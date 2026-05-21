@@ -20,17 +20,48 @@ Added:
 """
 
 # Per-provider default model names (used if --model not provided and no env var)
-# Per-provider default model names (updated as of 2024-06)
-PROVIDER_DEFAULT_MODELS: Dict[str, str] = {
-    "echo": "",
-    # Common generally-available model names (mid-2024)
-    "openai": "gpt-4o",
-    "anthropic": "claude-3",
-    "gemini": "gemini-1.5-pro",
-    "copilot": "copilot-next",
-    "deepseek": "deepseek-v2",
-    "grok": "grok-1.5",
+PROVIDER_CONFIG = {
+    "openai": {
+        "default_model": "gpt-5.5",
+        "supports_streaming": True,
+        "supports_tools": True,
+        "supports_vision": True,
+        "max_context": 1000000,
+    },
+
+    "anthropic": {
+        "default_model": "claude-sonnet-4",
+        "supports_streaming": True,
+        "supports_tools": True,
+        "supports_vision": True,
+        "max_context": 200000,
+    },
+
+    "gemini": {
+        "default_model": "gemini-3.5-flash",
+        "supports_streaming": True,
+        "supports_tools": True,
+        "supports_vision": True,
+        "max_context": 1000000,
+    },
+
+    "cohere": {
+        "default_model": "command-r-plus",
+        "supports_streaming": True,
+        "supports_tools": False,
+        "supports_vision": False,
+        "max_context": 128000,
+    },
+
+    "deepseek": {
+        "default_model": "deepseek-v3",
+        "supports_streaming": True,
+        "supports_tools": True,
+        "supports_vision": False,
+        "max_context": 128000,
+    },
 }
+
 
 
 class AIProvider(ABC):
@@ -239,6 +270,44 @@ class GrokProvider(AIProvider):
         raise NotImplementedError(
             "GrokProvider is not implemented. Add API call here."
         )
+    
+class CohereProvider(AIProvider):
+    @property
+    def capabilities(self) -> dict:
+        return {
+            "streaming": True,
+            "tools": False,
+            "vision": False,
+            "embeddings": True,
+            "async": False,
+        }
+
+    def send(self, prompt: str) -> str:
+        import cohere
+        api_key = os.getenv("COHERE_API_KEY")
+        if not api_key:
+            raise NotImplementedError(
+                "COHERE_API_KEY is not implemented. Add API call here."
+            )
+
+        client = cohere.Client(api_key)
+        response = client.chat(
+            model=self.model,
+            message=prompt,
+        )
+        return response.text
+
+PROVIDER_DEFAULT_MODELS: Dict[str, str] = {
+    # Common generally-available model names
+    "openai": "gpt-5.5",
+    "anthropic": "claude-sonnet-4",
+    "gemini": "gemini-3.5-flash",
+    "copilot": "copilot-next",
+    "deepseek": "deepseek-v3",
+    "grok": "grok-1.5",
+    "cohere": "command-r-plus",
+    "echo": ""
+}
 
 
 PROVIDER_MAP: Dict[str, Type[AIProvider]] = {
@@ -249,6 +318,7 @@ PROVIDER_MAP: Dict[str, Type[AIProvider]] = {
     "copilot": GithubCopilotProvider,
     "deepseek": DeepseekProvider,
     "grok": GrokProvider,
+    "cohere": CohereProvider,
 }
 
 
