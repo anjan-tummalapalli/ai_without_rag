@@ -1,43 +1,100 @@
-name: Python package
+name: CI
 
 on:
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
 
 jobs:
-  build:
+  test:
 
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out the code
-      uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'  # Specify the Python version to use
+      # ---------------------------------------------------------
+      # Checkout
+      # ---------------------------------------------------------
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Run tests
-      run: |
-        pytest tests
+      # ---------------------------------------------------------
+      # Python Setup
+      # ---------------------------------------------------------
 
-    - name: Build package
-      run: |
-        python -m build
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Publish package
-      run: |
-        python -m twine upload dist/* 
-      env:
-        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      # ---------------------------------------------------------
+      # Install Poetry
+      # ---------------------------------------------------------
+
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+
+      # ---------------------------------------------------------
+      # Remove Old Environments
+      # ---------------------------------------------------------
+
+      - name: Remove Old Poetry Environments
+        run: |
+          poetry env remove --all || true
+
+      # ---------------------------------------------------------
+      # Clear Poetry Cache
+      # ---------------------------------------------------------
+
+      - name: Clear Poetry Cache
+        run: |
+          poetry cache clear pypi --all || true
+
+      # ---------------------------------------------------------
+      # Debug pyproject.toml
+      # ---------------------------------------------------------
+
+      - name: Debug pyproject.toml
+        run: |
+          echo "===== pyproject.toml ====="
+          cat pyproject.toml
+
+      # ---------------------------------------------------------
+      # Debug poetry.lock
+      # ---------------------------------------------------------
+
+      - name: Debug poetry.lock
+        run: |
+          echo "===== poetry.lock ====="
+
+          if [ -f poetry.lock ]; then
+            cat poetry.lock | grep perplexity || true
+          else
+            echo "poetry.lock missing"
+          fi
+
+      # ---------------------------------------------------------
+      # Install Dependencies
+      # ---------------------------------------------------------
+
+      - name: Install Dependencies
+        run: |
+          poetry install --no-cache --no-interaction -vvv
+
+      # ---------------------------------------------------------
+      # Show Installed Packages
+      # ---------------------------------------------------------
+
+      - name: Show Installed Packages
+        run: |
+          poetry show
+
+      # ---------------------------------------------------------
+      # Run Tests
+      # ---------------------------------------------------------
+
+      - name: Run Tests
+        run: |
+          poetry run pytest -v

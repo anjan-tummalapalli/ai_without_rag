@@ -1,27 +1,249 @@
 [tool.poetry]
-name = "ai_cli"
-version = "0.1.0"
-description = "A command-line utility that routes natural-language prompts to various AI providers."
-authors = ["Your Name <youremail@example.com>"]
+name = "ai-cli"
+version = "0.2.0"
+description = "Enterprise-grade AI CLI gateway for multi-provider LLM orchestration, observability, routing, and intelligent operations."
+authors = [
+    "Your Name <youremail@example.com>"
+]
+
 license = "MIT"
+
 readme = "README.md"
-homepage = "https://github.com/yourusername/ai_cli"
-repository = "https://github.com/yourusername/ai_cli"
-keywords = ["AI", "CLI", "chatbot", "natural language processing"]
+
+homepage = "https://github.com/yourusername/ai-cli"
+
+repository = "https://github.com/yourusername/ai-cli"
+
+documentation = "https://github.com/yourusername/ai-cli/docs"
+
+keywords = [
+    "ai",
+    "llm",
+    "cli",
+    "openai",
+    "anthropic",
+    "gemini",
+    "grok",
+    "cohere",
+    "devops",
+    "sre",
+    "ai-gateway",
+    "observability",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+
+    "License :: OSI Approved :: MIT License",
+
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+
+    "Operating System :: OS Independent",
+
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+packages = [
+    { include = "ai_cli", from = "src" }
+]
+
+# -----------------------------------------------------------------------------
+# Runtime Dependencies
+# -----------------------------------------------------------------------------
 
 [tool.poetry.dependencies]
-python = "^3.8"
-openai = "^0.27.0"
-google-generativeai = "^0.1.0"
-anthropic = "^0.1.0"
-perplexity = "^0.1.0"
-xai = "^0.1.0"
-mistralai = "^0.1.0"
-groq = "^0.1.0"
-deepseek = "^0.1.0"
-together = "^0.1.0"
-cohere = "^0.1.0"
+
+python = "^3.10"
+
+# Core Providers
+openai = "^1.30.0"
+anthropic = "^0.25.0"
+google-generativeai = "^0.5.0"
+cohere = "^5.5.0"
+groq = "^0.8.0"
+mistralai = "^1.0.0"
+together = "^1.2.0"
+
+# HTTP / Networking
+httpx = "^0.27.0"
+requests = "^2.32.0"
+
+# Retry / Resilience
+tenacity = "^8.3.0"
+
+# Observability
+prometheus-client = "^0.20.0"
+
+opentelemetry-api = "^1.25.0"
+opentelemetry-sdk = "^1.25.0"
+opentelemetry-exporter-otlp = "^1.25.0"
+
+# Validation / Config
+pydantic = "^2.7.0"
+python-dotenv = "^1.0.1"
+
+# CLI UX
+rich = "^13.7.0"
+typer = "^0.12.3"
+
+# Async Support
+anyio = "^4.4.0"
+
+# Structured Logging
+structlog = "^24.2.0"
+
+# Tokenization / AI Utilities
+tiktoken = "^0.7.0"
+
+# -----------------------------------------------------------------------------
+# Optional Dependency Groups
+# -----------------------------------------------------------------------------
+
+[tool.poetry.group.dev.dependencies]
+
+pytest = "^8.2.0"
+pytest-cov = "^5.0.0"
+pytest-timeout = "^2.3.1"
+pytest-asyncio = "^0.23.7"
+
+black = "^24.4.2"
+ruff = "^0.4.4"
+mypy = "^1.10.0"
+
+pre-commit = "^3.7.1"
+
+types-requests = "^2.32.0.20240523"
+
+# -----------------------------------------------------------------------------
+# CLI Entrypoint
+# -----------------------------------------------------------------------------
+
+[tool.poetry.scripts]
+
+ai-cli = "ai_cli.cli:main"
+
+# -----------------------------------------------------------------------------
+# Build System
+# -----------------------------------------------------------------------------
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+
+requires = [
+    "poetry-core>=1.8.0"
+]
+
 build-backend = "poetry.core.masonry.api"
+
+# -----------------------------------------------------------------------------
+# Black
+# -----------------------------------------------------------------------------
+
+[tool.black]
+
+line-length = 88
+
+target-version = [
+    "py310",
+    "py311",
+    "py312",
+]
+
+# -----------------------------------------------------------------------------
+# Ruff
+# -----------------------------------------------------------------------------
+
+[tool.ruff]
+
+line-length = 88
+
+target-version = "py310"
+
+lint.select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+]
+
+lint.ignore = [
+    "E501",
+]
+
+# -----------------------------------------------------------------------------
+# Mypy
+# -----------------------------------------------------------------------------
+
+[tool.mypy]
+
+python_version = "3.10"
+
+strict = true
+
+warn_unused_configs = true
+
+disallow_untyped_defs = true
+
+check_untyped_defs = true
+
+no_implicit_optional = true
+
+warn_return_any = true
+
+warn_unused_ignores = true
+
+# -----------------------------------------------------------------------------
+# Pytest
+# -----------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+
+testpaths = [
+    "tests"
+]
+
+python_files = [
+    "test_*.py"
+]
+
+addopts = """
+-v
+--strict-markers
+--cov=src/ai_cli
+--cov-report=term-missing
+"""
+
+markers = [
+    "integration",
+    "slow",
+    "provider",
+]
+
+# -----------------------------------------------------------------------------
+# Coverage
+# -----------------------------------------------------------------------------
+
+[tool.coverage.run]
+
+source = [
+    "src/ai_cli"
+]
+
+branch = true
+
+# -----------------------------------------------------------------------------
+# Coverage Report
+# -----------------------------------------------------------------------------
+
+[tool.coverage.report]
+
+show_missing = true
+skip_covered = true
