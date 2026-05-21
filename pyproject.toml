@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "ai_cli"
+version = "0.1.0"
+description = "A command-line utility that routes natural-language prompts to various AI providers."
+authors = ["Your Name <youremail@example.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/yourusername/ai_cli"
+repository = "https://github.com/yourusername/ai_cli"
+keywords = ["AI", "CLI", "chatbot", "natural language processing"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+openai = "^0.27.0"
+google-generativeai = "^0.1.0"
+anthropic = "^0.1.0"
+perplexity = "^0.1.0"
+xai = "^0.1.0"
+mistralai = "^0.1.0"
+groq = "^0.1.0"
+deepseek = "^0.1.0"
+together = "^0.1.0"
+cohere = "^0.1.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

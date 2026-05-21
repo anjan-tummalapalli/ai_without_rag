@@ -1,0 +1,15 @@
+openai
+google-generativeai
+anthropic
+perplexity
+xai
+mistralai
+groq
+deepseek
+together
+cohere
+together
+fireworks
+gitpython
+python-dotenv
+pytest
