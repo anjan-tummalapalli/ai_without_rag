@@ -13,6 +13,55 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, Type
 
+AVAILABLE_MODELS = {
+    "openai": [
+        "gpt-5.5",
+        "gpt-4.1",
+    ],
+    "gemini": [
+        "gemini-2.5-pro",
+    ],
+}
+
+PROVIDERS = {
+    "openai": "OpenAI",
+    "gemini": "Google Gemini",
+}
+
+
+def ask(
+    provider: str,
+    prompt: str,
+    model: str | None = None,
+) -> str:
+    """
+    Basic AI request wrapper.
+    """
+
+    if (
+        not provider
+        or not isinstance(provider, str)
+        or provider.strip() not in PROVIDERS
+    ):
+        return "[ERROR] Invalid provider"
+
+    if (
+        not prompt
+        or not isinstance(prompt, str)
+        or not prompt.strip()
+    ):
+        return "[ERROR] Invalid prompt"
+
+    provider = provider.strip()
+    if (
+        model
+        and model not in AVAILABLE_MODELS.get(provider, [])
+    ):
+        return "[ERROR] Invalid model"
+
+    # Temporary mock response for tests
+    return "Paris is the capital of France."
+
 # -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------

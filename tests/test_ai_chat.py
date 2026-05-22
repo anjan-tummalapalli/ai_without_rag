@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.ai_cli.ai_chat import (
+from ai_cli.ai_chat import (
     AVAILABLE_MODELS,
     PROVIDERS,
     ask,
