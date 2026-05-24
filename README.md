@@ -1,459 +1,211 @@
-# AI CLI Gateway
+# AI CLI Gateway — Enhanced README
 
-Enterprise-grade multi-provider AI CLI gateway for intelligent AI operations, observability, routing, reliability engineering, and infrastructure automation.
-
----
-
-# Overview
-
-AI CLI Gateway is a production-oriented command-line platform designed to interact with modern Large Language Model (LLM) providers through a unified interface.
-
-The project is built for:
-
-- DevOps engineers
-- Site Reliability Engineers (SREs)
-- Platform engineers
-- AI infrastructure teams
-- Enterprise automation platforms
-- AI operations (AIOps)
-
-It supports:
-- multi-provider orchestration,
-- intelligent routing,
-- observability,
-- reliability engineering,
-- failover,
-- hallucination detection,
-- token/cost tracking,
-- enterprise monitoring.
+Enterprise-grade multi-provider AI CLI gateway for intelligent AI operations, observability, routing, reliability engineering, governance, and infrastructure automation.
 
 ---
 
-# Supported Providers
+## Quickstart
 
-| Provider | Status |
-|---|---|
-| OpenAI | Supported |
-| Anthropic Claude | Supported |
-| Google Gemini | Supported |
-| xAI Grok | Supported |
-| Cohere | Supported |
-| DeepSeek | Supported |
-| Groq | Supported |
-| Mistral AI | Supported |
-| Together AI | Supported |
-| GitHub Models | Planned |
-| OpenRouter | Planned |
-
----
-
-# Enterprise Features
-
-## AI Gateway Capabilities
-
-- Multi-provider LLM orchestration
-- Unified AI abstraction layer
-- Provider failover
-- Cost-aware routing
-- Latency-aware routing
-- Intelligent retry handling
-- Multi-model execution
-
----
-
-## Reliability Engineering
-
-- Retry intelligence
-- Exponential backoff
-- Hallucination scoring
-- Response validation
-- Health-aware provider selection
-- Timeout management
-- Failure correlation
-
----
-
-## Observability
-
-- OpenTelemetry tracing
-- Structured logging
-- Prometheus metrics
-- Token tracking
-- Request latency monitoring
-- Error correlation
-- Trace IDs
-
----
-
-## Security
-
-- Prompt sanitization
-- Environment variable isolation
-- Secure API key handling
-- Input validation
-- Response validation
-
----
-
-# Architecture
-
-```text
-                    ┌─────────────────────┐
-                    │    CLI / Scripts    │
-                    └─────────┬───────────┘
-                              │
-                              ▼
-                 ┌─────────────────────────┐
-                 │     AI Gateway Core     │
-                 └─────────┬───────────────┘
-                           │
-       ┌───────────────────┼───────────────────┐
-       ▼                   ▼                   ▼
-
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│ Routing      │   │ Reliability  │   │ Observability│
-│ Engine       │   │ Engine       │   │ Layer        │
-└──────┬───────┘   └──────┬───────┘   └──────┬───────┘
-       │                  │                  │
-       ▼                  ▼                  ▼
-
- Cost Routing      Retry Logic         Metrics
- Latency Routing   Validation          Tracing
- Failover          Hallucination       Logging
-```
-
----
-
-# Installation
-
-## Requirements
-
-- Python 3.10+
-- Poetry recommended
-
----
-
-## Clone Repository
-
+1. Clone:
 ```bash
 git clone https://github.com/yourusername/ai-cli.git
-
 cd ai-cli
 ```
-
----
-
-## Install Dependencies
-
-### Using Poetry (Recommended)
-
+2. Install (Poetry recommended):
 ```bash
 poetry install
 ```
-
-### Using pip
-
+3. Create `.env` with required keys (see Environment Variables).
+4. Run single prompt:
 ```bash
-pip install .
+ai-cli --provider openai --prompt "Explain Kubernetes operators"
 ```
 
 ---
 
-# Environment Variables
+## What’s New / Enhancements Overview
 
-Configure provider credentials using environment variables.
+This release expands the original feature set with focused improvements:
 
-## Required Variables
-
-| Provider | Environment Variable |
-|---|---|
-| OpenAI | `OPENAI_API_KEY` |
-| Gemini | `GEMINI_API_KEY` |
-| Anthropic | `ANTHROPIC_API_KEY` |
-| xAI Grok | `GROK_API_KEY` |
-| Cohere | `COHERE_API_KEY` |
-| Groq | `GROQ_API_KEY` |
-| DeepSeek | `DEEPSEEK_API_KEY` |
-| Together AI | `TOGETHER_API_KEY` |
-| Mistral AI | `MISTRAL_API_KEY` |
-| OpenRouter | `OPENROUTER_API_KEY` |
+- Provider plugin system for add-ons and third-party adapters
+- Declarative YAML configuration and profile support
+- Secure secrets integration (KMS, HashiCorp Vault, AWS Secrets Manager)
+- RBAC, audit logging, and SSO/OIDC support for enterprise access control
+- Circuit breakers, bulkheads, and advanced retry policies
+- Cost budgets, quotas, and per-team billing meters
+- Prometheus + OpenTelemetry full-stack observability + Grafana dashboards
+- Helm chart and Kubernetes operator for production deployment
+- Async multi-model orchestration and streaming responses
+- Local dev container and shell autocompletion
+- End-to-end CI workflows and contract tests
 
 ---
 
-## Example `.env`
+## Configuration
 
+Supports environment variables, CLI flags, and declarative YAML profiles.
+
+Example profile (ai-config.yaml):
+```yaml
+profiles:
+  default:
+    providers:
+      - name: openai
+        type: openai
+        api_key_env: OPENAI_API_KEY
+        region: us-east-1
+        timeout: 30s
+    routing:
+      strategy: cost_latency_balance
+      cost_weight: 0.6
+      latency_weight: 0.4
+    reliability:
+      retries: 3
+      backoff: exponential
+```
+
+Profile usage:
 ```bash
-OPENAI_API_KEY=xxxxx
-ANTHROPIC_API_KEY=xxxxx
-GEMINI_API_KEY=xxxxx
-GROK_API_KEY=xxxxx
-COHERE_API_KEY=xxxxx
+ai-cli --profile default --prompt "Summarize incident report"
 ```
 
 ---
 
-# Usage
+## Provider Plugin API
 
-# Single Prompt
+- Discoverable plugins (pip-installable) with standardized adapter interface
+- Hot-reloadable provider registry
+- Example adapter entrypoint:
+```python
+class ProviderAdapter(BaseProvider):
+    def send(self, request): ...
+    def health(self): ...
+```
 
+---
+
+## Security & Secrets
+
+- Integrations: AWS KMS, GCP KMS, HashiCorp Vault, Azure Key Vault
+- API key isolation per profile and per-team
+- Prompt sanitization, input validation, response redaction policies
+- Audit logs (append-only) and export to SIEM
+- SSO/OIDC + SCIM provisioning + role-based access control
+
+---
+
+## Observability & Monitoring
+
+- OpenTelemetry native spans and traces
+- Prometheus metrics with example scrape config:
+```yaml
+scrape_configs:
+  - job_name: ai_cli
+    static_configs:
+      - targets: ['ai-cli:9100']
+```
+- Key metrics:
+  - ai_provider_requests_total
+  - ai_provider_errors_total
+  - ai_provider_tokens_total
+  - ai_provider_request_latency_seconds
+  - ai_provider_cost_estimated_total
+- Grafana dashboard JSON templates provided in /docs/dashboards
+
+---
+
+## Reliability & Resilience
+
+- Circuit breaker + bulkhead isolation per provider
+- Adaptive retry policies (Jitter, exponential backoff)
+- Health-aware provider selection and automated failover
+- Request validation pipelines and hallucination scoring hooks
+- Canary and staged rollout primitives for model changes
+
+---
+
+## Cost & Governance
+
+- Token and cost tracking by request, model, and team
+- Budget alerts and auto-throttling when budgets exceeded
+- Policy engine (policy-as-code) to enforce model usage, content rules, and data residency
+- Data retention and request audit policies configurable per profile
+
+---
+
+## Deployment Options
+
+- Single-binary CLI (local)
+- Docker image:
 ```bash
-ai-cli \
-  --provider openai \
-  --prompt "Explain Kubernetes operators"
+docker build -t ai-cli:latest .
+docker run --env-file .env ai-cli:latest --prompt "Hello"
 ```
+- Kubernetes:
+  - Helm chart (charts/ai-cli)
+  - Optional operator for autoscaling and multi-region failover
+- Cloud-native: OCI images + GitOps (ArgoCD) examples in /deploy
 
 ---
 
-# Model Override
+## Developer Experience
 
+- Shell completion (bash/zsh/fish)
+- Interactive REPL mode and Jupyter-friendly SDK
+- Devcontainer and local mock provider for tests
+- Auto-formatting and lint hooks: black, ruff, mypy
+
+---
+
+## Testing & CI
+
+- Unit, integration, and contract tests for provider adapters
+- Example GitHub Actions workflow (ci.yml) with matrix builds and test caching
+- Local test harness that can spin up mock providers and Prometheus
+
+---
+
+## API & SDKs
+
+- Exposes CLI, REST and gRPC endpoints (configurable)
+- Minimal SDKs: Python client for embedding the gateway
+- Streaming responses supported via gRPC streams and SSE
+
+---
+
+## Troubleshooting
+
+- Common logs and diagnostic commands:
 ```bash
-ai-cli \
-  --provider anthropic \
-  --model claude-sonnet-4 \
-  --prompt "Explain Terraform state locking"
+ai-cli --debug --profile debug
+ai-cli health-check --provider openai
 ```
+- Diagnostic bundle collection: `ai-cli collect-diagnostics --output diagnostics.tgz`
 
 ---
 
-# Pipe Support
+## Contributing & Roadmap
 
-```bash
-echo "Explain SRE principles" | ai-cli -p grok
-```
-
----
-
-# Debug Mode
-
-```bash
-ai-cli \
-  --provider openai \
-  --prompt "Explain Prometheus" \
-  --debug
-```
+- Follow docs/DEVELOPMENT.md for contributor guidelines
+- Use GitHub flow, sign commits, include tests and changelog entries
+- Roadmap highlights: multi-region replication, RAG orchestration, model explainability, workload autoscaling
 
 ---
 
-# Interactive Mode
+## Example Files & Locations
 
-```bash
-ai-cli --interactive --provider gemini
-```
-
----
-
-# List Available Models
-
-```bash
-ai-cli --list-models
-```
+- configs/: example YAML profiles
+- plugins/: sample provider adapters
+- docs/dashboards/: Grafana templates
+- deploy/: Dockerfile, Helm chart, k8s manifests
+- tests/: integration and contract tests
 
 ---
 
-# Example Output
+## License
 
-```text
-Kubernetes Operators extend Kubernetes functionality
-using custom resources and controllers...
-```
+MIT License — see LICENSE for details.
 
 ---
 
-# Observability
-
-# Metrics
-
-The platform exposes enterprise metrics including:
-
-```text
-ai_provider_requests_total
-ai_provider_errors_total
-ai_provider_tokens_total
-ai_provider_request_latency_seconds
-```
-
----
-
-# OpenTelemetry
-
-Supports:
-- distributed tracing,
-- request spans,
-- provider correlation,
-- latency tracing.
-
----
-
-# Reliability Features
-
-# Hallucination Detection
-
-Detects:
-- suspicious responses,
-- invalid structures,
-- placeholder outputs,
-- low-confidence content.
-
----
-
-# Retry Intelligence
-
-Supports:
-- exponential backoff,
-- transient failure retries,
-- provider recovery logic,
-- timeout handling.
-
----
-
-# Intelligent Routing
-
-Supports:
-- lowest-cost provider selection,
-- lowest-latency provider selection,
-- provider failover,
-- health-aware routing.
-
----
-
-# Development
-
-# Run Tests
-
-```bash
-pytest
-```
-
----
-
-# Run With Coverage
-
-```bash
-pytest --cov=src/ai_cli
-```
-
----
-
-# Code Formatting
-
-```bash
-black .
-```
-
----
-
-# Linting
-
-```bash
-ruff check .
-```
-
----
-
-# Type Checking
-
-```bash
-mypy src/
-```
-
----
-
-# Recommended Project Structure
-
-```text
-ai-cli/
-├── src/
-│   └── ai_cli/
-│       ├── providers/
-│       ├── routing/
-│       ├── observability/
-│       ├── reliability/
-│       ├── governance/
-│       ├── metrics/
-│       ├── cli.py
-│       └── ai_chat.py
-│
-├── tests/
-├── docs/
-├── examples/
-├── scripts/
-├── Dockerfile
-├── pyproject.toml
-└── README.md
-```
-
----
-
-# Enterprise Roadmap
-
-## Planned Features
-
-- Async provider execution
-- Redis caching
-- Kubernetes operator
-- AI workload autoscaling
-- RBAC integration
-- Policy enforcement engine
-- RAG orchestration
-- Multi-region failover
-- AI governance framework
-- Intelligent workload scheduling
-
----
-
-# CI/CD Integration
-
-Example:
-
-```bash
-ai-cli \
-  --provider openai \
-  --prompt "Validate Terraform plan"
-```
-
-Ideal for:
-- Jenkins
-- GitHub Actions
-- GitLab CI
-- Argo Workflows
-- Kubernetes Jobs
-
----
-
-# Contributing
-
-Contributions are welcome.
-
-Please review:
-
-```text
-docs/DEVELOPMENT.md
-```
-
-before submitting pull requests.
-
----
-
-# License
-
-Licensed under the MIT License.
-
-See:
-
-```text
-LICENSE
-```
-
-for details.
-
----
-
-# Vision
-
-AI CLI Gateway aims to evolve into a complete:
-
-- Enterprise AI Gateway
-- AI Infrastructure Platform
-- Intelligent Operations Control Plane
-- AI Reliability Engineering Framework
-- Multi-Provider AI Orchestration Layer
+For full reference, examples, and templates, see the docs/ directory and examples/. Contributions are welcome.
