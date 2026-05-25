@@ -1,20 +1,20 @@
 """
 Lightweight AI gateway helpers.
 
-This module provides small, opt-in operational components and a simple
-provider framework. Optional dependencies are permissive: missing packages
-fall back to no-op or pure-Python implementations so the module remains
-usable without extras.
+This module provides small, opt-in operational components and a
+simple provider framework. Optional dependencies are permissive:
+missing packages fall back to no-op or pure-Python implementations
+so the module remains usable without extras.
 
 To enable richer behavior install the extras:
-    pip install redis prometheus_client opentelemetry-api opentelemetry-sdk aiohttp
+    pip install redis prometheus_client opentelemetry-api \
+        opentelemetry-sdk aiohttp
 """
 
 from __future__ import annotations
 
-import argparse, asyncio, contextlib, functools
-import inspect, logging
-import os, sys, re, time, uuid, random, threading
+import argparse, asyncio, contextlib, functools, inspect, logging, os, sys
+import re, time, uuid, random, threading
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Deque, Optional, Final, TypeVar
@@ -34,27 +34,45 @@ except Exception:  # optional
 try:
     from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
-    from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
+    from opentelemetry.sdk.trace.export import (
+        SimpleSpanProcessor,
+        ConsoleSpanExporter,
+    )
 except Exception:  # optional
     trace = None  # type: ignore
 
 # -----------------------------------------------------------------------------
-# Operational helpers (cache, retry, circuit breaker, rate limiter, tracing)
+# Operational helpers (cache, retry, circuit breaker, rate limiter,
+# tracing)
 # -----------------------------------------------------------------------------
 
 class Cache:
-    """Simple cache: Redis-backed when available, else in-memory LRU."""
+    """Simple cache: Redis-backed when available, else in-memory LRU.
+
+    Purpose:
+        Provide namespaced cache get/set semantics with optional Redis
+        backend and a local LRU fallback.
+
+    Args:
+        namespace (str): Prefix used for keys stored in Redis or local cache.
+        max_entries (int): Maximum number of entries in local in-memory cache.
+    """
 
     def __init__(self, namespace: str = "ai_gateway", max_entries: int = 1024):
+        """Initialize Cache.
+
+        Args:
+            namespace (str): Namespace prefix for keys.
+            max_entries (int): Maximum local cache entries.
+        """
         self.namespace = namespace
         self.max_entries = max_entries
         self._local_cache: dict[str, Any] = {}
         self._local_order: Deque[str] = deque()
         if redis is not None:
             try:
-                self._redis = redis.Redis.from_url(
-                    os.getenv("REDIS_URL", "redis://localhost:6379/0")
-                )
+                url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+                self._redis = redis.Redis.from_url(url)
                 self._redis.ping()
             except Exception:
                 self._redis = None
@@ -62,9 +80,25 @@ class Cache:
             self._redis = None
 
     def _key(self, k: str) -> str:
+        """Return a namespaced key.
+
+        Args:
+            k (str): Original key.
+
+        Returns:
+            str: Namespaced key string.
+        """
         return f"{self.namespace}:{k}"
 
     def get(self, key: str) -> Optional[Any]:
+        """Retrieve a value from cache.
+
+        Args:
+            key (str): Key to retrieve.
+
+        Returns:
+            Optional[Any]: Stored value or None if missing.
+        """
         if self._redis:
             try:
                 val = self._redis.get(self._key(key))
@@ -74,6 +108,13 @@ class Cache:
         return self._local_cache.get(key)
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+        """Set a value in cache with optional TTL.
+
+        Args:
+            key (str): Key to set.
+            value (Any): Value to store.
+            ttl (Optional[int]): Time-to-live in seconds for Redis backend.
+        """
         if self._redis:
             try:
                 self._redis.set(self._key(key), value, ex=ttl)
@@ -93,13 +134,40 @@ class Cache:
 
 
 class AsyncRetryEngine:
-    """Async retry executor with exponential backoff."""
+    """Async retry executor with exponential backoff.
+
+    Purpose:
+        Execute asynchronous or awaitable-producing callables with retries
+        and exponential backoff.
+
+    Args:
+        max_attempts (int): Maximum retry attempts.
+        base_delay (float): Base delay in seconds for backoff.
+    """
 
     def __init__(self, max_attempts: int = 3, base_delay: float = 0.5):
+        """Initialize AsyncRetryEngine.
+
+        Args:
+            max_attempts (int): Maximum retry attempts.
+            base_delay (float): Base delay in seconds.
+        """
         self.max_attempts = max_attempts
         self.base_delay = base_delay
 
     async def execute(self, coro_fn: Callable[[], Any]) -> Any:
+        """Execute the provided coroutine-producing callable with retries.
+
+        Args:
+            coro_fn (Callable[[], Any]): Callable that returns an awaitable
+                or value.
+
+        Returns:
+            Any: Result returned by awaited coroutine or the callable.
+
+        Raises:
+            Exception: Re-raises last exception if all attempts fail.
+        """
         last_exc: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             try:
@@ -116,9 +184,24 @@ class AsyncRetryEngine:
 
 
 class CircuitBreaker:
-    """Minimal thread-safe circuit breaker."""
+    """Minimal thread-safe circuit breaker.
+
+    Purpose:
+        Track failures and open the circuit for a timeout when threshold is
+        exceeded to prevent cascading failures.
+
+    Args:
+        threshold (int): Failure count threshold to open circuit.
+        timeout (int): Seconds to keep circuit open.
+    """
 
     def __init__(self, threshold: int = 5, timeout: int = 30):
+        """Initialize CircuitBreaker.
+
+        Args:
+            threshold (int): Failure threshold before opening circuit.
+            timeout (int): Open-circuit timeout in seconds.
+        """
         self.threshold = threshold
         self.timeout = timeout
         self.failures = 0
@@ -126,21 +209,30 @@ class CircuitBreaker:
         self._lock = threading.Lock()
 
     def allow(self) -> bool:
+        """Check whether requests are allowed.
+
+        Returns:
+            bool: True if circuit is closed, False if open.
+        """
         with self._lock:
             return time.time() >= self.open_until
 
     def success(self) -> None:
+        """Record a successful call and reset failure tracking."""
         with self._lock:
             self.failures = 0
             self.open_until = 0.0
 
     def failure(self) -> None:
+        """Record a failure and open circuit if threshold exceeded."""
         with self._lock:
             self.failures += 1
             if self.failures >= self.threshold:
                 self.open_until = time.time() + self.timeout
 
     def wrap(self, fn: Callable[..., Any]) -> Callable[..., Any]:
+        """Wrap a callable with circuit breaker checks."""
+
         @functools.wraps(fn)
         def _wrapped(*args, **kwargs):
             if not self.allow():
@@ -153,6 +245,7 @@ class CircuitBreaker:
             else:
                 self.success()
                 return result
+
         return _wrapped
 
 
@@ -160,6 +253,12 @@ class RateLimiter:
     """Token-bucket rate limiter."""
 
     def __init__(self, capacity: int = 10, rate_per_second: float = 1.0):
+        """Initialize RateLimiter.
+
+        Args:
+            capacity (int): Token capacity.
+            rate_per_second (float): Token refill rate per second.
+        """
         self.capacity = capacity
         self.tokens = float(capacity)
         self.rate = rate_per_second
@@ -167,6 +266,7 @@ class RateLimiter:
         self._lock = threading.Lock()
 
     def _refill(self) -> None:
+        """Refill tokens based on elapsed time since last refill."""
         now = time.monotonic()
         elapsed = now - self._last
         self._last = now
@@ -174,6 +274,14 @@ class RateLimiter:
         self.tokens = min(self.capacity, self.tokens + add)
 
     def allow(self, cost: float = 1.0) -> bool:
+        """Attempt to consume tokens to allow an action.
+
+        Args:
+            cost (float): Token cost for the action.
+
+        Returns:
+            bool: True if tokens were available and consumed.
+        """
         with self._lock:
             self._refill()
             if self.tokens >= cost:
@@ -182,25 +290,36 @@ class RateLimiter:
             return False
 
     def wrap(self, fn: Callable[..., Any]) -> Callable[..., Any]:
+        """Wrap a callable to enforce rate limiting."""
+
         @functools.wraps(fn)
         def _wrapped(*args, **kwargs):
             if not self.allow():
                 raise RuntimeError("rate limited")
             return fn(*args, **kwargs)
+
         return _wrapped
 
 
 class StreamConsumer:
     """
     Helper to adapt synchronous providers into streaming-like behavior.
-    If provider defines `send_stream(prompt, on_token)`, use it; otherwise
-    run send() in a background thread and heuristically stream tokens.
+
+    Purpose:
+        Provide a streaming interface via either provider.send_stream or by
+        running provider.send in a background thread and emitting tokens.
     """
 
     def __init__(self, provider: Any):
+        """Initialize StreamConsumer.
+
+        Args:
+            provider (Any): Provider implementing send or send_stream.
+        """
         self.provider = provider
 
     def stream(self, prompt: str, on_token: Callable[[str], None]) -> None:
+        """Start streaming tokens for a prompt."""
         if hasattr(self.provider, "send_stream"):
             return self.provider.send_stream(prompt, on_token)
 
@@ -218,13 +337,20 @@ class Tracer:
     """Small wrapper for OpenTelemetry tracing. No-op if not installed."""
 
     def __init__(self, service_name: str = "ai_gateway"):
+        """Initialize Tracer.
+
+        Args:
+            service_name (str): Service name for tracer.
+        """
         self._enabled = False
         if trace is not None:
             try:
                 provider = SDKTracerProvider()
                 trace.set_tracer_provider(provider)
                 tracer = trace.get_tracer(__name__)
-                provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+                provider.add_span_processor(
+                    SimpleSpanProcessor(ConsoleSpanExporter())
+                )
                 self._tracer = tracer
                 self._enabled = True
             except Exception:
@@ -232,6 +358,7 @@ class Tracer:
 
     @contextlib.contextmanager
     def span(self, name: str):
+        """Context manager to start a trace span when enabled."""
         if not self._enabled:
             yield None
             return
@@ -240,21 +367,26 @@ class Tracer:
 
 
 class Metrics:
-    """Lightweight Prometheus metrics. No-op if prometheus_client not installed."""
+    """Lightweight Prometheus metrics. No-op if prometheus_client missing."""
 
     def __init__(self, port: int = 8000):
+        """Initialize Metrics.
+
+        Args:
+            port (int): HTTP port to expose Prometheus metrics.
+        """
         self._enabled = Counter is not None
         if not self._enabled:
             return
-        self.requests = Counter("ai_gateway_requests_total",
-                                "Total AI requests",
-                                ["provider"])
-        self.failures = Counter("ai_gateway_failures_total",
-                                "Failed AI requests",
-                                ["provider"])
-        self.latency = Gauge("ai_gateway_latency_seconds",
-                             "Request latency seconds",
-                             ["provider"])
+        self.requests = Counter(
+            "ai_gateway_requests_total", "Total AI requests", ["provider"]
+        )
+        self.failures = Counter(
+            "ai_gateway_failures_total", "Failed AI requests", ["provider"]
+        )
+        self.latency = Gauge(
+            "ai_gateway_latency_seconds", "Request latency seconds", ["provider"]
+        )
         try:
             if start_http_server:
                 start_http_server(port)
@@ -262,16 +394,19 @@ class Metrics:
             pass
 
     def record_request(self, provider: str) -> None:
+        """Increment request counter."""
         if not self._enabled:
             return
         self.requests.labels(provider=provider).inc()
 
     def record_failure(self, provider: str) -> None:
+        """Increment failure counter."""
         if not self._enabled:
             return
         self.failures.labels(provider=provider).inc()
 
     def record_latency(self, provider: str, seconds: float) -> None:
+        """Set latency gauge."""
         if not self._enabled:
             return
         self.latency.labels(provider=provider).set(seconds)
@@ -282,6 +417,7 @@ class SecretManager:
 
     @staticmethod
     def get_secret(name: str, file_path: Optional[str] = None) -> Optional[str]:
+        """Obtain a secret value."""
         val = os.getenv(name)
         if val:
             return val
@@ -295,15 +431,19 @@ class SecretManager:
 
 
 def is_kubernetes() -> bool:
-    """Heuristic: check KUBERNETES_SERVICE_HOST or in-cluster serviceaccount token."""
+    """Heuristic detection for running inside Kubernetes."""
     if os.getenv("KUBERNETES_SERVICE_HOST"):
         return True
-    return os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token")
+    return os.path.exists(
+        "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    )
 
 
 GLOBAL_CACHE = Cache()
 GLOBAL_TRACER = Tracer()
-GLOBAL_METRICS = Metrics(port=int(os.getenv("PROMETHEUS_PORT", "8000")))
+GLOBAL_METRICS = Metrics(
+    port=int(os.getenv("PROMETHEUS_PORT", "8000"))
+)
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -328,22 +468,27 @@ T = TypeVar("T")
 
 class AIProviderError(Exception):
     """Base exception for AI provider errors."""
+    pass
 
 
 class PromptValidationError(AIProviderError):
     """Raised when prompt validation fails."""
+    pass
 
 
 class ProviderConfigurationError(AIProviderError):
     """Raised when provider configuration is invalid."""
+    pass
 
 
 class ProviderRequestError(AIProviderError):
     """Raised when provider request execution fails."""
+    pass
 
 
 class ResponseValidationError(AIProviderError):
     """Raised when AI response validation fails."""
+    pass
 
 
 # -----------------------------------------------------------------------------
@@ -352,6 +497,7 @@ class ResponseValidationError(AIProviderError):
 
 @dataclass(frozen=True)
 class ProviderMetadata:
+    """Metadata describing a provider and its capabilities."""
     name: str
     default_model: str
     supported_models: list[str]
@@ -389,7 +535,11 @@ PROVIDERS: dict[str, ProviderMetadata] = {
     "deepseek": ProviderMetadata(
         name="DeepSeek",
         default_model="deepseek-chat",
-        supported_models=["deepseek-chat", "deepseek-coder", "deepseek-reasoner"],
+        supported_models=[
+            "deepseek-chat",
+            "deepseek-coder",
+            "deepseek-reasoner",
+        ],
         supports_streaming=True,
         supports_tools=True,
         supports_vision=False,
@@ -411,7 +561,11 @@ PROVIDERS: dict[str, ProviderMetadata] = {
     "openrouter": ProviderMetadata(
         name="OpenRouter",
         default_model="openai/gpt-4o",
-        supported_models=["openai/gpt-4o", "anthropic/claude-3.5-sonnet", "google/gemini-2.5-pro"],
+        supported_models=[
+            "openai/gpt-4o",
+            "anthropic/claude-3.5-sonnet",
+            "google/gemini-2.5-pro",
+        ],
         supports_streaming=True,
         supports_tools=True,
         supports_vision=True,
@@ -422,7 +576,10 @@ PROVIDERS: dict[str, ProviderMetadata] = {
     "together": ProviderMetadata(
         name="Together AI",
         default_model="meta-llama/Llama-3-70b-chat-hf",
-        supported_models=["meta-llama/Llama-3-70b-chat-hf", "mistralai/Mixtral-8x7B-Instruct-v0.1"],
+        supported_models=[
+            "meta-llama/Llama-3-70b-chat-hf",
+            "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        ],
         supports_streaming=True,
         supports_tools=False,
         supports_vision=False,
@@ -432,8 +589,12 @@ PROVIDERS: dict[str, ProviderMetadata] = {
     ),
     "fireworks": ProviderMetadata(
         name="Fireworks AI",
-        default_model="accounts/fireworks/models/llama-v3p1-70b-instruct",
-        supported_models=["accounts/fireworks/models/llama-v3p1-70b-instruct"],
+        default_model=(
+            "accounts/fireworks/models/llama-v3p1-70b-instruct"
+        ),
+        supported_models=[
+            "accounts/fireworks/models/llama-v3p1-70b-instruct",
+        ],
         supports_streaming=True,
         supports_tools=False,
         supports_vision=False,
@@ -452,6 +613,22 @@ PROVIDERS: dict[str, ProviderMetadata] = {
         cost_per_1k_tokens=0.011,
         avg_latency_ms=750,
     ),
+    "google": ProviderMetadata(
+        name="Google",
+        default_model="gemini-pro",
+        supported_models=[
+            "gemini-pro",
+            "gemini-1.5",
+            "gemini-1.0",
+            "gemini-mini",
+        ],
+        supports_streaming=True,
+        supports_tools=True,
+        supports_vision=True,
+        max_context=1_000_000,
+        cost_per_1k_tokens=0.012,
+        avg_latency_ms=600,
+    ),
     "echo": ProviderMetadata(
         name="Local Echo",
         default_model="echo",
@@ -466,7 +643,8 @@ PROVIDERS: dict[str, ProviderMetadata] = {
 }
 
 AVAILABLE_MODELS: dict[str, list[str]] = {
-    provider: metadata.supported_models for provider, metadata in PROVIDERS.items()
+    provider: metadata.supported_models
+    for provider, metadata in PROVIDERS.items()
 }
 
 # -----------------------------------------------------------------------------
@@ -475,6 +653,7 @@ AVAILABLE_MODELS: dict[str, list[str]] = {
 
 @dataclass
 class ModelQualityMetrics:
+    """Collect simple quality metrics for a model and provider."""
     provider: str
     model: str
     requests: int = 0
@@ -486,18 +665,21 @@ class ModelQualityMetrics:
 
     @property
     def success_rate(self) -> float:
+        """Compute success rate as (requests - failures) / requests."""
         if self.requests == 0:
             return 0.0
         return (self.requests - self.failures) / self.requests
 
     @property
     def avg_latency(self) -> float:
+        """Compute average latency per request."""
         if self.requests == 0:
             return 0.0
         return self.total_latency_seconds / self.requests
 
     @property
     def hallucination_rate(self) -> float:
+        """Compute hallucination detection rate."""
         if self.requests == 0:
             return 0.0
         return self.hallucination_failures / self.requests
@@ -505,6 +687,7 @@ class ModelQualityMetrics:
 
 @dataclass
 class HallucinationResult:
+    """Result of hallucination risk evaluation."""
     score: float
     passed: bool
     reasons: list[str] = field(default_factory=list)
@@ -522,6 +705,7 @@ class HallucinationDetector:
     ]
 
     def evaluate(self, response: str) -> HallucinationResult:
+        """Evaluate response for hallucination risk."""
         score = 0.0
         reasons: list[str] = []
 
@@ -539,13 +723,19 @@ class HallucinationDetector:
             reasons.append("placeholder content detected")
 
         score = min(score, 1.0)
-        return HallucinationResult(score=score, passed=score < 0.5, reasons=reasons)
+        return HallucinationResult(score=score, passed=score < 0.5,
+                                   reasons=reasons)
 
 
 class ResponseValidator:
-    """Simple response validation."""
+    """Simple response validation helper."""
 
     def validate(self, response: str) -> None:
+        """Validate the response string.
+
+        Raises:
+            ResponseValidationError: If response is empty or too short.
+        """
         if not response:
             raise ResponseValidationError("empty response")
         if len(response.strip()) < MIN_RESPONSE_LENGTH:
@@ -560,19 +750,26 @@ class RetryEngine:
     """Sync retry executor with exponential backoff."""
 
     def __init__(self, max_attempts: int = 3, base_delay: float = 1.0) -> None:
+        """Initialize RetryEngine."""
         self.max_attempts = max_attempts
         self.base_delay = base_delay
 
     def execute(self, func: Callable[[], T]) -> T:
+        """Execute callable with retries."""
         last_error: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             try:
                 return func()
             except Exception as exc:
                 last_error = exc
-                sleep_time = (self.base_delay * (2 ** (attempt - 1)))
+                sleep_time = self.base_delay * (2 ** (attempt - 1))
                 jitter = random.uniform(0, 0.5)
-                logger.warning("retry_attempt=%s sleep=%s error=%s", attempt, sleep_time, exc)
+                logger.warning(
+                    "retry_attempt=%s sleep=%s error=%s",
+                    attempt,
+                    sleep_time,
+                    exc,
+                )
                 time.sleep(sleep_time + jitter)
         raise last_error  # type: ignore[misc]
 
@@ -584,9 +781,17 @@ class RetryEngine:
 class AIProvider:
     """Abstract base for provider integrations."""
 
-    def __init__(self, provider_name: str, model: str | None = None, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self,
+        provider_name: str,
+        model: str | None = None,
+        timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    ) -> None:
+        """Initialize AIProvider base."""
         if provider_name not in PROVIDERS:
-            raise ProviderConfigurationError(f"Unknown provider metadata '{provider_name}'")
+            raise ProviderConfigurationError(
+                f"Unknown provider metadata '{provider_name}'"
+            )
         self.provider_name = provider_name
         self.timeout = timeout
         provider_meta = PROVIDERS[provider_name]
@@ -595,9 +800,12 @@ class AIProvider:
         self.retry_engine = RetryEngine()
         self.response_validator = ResponseValidator()
         self.hallucination_detector = HallucinationDetector()
-        self.metrics = ModelQualityMetrics(provider=provider_name, model=self.model)
+        self.metrics = ModelQualityMetrics(
+            provider=provider_name, model=self.model
+        )
 
     def validate_prompt(self, prompt: str) -> str:
+        """Validate and sanitize a prompt string."""
         if not isinstance(prompt, str):
             raise PromptValidationError("prompt must be string")
         prompt = prompt.strip()
@@ -607,7 +815,9 @@ class AIProvider:
             raise PromptValidationError("prompt exceeds maximum length")
         if "\x00" in prompt:
             raise PromptValidationError("prompt contains NUL byte")
-        sanitized = "".join(ch for ch in prompt if ch in ("\n", "\t") or ord(ch) >= 32)
+        sanitized = "".join(
+            ch for ch in prompt if ch in ("\n", "\t") or ord(ch) >= 32
+        )
         return sanitized
 
     def _send_impl(self, prompt: str) -> str:
@@ -615,14 +825,22 @@ class AIProvider:
         raise NotImplementedError
 
     def send(self, prompt: str) -> str:
+        """High-level send that validates prompt, runs retries, and checks."""
         validated_prompt = self.validate_prompt(prompt)
         self.metrics.requests += 1
         start_time = time.monotonic()
 
-        logger.info("provider_request provider=%s model=%s trace_id=%s", self.provider_name, self.model, self.trace_id)
+        logger.info(
+            "provider_request provider=%s model=%s trace_id=%s",
+            self.provider_name,
+            self.model,
+            self.trace_id,
+        )
 
         try:
-            response = self.retry_engine.execute(lambda: self._send_impl(validated_prompt))
+            response = self.retry_engine.execute(
+                lambda: self._send_impl(validated_prompt)
+            )
             duration = time.monotonic() - start_time
             self.metrics.total_latency_seconds += duration
             self.response_validator.validate(response)
@@ -630,27 +848,47 @@ class AIProvider:
             hallucination = self.hallucination_detector.evaluate(response)
             if not hallucination.passed:
                 self.metrics.hallucination_failures += 1
-                logger.warning("hallucination_detected provider=%s score=%s reasons=%s", self.provider_name, hallucination.score, hallucination.reasons)
+                logger.warning(
+                    "hallucination_detected provider=%s score=%s reasons=%s",
+                    self.provider_name,
+                    hallucination.score,
+                    hallucination.reasons,
+                )
             return response.strip()
         except Exception as exc:
             self.metrics.failures += 1
-            logger.exception("provider_error provider=%s trace_id=%s error=%s", self.provider_name, self.trace_id, exc)
-            raise ProviderRequestError(f"{self.provider_name} request failed: {exc}") from exc
+            logger.exception(
+                "provider_error provider=%s trace_id=%s error=%s",
+                self.provider_name,
+                self.trace_id,
+                exc,
+            )
+            raise ProviderRequestError(
+                f"{self.provider_name} request failed: {exc}"
+            ) from exc
 
 
 class EchoProvider(AIProvider):
+    """Local echo provider used for testing and defaults."""
+
     def __init__(self, model: str | None = None) -> None:
+        """Initialize EchoProvider."""
         super().__init__(provider_name="echo", model=model)
 
     def _send_impl(self, prompt: str) -> str:
+        """Return echoed prompt."""
         return f"(echo) {prompt}"
 
 
 class OpenAIProvider(AIProvider):
+    """Concrete provider using OpenAI SDK."""
+
     def __init__(self, model: str | None = None) -> None:
+        """Initialize OpenAIProvider."""
         super().__init__(provider_name="openai", model=model)
 
     def _send_impl(self, prompt: str) -> str:
+        """Send prompt to OpenAI API and return content."""
         try:
             from openai import OpenAI
         except Exception as exc:
@@ -669,36 +907,45 @@ class OpenAIProvider(AIProvider):
                 max_tokens=2048,
             )
         except Exception as exc:
-            raise ProviderRequestError(f"OpenAI request failed: {exc}") from exc
+            raise ProviderRequestError(
+                f"OpenAI request failed: {exc}"
+            ) from exc
 
         usage = getattr(response, "usage", None)
         if usage:
-            self.metrics.total_prompt_tokens += getattr(usage, "prompt_tokens", 0)
-            self.metrics.total_completion_tokens += getattr(usage, "completion_tokens", 0)
+            self.metrics.total_prompt_tokens += getattr(
+                usage, "prompt_tokens", 0
+            )
+            self.metrics.total_completion_tokens += getattr(
+                usage, "completion_tokens", 0
+            )
 
         try:
             return response.choices[0].message.content
         except Exception as exc:
-            raise ResponseValidationError("Invalid response structure") from exc
+            raise ResponseValidationError(
+                "Invalid response structure"
+            ) from exc
 
 
 class OpenAICompatibleProvider(AIProvider):
-    """
-    Generic provider for OpenAI-compatible APIs. Subclasses should set
-    api_base_url and api_key_env.
-    """
+    """Generic provider for OpenAI-compatible APIs."""
 
     api_base_url: str = ""
     api_key_env: str = ""
 
     def __init__(self, provider_name: str, model: str | None = None) -> None:
+        """Initialize OpenAICompatibleProvider."""
         super().__init__(provider_name=provider_name, model=model)
 
     def _send_impl(self, prompt: str) -> str:
+        """Send prompt using OpenAI SDK against configured base_url."""
         try:
             from openai import OpenAI
         except Exception as exc:
-            raise ProviderConfigurationError("Install OpenAI SDK: pip install openai") from exc
+            raise ProviderConfigurationError(
+                "Install OpenAI SDK: pip install openai"
+            ) from exc
 
         api_key = os.getenv(self.api_key_env)
         if not api_key:
@@ -713,76 +960,108 @@ class OpenAICompatibleProvider(AIProvider):
                 max_tokens=2048,
             )
         except Exception as exc:
-            raise ProviderRequestError(f"{self.provider_name} request failed: {exc}") from exc
+            raise ProviderRequestError(
+                f"{self.provider_name} request failed: {exc}"
+            ) from exc
 
         usage = getattr(response, "usage", None)
         if usage:
-            self.metrics.total_prompt_tokens += getattr(usage, "prompt_tokens", 0)
-            self.metrics.total_completion_tokens += getattr(usage, "completion_tokens", 0)
+            self.metrics.total_prompt_tokens += getattr(
+                usage, "prompt_tokens", 0
+            )
+            self.metrics.total_completion_tokens += getattr(
+                usage, "completion_tokens", 0
+            )
 
         try:
             content = response.choices[0].message.content
         except Exception as exc:
-            raise ResponseValidationError("Invalid response structure") from exc
+            raise ResponseValidationError(
+                "Invalid response structure"
+            ) from exc
         if not content or not isinstance(content, str):
             raise ResponseValidationError("Empty response")
         return content.strip()
 
 
 class PerplexityProvider(OpenAICompatibleProvider):
+    """Provider for Perplexity API."""
     api_base_url = "https://api.perplexity.ai"
     api_key_env = "PERPLEXITY_API_KEY"
 
     def __init__(self, model: str | None = None) -> None:
+        """Initialize PerplexityProvider."""
         super().__init__(provider_name="perplexity", model=model)
 
 
 class DeepSeekProvider(OpenAICompatibleProvider):
+    """Provider for DeepSeek API."""
     api_base_url = "https://api.deepseek.com/v1"
     api_key_env = "DEEPSEEK_API_KEY"
 
     def __init__(self, model: str | None = None) -> None:
+        """Initialize DeepSeekProvider."""
         super().__init__(provider_name="deepseek", model=model)
 
 
 class GroqProvider(OpenAICompatibleProvider):
+    """Provider for Groq API."""
     api_base_url = "https://api.groq.com/openai/v1"
     api_key_env = "GROQ_API_KEY"
 
     def __init__(self, model: str | None = None) -> None:
+        """Initialize GroqProvider."""
         super().__init__(provider_name="groq", model=model)
 
 
 class OpenRouterProvider(OpenAICompatibleProvider):
+    """Provider for OpenRouter API."""
     api_base_url = "https://openrouter.ai/api/v1"
     api_key_env = "OPENROUTER_API_KEY"
 
     def __init__(self, model: str | None = None) -> None:
+        """Initialize OpenRouterProvider."""
         super().__init__(provider_name="openrouter", model=model)
 
 
 class TogetherProvider(OpenAICompatibleProvider):
+    """Provider for Together AI API."""
     api_base_url = "https://api.together.xyz/v1"
     api_key_env = "TOGETHER_API_KEY"
 
     def __init__(self, model: str | None = None) -> None:
+        """Initialize TogetherProvider."""
         super().__init__(provider_name="together", model=model)
 
 
 class FireworksProvider(OpenAICompatibleProvider):
+    """Provider for Fireworks AI API."""
     api_base_url = "https://api.fireworks.ai/inference/v1"
     api_key_env = "FIREWORKS_API_KEY"
 
     def __init__(self, model: str | None = None) -> None:
+        """Initialize FireworksProvider."""
         super().__init__(provider_name="fireworks", model=model)
 
 
 class XAIProvider(OpenAICompatibleProvider):
+    """Provider for xAI Grok API."""
     api_base_url = "https://api.x.ai/v1"
     api_key_env = "XAI_API_KEY"
 
     def __init__(self, model: str | None = None) -> None:
+        """Initialize XAIProvider."""
         super().__init__(provider_name="xai", model=model)
+
+
+class GeminiProvider(OpenAICompatibleProvider):
+    """Google Gemini-compatible provider (uses OpenAI shim)."""
+    api_base_url = "https://api.gemini.google/v1"
+    api_key_env = "GEMINI_API_KEY"
+
+    def __init__(self, model: str | None = None) -> None:
+        """Initialize GeminiProvider."""
+        super().__init__(provider_name="gemini", model=model)
 
 
 # -----------------------------------------------------------------------------
@@ -799,10 +1078,12 @@ PROVIDER_MAP: dict[str, type[AIProvider]] = {
     "together": TogetherProvider,
     "fireworks": FireworksProvider,
     "xai": XAIProvider,
+    "gemini": GeminiProvider,
 }
 
 
 def build_provider(name: str, model: str | None = None) -> AIProvider:
+    """Factory that constructs a provider instance by name."""
     normalized_name = name.lower()
     try:
         provider_class = PROVIDER_MAP[normalized_name]
@@ -816,6 +1097,7 @@ def build_provider(name: str, model: str | None = None) -> AIProvider:
 # -----------------------------------------------------------------------------
 
 def ask(provider: str, prompt: str, model: str | None = None) -> str:
+    """High-level convenience function to ask a provider a prompt."""
     if not isinstance(provider, str):
         return "[ERROR] provider must be string"
     provider = provider.strip().lower()
@@ -823,7 +1105,10 @@ def ask(provider: str, prompt: str, model: str | None = None) -> str:
         return "[ERROR] provider is empty"
     if provider not in PROVIDERS:
         available = ", ".join(sorted(PROVIDERS.keys()))
-        return f"[ERROR] Invalid provider '{provider}'. Available providers: {available}"
+        return (
+            f"[ERROR] Invalid provider '{provider}'. Available providers: "
+            f"{available}"
+        )
 
     if not isinstance(prompt, str):
         return "[ERROR] prompt must be string"
@@ -840,14 +1125,21 @@ def ask(provider: str, prompt: str, model: str | None = None) -> str:
         supported_models = PROVIDERS[provider].supported_models
         if model not in supported_models:
             supported = ", ".join(supported_models)
-            return f"[ERROR] Invalid model '{model}' for provider '{provider}'. Supported models: {supported}"
+            return (
+                f"[ERROR] Invalid model '{model}' for provider "
+                f"'{provider}'. Supported models: {supported}"
+            )
 
     try:
         ai_provider = build_provider(name=provider, model=model)
         response = ai_provider.send(prompt)
 
         if not isinstance(response, str):
-            logger.error("invalid_response_type provider=%s type=%s", provider, type(response).__name__)
+            logger.error(
+                "invalid_response_type provider=%s type=%s",
+                provider,
+                type(response).__name__,
+            )
             return "[ERROR] Invalid response type"
         response = response.strip()
         if not response:
@@ -857,8 +1149,13 @@ def ask(provider: str, prompt: str, model: str | None = None) -> str:
         logger.error("ai_provider_error provider=%s error=%s", provider, exc)
         return f"[ERROR] {exc}"
     except Exception as exc:
-        logger.exception("unexpected_ask_failure provider=%s model=%s error=%s", provider, model, exc)
-        return "[ERROR] Unexpected internal error. Check logs for details."
+        logger.exception(
+            "unexpected_ask_failure provider=%s model=%s error=%s",
+            provider,
+            model,
+            exc,
+        )
+        return "[ERROR] Unexpected internal error. Check logs."
 
 
 # -----------------------------------------------------------------------------
@@ -866,14 +1163,19 @@ def ask(provider: str, prompt: str, model: str | None = None) -> str:
 # -----------------------------------------------------------------------------
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="ai_chat", description="Enterprise AI Gateway CLI")
-    parser.add_argument("-p", "--provider", default="echo", help="Provider name")
+    """Parse CLI arguments."""
+    parser = argparse.ArgumentParser(prog="ai_chat", description=(
+        "Enterprise AI Gateway CLI"
+    ))
+    parser.add_argument("-p", "--provider", default="echo",
+                        help="Provider name")
     parser.add_argument("-m", "--prompt", help="Prompt text")
     parser.add_argument("-M", "--model", help="Model override")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entrypoint main function."""
     args = parse_args(argv)
     prompt = args.prompt
     if not prompt:

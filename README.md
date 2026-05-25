@@ -26,7 +26,6 @@ ai-cli --provider openai --prompt "Explain Kubernetes operators"
 ## What’s New / Enhancements Overview
 
 This release expands the original feature set with focused improvements:
-
 - Provider plugin system for add-ons and third-party adapters
 - Declarative YAML configuration and profile support
 - Secure secrets integration (KMS, HashiCorp Vault, AWS Secrets Manager)

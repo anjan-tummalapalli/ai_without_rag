@@ -103,14 +103,39 @@ def build_parser() -> argparse.ArgumentParser:
 # -----------------------------------------------------------------------------
 
 
-def main(
-    argv: Sequence[str] | None = None,
-) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """
-    Main CLI entrypoint.
+    Main CLI entrypoint for the ai_cli application.
+
+    This function parses command-line arguments, reads a prompt either from the
+    --prompt argument or from stdin (when piped), invokes the AI request via
+    ask(...), and prints the response to stdout. It also handles logging,
+    timeout validation, decoding of byte responses, and maps common failure
+    scenarios to conventional exit codes.
+
+    Args:
+        argv (Sequence[str] | None): Optional list of command-line arguments to
+            parse. If None, the parser reads arguments from sys.argv (default
+            behaviour of argparse). Expected to be a sequence of strings or None.
 
     Returns:
-        int: process exit code
+        int: Process exit code indicating the outcome:
+            - 0   : success, response printed to stdout
+            - 1   : general error (parsing/IO/AI request failure)
+            - 124 : request timed out
+            - 130 : interrupted by user (KeyboardInterrupt)
+
+    Side effects:
+        - Reads from sys.stdin when no --prompt is provided and stdin is piped.
+        - Writes the AI response to stdout.
+        - Writes error messages to stderr on failure.
+        - Adjusts logging level when --debug is set.
+        - May call parser.error(...) which raises SystemExit for invalid args.
+
+    Raises:
+        SystemExit: If argument parsing fails (argparse parser.error is invoked).
+        KeyboardInterrupt: Propagated/handled as an interrupted operation (returns 130).
+        TimeoutError: Treated as a timeout condition (returns 124).
     """
     parser = build_parser()
     args = parser.parse_args(argv)

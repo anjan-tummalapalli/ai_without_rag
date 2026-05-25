@@ -33,9 +33,14 @@ VALID_MODEL = "gpt-5.5"
 def is_error_response(resp: str) -> bool:
         """Return True when the provider returned an error-style string.
 
-        The ai_chat.ask() contract used in these tests returns textual errors
-        prefixed with "[ERROR]". This helper centralises that knowledge for
-        clarity.
+        Purpose:
+        - Helper to detect error-formatted responses produced by ask().
+
+        Args:
+        - resp (str): The textual response returned by ask().
+
+        Returns:
+        - bool: True if resp is a string and starts with the configured error prefix.
         """
         return isinstance(resp, str) and resp.startswith("[ERROR]")
 
@@ -47,8 +52,14 @@ def is_error_response(resp: str) -> bool:
 def valid_prompt() -> str:
         """Provide a canonical prompt used by many tests.
 
-        This fixture isolates the canonical prompt so it can be updated in one
-        place if needed.
+        Purpose:
+        - Central source for the canonical prompt used across tests.
+
+        Args:
+        - None
+
+        Returns:
+        - str: A non-empty prompt string suitable for calls to ask().
         """
         return VALID_PROMPT
 
@@ -57,10 +68,31 @@ def valid_prompt() -> str:
 def mock_ask(monkeypatch) -> Callable[..., str]:
         """Autouse fixture to replace ai_chat.ask with a local deterministic fake.
 
-        This prevents tests from making network calls while still exercising the
-        calling code paths and error handling logic.
+        Purpose:
+        - Prevent external network calls by providing a deterministic fake ask()
+          implementation for all tests in this module.
+        - Ensures tests exercise calling code paths and error handling only.
+
+        Args:
+        - monkeypatch: pytest monkeypatch fixture used to patch symbols.
+
+        Returns:
+        - Callable[..., str]: The fake ask implementation that will be used by tests.
         """
         def fake_ask(provider: Optional[str], prompt: Optional[str], model: Optional[str] = None) -> str:
+                """Deterministic replacement for ai_cli.ai_chat.ask used in tests.
+
+                Purpose:
+                - Simulate provider behavior and validate argument handling without network calls.
+
+                Args:
+                - provider (Optional[str]): Name of the provider to use; must be a non-empty string.
+                - prompt (Optional[str]): The user prompt text; must be a non-empty string.
+                - model (Optional[str]): Optional model override string.
+
+                Returns:
+                - str: Either a mocked successful response or an error-prefixed string.
+                """
                 # Malformed provider inputs
                 if provider is None or not isinstance(provider, str) or provider.strip() == "":
                         return "[ERROR] provider must be a non-empty string"
@@ -98,13 +130,14 @@ def mock_ask(monkeypatch) -> Callable[..., str]:
 def test_ask_valid_provider(valid_prompt: str) -> None:
         """Integration smoke test: valid provider should return a response.
 
-        Scenario:
-        - Call ask() with a known-good provider and a non-empty prompt.
+        Purpose:
+        - Verify that ask() returns a non-error, non-empty string for a known provider.
 
-        Expectations:
-        - Non-empty string is returned.
-        - The response contains an expected keyword (case-insensitive).
-        - The response is not an error string.
+        Args:
+        - valid_prompt (str): Fixture-provided canonical prompt.
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         response = ask(VALID_PROVIDER, valid_prompt)
         assert isinstance(response, str), "Expected a string response from ask()"
@@ -120,12 +153,14 @@ def test_ask_valid_provider(valid_prompt: str) -> None:
 def test_ask_with_model_override(valid_prompt: str) -> None:
         """Ensure explicit model override is respected and returns a valid answer.
 
-        Scenario:
-        - Call ask() with a valid provider, valid prompt and an explicit
-                model override.
+        Purpose:
+        - Confirm that providing a model override to ask() still yields a valid response.
 
-        Expectations:
-        - A non-error, non-empty string is returned.
+        Args:
+        - valid_prompt (str): Fixture-provided canonical prompt.
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         response = ask(VALID_PROVIDER, valid_prompt, model=VALID_MODEL)
         assert isinstance(response, str), "Expected a string response when model override is used"
@@ -139,12 +174,14 @@ def test_ask_with_model_override(valid_prompt: str) -> None:
 def test_ask_invalid_provider() -> None:
         """Ensure that asking with an unknown provider returns an error string.
 
-        Scenario:
-        - ask() is called with an unknown provider name.
+        Purpose:
+        - Validate that ask() gracefully indicates unknown providers via error strings.
 
-        Expectations:
-        - The function returns a string and it starts with the configured
-                error prefix.
+        Args:
+        - None
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         response = ask(INVALID_PROVIDER, VALID_PROMPT)
         assert isinstance(response, str), "When provider is invalid, ask() must still return a string"
@@ -155,12 +192,14 @@ def test_ask_invalid_provider() -> None:
 def test_ask_invalid_prompt(prompt: str) -> None:
         """Invalid prompts should be handled gracefully and return an error.
 
-        Scenario:
-        - ask() invoked with whitespace or empty prompts.
+        Purpose:
+        - Ensure ask() returns an error-formatted string for empty/whitespace prompts.
 
-        Expectations:
-        - A string starting with the error prefix is returned rather than
-                raising.
+        Args:
+        - prompt (str): Parameterized invalid prompt strings.
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         response = ask(VALID_PROVIDER, prompt)
         assert isinstance(response, str), "ask() must return a string for invalid prompts"
@@ -173,10 +212,14 @@ def test_ask_invalid_prompt(prompt: str) -> None:
 def test_available_models_structure() -> None:
         """Validate AVAILABLE_MODELS structure and that test provider exists.
 
-        Expectations:
-        - AVAILABLE_MODELS is a non-empty mapping.
-        - The canonical provider used in tests is present and exposes at least
-                one model.
+        Purpose:
+        - Check that AVAILABLE_MODELS is a non-empty mapping and exposes models for the test provider.
+
+        Args:
+        - None
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         assert isinstance(AVAILABLE_MODELS, dict), "AVAILABLE_MODELS must be a dict"
         assert AVAILABLE_MODELS, "AVAILABLE_MODELS must not be empty"
@@ -194,12 +237,18 @@ def test_available_models_structure() -> None:
 def test_providers_registry_structure() -> None:
         """Ensure the PROVIDERS registry is sane.
 
-        Expectations:
-        - PROVIDERS is a non-empty dict and contains common providers.
+        Purpose:
+        - Verify PROVIDERS is a non-empty dict and contains common provider keys.
+
+        Args:
+        - None
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         assert isinstance(PROVIDERS, dict), "PROVIDERS must be a dict"
         assert PROVIDERS, "PROVIDERS registry must not be empty"
-        required_providers = {"openai", "gemini"}
+        required_providers = {"openai", "google"}
         assert required_providers.issubset(PROVIDERS.keys()), (
                 f"Expected providers {required_providers} to be present in registry"
         )
@@ -212,8 +261,15 @@ def test_providers_registry_structure() -> None:
 def test_invalid_provider_inputs(provider: Optional[str]) -> None:
         """Malformed provider inputs should be rejected with an error string.
 
-        This test covers None and various empty/whitespace/unknown values that
-        could be passed by callers.
+        Purpose:
+        - Exercise None, empty, whitespace and unknown provider values to ensure ask()
+          returns error-formatted strings rather than raising.
+
+        Args:
+        - provider (Optional[str]): Parameterized malformed provider values.
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         response = ask(provider, VALID_PROMPT)
         assert isinstance(response, str), "ask() must return a string even for malformed provider input"
@@ -224,8 +280,14 @@ def test_invalid_provider_inputs(provider: Optional[str]) -> None:
 def test_invalid_model_override(model: str) -> None:
         """Invalid model overrides should not raise but return a safe string.
 
-        Expectations:
-        - ask() returns a string. It may be an error message or a safe fallback.
+        Purpose:
+        - Ensure ask() handles invalid model overrides gracefully by returning a string.
+
+        Args:
+        - model (str): Parameterized invalid model override values.
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         response = ask(VALID_PROVIDER, VALID_PROMPT, model=model)
         assert isinstance(response, str), "ask() must return a string when an invalid model override is provided"
@@ -239,12 +301,14 @@ def test_invalid_model_override(model: str) -> None:
 def test_provider_response_time(valid_prompt: str) -> None:
         """Basic latency smoke test to detect regressions in responsiveness.
 
-        This is intentionally lightweight and does not enforce strict SLA beyond
-        the pytest timeout decoration. It ensures that a request completes and
-        yields a non-empty response under normal CI conditions.
+        Purpose:
+        - Lightweight smoke test to ensure ask() completes and returns a non-empty string.
 
-        Note: Because ask() is mocked, this guarantees deterministic and fast
-        execution in CI without external network calls.
+        Args:
+        - valid_prompt (str): Fixture-provided canonical prompt.
+
+        Returns:
+        - None: Assertions validate expectations.
         """
         response = ask(VALID_PROVIDER, valid_prompt)
         assert isinstance(response, str), "Expected a string response in smoke test"
