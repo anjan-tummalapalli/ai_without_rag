@@ -6,6 +6,9 @@ on:
 
 jobs:
   test:
+    # make the repository secret available to all steps in this job
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     runs-on: ubuntu-latest
 
