@@ -172,12 +172,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.info("provider=%s model=%s", args.provider, args.model)
 
     try:
-        response: Any = ask(
-            provider=args.provider,
-            prompt=prompt,
-            model=args.model,
-            timeout=args.timeout,
-        )
+        response = ask(
+                       provider=args.provider,
+                       prompt=prompt,
+                       timeout=args.timeout,
+                       )
 
         # Normalize response to string for safe printing
         if isinstance(response, bytes):

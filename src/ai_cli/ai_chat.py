@@ -898,7 +898,7 @@ class OpenAIProvider(AIProvider):
         if not api_key:
             raise ProviderConfigurationError("OPENAI_API_KEY not set")
 
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, timeout=self.timeout)
         try:
             response = client.chat.completions.create(
                 model=self.model,
@@ -921,11 +921,14 @@ class OpenAIProvider(AIProvider):
             )
 
         try:
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
         except Exception as exc:
             raise ResponseValidationError(
                 "Invalid response structure"
             ) from exc
+        if not content or not isinstance(content, str):
+            raise ResponseValidationError("Empty response")
+        return content.strip()
 
 
 class OpenAICompatibleProvider(AIProvider):
@@ -1096,7 +1099,13 @@ def build_provider(name: str, model: str | None = None) -> AIProvider:
 # High-level API
 # -----------------------------------------------------------------------------
 
-def ask(provider: str, prompt: str, model: str | None = None) -> str:
+def ask(
+    *,
+    provider: str,
+    prompt: str,
+    model: str | None = None,
+    timeout: float | None = 30.0,
+) -> str:
     """High-level convenience function to ask a provider a prompt."""
     if not isinstance(provider, str):
         return "[ERROR] provider must be string"
