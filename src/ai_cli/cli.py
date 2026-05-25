@@ -1,10 +1,6 @@
 from __future__ import annotations
-
-import argparse
-import logging
-import sys
-from typing import Sequence, Any
-
+import argparse, logging, sys
+from typing import Any, Sequence
 from ai_cli.ai_chat import ask
 
 # -----------------------------------------------------------------------------
@@ -20,14 +16,11 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
     stream=sys.stderr,
 )
-
 logger = logging.getLogger("ai_cli")
 
 # -----------------------------------------------------------------------------
 # CLI Argument Parsing
 # -----------------------------------------------------------------------------
-
-
 def build_parser() -> argparse.ArgumentParser:
     """
     Build and return the CLI argument parser.
@@ -66,20 +59,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         default=None,
         type=str,
-        help=(
-            "Optional model override "
-            "for the selected provider."
-        ),
+        help=("Optional model override " "for the selected provider."),
     )
 
     parser.add_argument(
         "--timeout",
         type=int,
         default=60,
-        help=(
-            "Request timeout in seconds. "
-            "Default: 60"
-        ),
+        help=("Request timeout in seconds. " "Default: 60"),
     )
 
     parser.add_argument(
@@ -97,12 +84,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 # -----------------------------------------------------------------------------
 # Main Execution
 # -----------------------------------------------------------------------------
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     """
     Main CLI entrypoint for the ai_cli application.
@@ -152,19 +136,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 prompt = sys.stdin.read().strip()
             else:
                 # interactive terminal and no prompt provided -> error
-                parser.error(
-                    "Prompt is required via --prompt or stdin (piped)."
-                )
+                parser.error("Prompt is required via --prompt or stdin (piped).")
         except Exception as exc:
             logger.exception("failed to read stdin: %s", exc)
             print(f"ERROR: failed to read stdin: {exc}", file=sys.stderr)
             return 1
 
     if not prompt:
-        parser.error(
-            "Prompt is required via "
-            "--prompt or stdin."
-        )
+        parser.error("Prompt is required via " "--prompt or stdin.")
 
     if args.timeout is None or args.timeout <= 0:
         parser.error("timeout must be a positive integer")
@@ -173,10 +152,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         response = ask(
-                       provider=args.provider,
-                       prompt=prompt,
-                       timeout=args.timeout,
-                       )
+            provider=args.provider,
+            prompt=prompt,
+            timeout=args.timeout,
+        )
 
         # Normalize response to string for safe printing
         if isinstance(response, bytes):
@@ -205,10 +184,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
-
 # -----------------------------------------------------------------------------
 # CLI Entrypoint
 # -----------------------------------------------------------------------------
-
 if __name__ == "__main__":
     raise SystemExit(main())
