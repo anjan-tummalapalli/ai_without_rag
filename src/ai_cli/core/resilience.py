@@ -5,6 +5,8 @@ import inspect
 import os
 import threading
 import time
+import random
+import logging
 from collections import deque
 from typing import Any, Callable, Deque, Optional, TypeVar
 
@@ -89,10 +91,6 @@ class AsyncRetryEngine:
                 await asyncio.sleep(sleep_time + (0.1 * attempt))
         assert last_exc is not None
         raise last_exc
-
-
-import random
-import logging
 
 logger = logging.getLogger("ai_gateway")
 
