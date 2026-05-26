@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, logging, sys
+import argparse, inspect, logging, sys
 from typing import Any, Sequence
 from ai_cli.core.api import ask
 
@@ -74,6 +74,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable debug logging.",
     )
 
+    # Added: support --profile and --stream
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default=None,
+        help="Profile name or configuration to use (optional).",
+    )
+
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Enable streaming responses if supported by provider.",
+    )
+
     parser.add_argument(
         "--version",
         action="version",
@@ -85,9 +99,49 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 # -----------------------------------------------------------------------------
+# Helper to build kwargs for ask() robustly
+# -----------------------------------------------------------------------------
+def _build_ask_kwargs(
+    provider: str,
+    prompt: str,
+    model: str | None,
+    timeout: int,
+    profile: str | None = None,
+    stream: bool = False,
+) -> dict[str, Any]:
+    """
+    Build the kwargs to pass to ask() based on what parameters it accepts.
+    This uses inspect.signature so the CLI remains compatible with different
+    versions of ask().
+    """
+    base = {"provider": provider, "prompt": prompt, "model": model, "timeout": timeout}
+    try:
+        sig = inspect.signature(ask)
+        params = sig.parameters
+        accepts_var_kw = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+        )
+        if accepts_var_kw or "profile" in params:
+            if profile is not None:
+                base["profile"] = profile
+        if accepts_var_kw or "stream" in params:
+            base["stream"] = stream
+    except Exception:
+        # If introspection fails, fall back to the base args only.
+        logger.debug("Failed to inspect ask() signature; sending base args only")
+    return base
+
+
+# -----------------------------------------------------------------------------
 # Interactive REPL Loop
 # -----------------------------------------------------------------------------
-def run_interactive(provider: str, model: str | None, timeout: int) -> int:
+def run_interactive(
+    provider: str,
+    model: str | None,
+    timeout: int,
+    profile: str | None = None,
+    stream: bool = False,
+) -> int:
     """Run an interactive chat session."""
     print(f"--- AI CLI Interactive Mode ---")
     print(f"Current Provider: {provider}")
@@ -118,12 +172,15 @@ def run_interactive(provider: str, model: str | None, timeout: int) -> int:
 
         print(f"[{current_provider}] Thinking...")
         try:
-            response = ask(
+            kwargs = _build_ask_kwargs(
                 provider=current_provider,
                 prompt=user_input,
                 model=model,
                 timeout=timeout,
+                profile=profile,
+                stream=stream,
             )
+            response = ask(**kwargs)
             print(f"\n{current_provider}: {response}")
         except Exception as e:
             print(f"[ERROR] {e}", file=sys.stderr)
@@ -143,7 +200,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         logger.setLevel(logging.DEBUG)
 
     if args.interactive:
-        return run_interactive(args.provider, args.model, args.timeout)
+        return run_interactive(
+            args.provider, args.model, args.timeout, profile=args.profile, stream=args.stream
+        )
 
     prompt = args.prompt
 
@@ -168,15 +227,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.timeout is None or args.timeout <= 0:
         parser.error("timeout must be a positive integer")
 
-    logger.info("provider=%s model=%s", args.provider, args.model)
+    logger.info("provider=%s model=%s profile=%s stream=%s", args.provider, args.model, args.profile, args.stream)
 
     try:
-        response = ask(
+        kwargs = _build_ask_kwargs(
             provider=args.provider,
             prompt=prompt,
             model=args.model,
             timeout=args.timeout,
+            profile=args.profile,
+            stream=args.stream,
         )
+        response = ask(**kwargs)
 
         if isinstance(response, bytes):
             try:
