@@ -13,42 +13,52 @@ git clone https://github.com/yourusername/ai-cli.git
 cd ai-cli
 ```
 
-2. Install (Poetry recommended):
+2. Install (Poetry recommended; editable install and pipx also supported):
 
 ```bash
+# Poetry
 poetry install
+
+# Editable pip install (local development)
+pip install -e .
+
+# Optional: install into isolated runtime with pipx
+pipx install .
 ```
 
-3. Create `.env` with required keys (see Environment Variables).
-4. Run single prompt (Auto-Fallback mode by default):
+3. Create `.env` or use your secret backend (see Security & Secrets). Required keys are referenced by env names in profiles (e.g., OPENAI_API_KEY).
+
+4. Run a single prompt (Auto-Fallback enabled by default; use --no-fallback to disable):
 
 ```bash
 PYTHONPATH=src python3 -m ai_cli.cli --prompt "Explain Kubernetes operators"
+# with explicit profile and streaming output
+PYTHONPATH=src python3 -m ai_cli.cli --profile default --stream --prompt "Explain Kubernetes operators"
 ```
 
-5. Start Interactive Chat Mode:
+5. Start Interactive Chat Mode (streaming, history and hot-switch supported):
 
 ```bash
 PYTHONPATH=src python3 -m ai_cli.cli -i
+# In REPL: /switch <provider>  /history  /clear
 ```
 
 ---
 
 ## What’s New / Enhancements Overview
 
-This release expands the original feature set with focused improvements:
+Recent updates include:
 
-- Provider plugin system for add-ons and third-party adapters
-- Declarative YAML configuration and profile support
-- Secure secrets integration (KMS, HashiCorp Vault, AWS Secrets Manager)
-- RBAC, audit logging, and SSO/OIDC support for enterprise access control
-- Circuit breakers, bulkheads, and advanced retry policies
-- Cost budgets, quotas, and per-team billing meters
-- Prometheus + OpenTelemetry full-stack observability + Grafana dashboards
-- Helm chart and Kubernetes operator for production deployment
-- Async multi-model orchestration and streaming responses
-- Local dev container and shell autocompletion
-- End-to-end CI workflows and contract tests
+- Async-first provider adapters and SDK improvements
+- Streaming-first CLI and SDK support (SSE/gRPC)
+- Provider plugin system with hot-reload and async entrypoints
+- Declarative YAML configuration with per-profile secret references
+- Secret-backend integrations (AWS Secrets Manager, HashiCorp Vault)
+- Opt-in OpenTelemetry auto-instrumentation and improved Prometheus metrics
+- Circuit breakers, bulkheads, adaptive retry policies, and request-based cost estimation
+- Helm chart, operator improvements, and GitOps-friendly manifests
+- Local web UI for quick debugging (http://localhost:8080) and Prometheus exporters
+- Expanded test matrix and contract tests for provider adapters
 
 ---
 
@@ -67,6 +77,7 @@ profiles:
         api_key_env: OPENAI_API_KEY
         region: us-east-1
         timeout: 30s
+        max_tokens: 2048
     routing:
       strategy: cost_latency_balance
       cost_weight: 0.6
@@ -74,6 +85,9 @@ profiles:
     reliability:
       retries: 3
       backoff: exponential
+      circuit_breaker:
+        failure_threshold: 0.05
+        window_seconds: 60
 ```
 
 Profile usage:
@@ -82,35 +96,50 @@ Profile usage:
 PYTHONPATH=src python3 -m ai_cli.cli --profile default --prompt "Summarize incident report"
 ```
 
+Notes:
+- Secrets can be referenced via env names or a secret backend path (see Security & Secrets).
+- Use --format json for structured output convenient for automation.
+
 ---
 
 ## Provider Plugin API
 
-- Discoverable plugins (pip-installable) with standardized adapter interface
-- Hot-reloadable provider registry
-- Example adapter entrypoint:
+- Discoverable plugins (pip-installable) with standardized async adapter interface
+- Hot-reloadable provider registry and feature flags per-provider
+- Example adapter entrypoint (async):
 
 ```python
 class ProviderAdapter(BaseProvider):
-    def send(self, request): ...
-    def health(self): ...
+    async def send(self, request): ...
+    async def health(self): ...
 ```
+
+Backward-compatible sync wrappers are provided for simple adapters.
 
 ---
 
 ## Security & Secrets
 
-- Integrations: AWS KMS, GCP KMS, HashiCorp Vault, Azure Key Vault
-- API key isolation per profile and per-team
-- Prompt sanitization, input validation, response redaction policies
-- Audit logs (append-only) and export to SIEM
-- SSO/OIDC + SCIM provisioning + role-based access control
+- Secret backends supported: AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault, Azure Key Vault
+- Configure backend via env: SECRET_BACKEND (e.g., aws_secrets, vault) and backend-specific config in ai-config.yaml
+- API key isolation per profile and per-team; secrets injected at runtime — no raw keys in logs
+- Prompt sanitization, input validation, response redaction policies, and configurable PII scrubbing
+- Audit logs (append-only) exportable to SIEM; SSO/OIDC + SCIM provisioning + RBAC supported
+
+Example: use secret reference instead of env var
+
+```yaml
+providers:
+  - name: openai
+    type: openai
+    api_key_secret: "secrets/ai/openai/api_key"
+```
 
 ---
 
 ## Observability & Monitoring
 
-- OpenTelemetry native spans and traces
+- OpenTelemetry native spans and traces; opt-in via AI_CLI_OTEL_ENABLED=true and OTel config
 - Prometheus metrics with example scrape config:
 
 ```yaml
@@ -126,26 +155,25 @@ scrape_configs:
   - ai_provider_tokens_total
   - ai_provider_request_latency_seconds
   - ai_provider_cost_estimated_total
-- Grafana dashboard JSON templates provided in /docs/dashboards
+- Local web UI provides live traces and metrics; Grafana dashboard JSON templates available in /docs/dashboards
 
 ---
 
 ## Reliability & Resilience
 
-- Circuit breaker + bulkhead isolation per provider
-- Adaptive retry policies (Jitter, exponential backoff)
-- Health-aware provider selection and automated failover
-- Request validation pipelines and hallucination scoring hooks
-- Canary and staged rollout primitives for model changes
+- Circuit breaker + bulkhead isolation per provider with configurable thresholds
+- Adaptive retry policies (jitter, exponential backoff), request-level deadlines, and cancellation
+- Health-aware provider selection, automated failover, and canary rollout primitives
+- Request validation pipelines, hallucination scoring hooks, and optional content moderation adapters
 
 ---
 
 ## Cost & Governance
 
-- Token and cost tracking by request, model, and team
-- Budget alerts and auto-throttling when budgets exceeded
+- Token and cost tracking by request, model, and team (billing meters exportable)
+- Budget alerts, quotas, and auto-throttling when budgets are exceeded
 - Policy engine (policy-as-code) to enforce model usage, content rules, and data residency
-- Data retention and request audit policies configurable per profile
+- Configurable data retention and request audit policies per profile
 
 ---
 
@@ -156,11 +184,11 @@ scrape_configs:
 
 ```bash
 docker build -t ai-cli:latest .
-docker run --env-file .env ai-cli:latest --prompt "Hello"
+docker run --env-file .env ai-cli:latest --profile default --prompt "Hello"
 ```
 
 - Kubernetes:
-  - Helm chart (charts/ai-cli)
+  - Helm chart (charts/ai-cli) with values for secret backends and observability
   - Optional operator for autoscaling and multi-region failover
 - Cloud-native: OCI images + GitOps (ArgoCD) examples in /deploy
 
@@ -168,63 +196,64 @@ docker run --env-file .env ai-cli:latest --prompt "Hello"
 
 ## Developer Experience
 
-- **Interactive Chat REPL**: Launch a continuous chat loop with hot-swappable providers by running `PYTHONPATH=src python3 -m ai_cli.cli -i`. Type `/switch <provider>` to change models mid-conversation!
-- Shell completion (bash/zsh/fish)
-- Devcontainer and local mock provider for tests
-- Auto-formatting and lint hooks: black, ruff, mypy
+- Interactive Chat REPL: streaming, history, provider hot-swap (`/switch <provider>`)
+- Shell completion (bash/zsh/fish) and CLI man page
+- Local devcontainer, mock provider, and local web UI for inspection
+- Auto-formatting and lint hooks: black, ruff, mypy; pre-commit included
+
+---
+
+## SDKs & API
+
+- CLI, REST and gRPC endpoints (configurable)
+- Python SDK: importable package (ai_cli.gateway) for embedding the gateway into applications
+- Streaming responses supported via gRPC streams and SSE; clients can opt into structured JSON streaming
+
+Example Python usage:
+
+```python
+from ai_cli.gateway import Client
+client = Client.from_profile("default")
+resp = await client.complete("Explain durable queues")
+```
 
 ---
 
 ## Testing & CI
 
 - Unit, integration, and contract tests for provider adapters
-- Example GitHub Actions workflow (ci.yml) with matrix builds and test caching
-- Local test harness that can spin up mock providers and Prometheus
-
----
-
-## API & SDKs
-
-- Exposes CLI, REST and gRPC endpoints (configurable)
-- Minimal SDKs: Python client for embedding the gateway
-- Streaming responses supported via gRPC streams and SSE
+- Example GitHub Actions workflows with matrix builds and cache layers in .github/workflows
+- Local test harness spins up mock providers, Prometheus, and runs contract checks
 
 ---
 
 ## Troubleshooting
 
-- Common logs and diagnostic commands:
+- Debug logging and diagnostic run:
 
 ```bash
 PYTHONPATH=src python3 -m ai_cli.cli --debug --provider echo --prompt "Test"
 ```
 
-- Diagnostic bundle collection: `ai-cli collect-diagnostics --output diagnostics.tgz`
+- Diagnostic bundle collection:
+
+```bash
+ai-cli collect-diagnostics --output diagnostics.tgz
+```
+
+- Use the local web UI to inspect recent traces, logs, and metrics when available
 
 ---
 
 ## Contributing & Roadmap
 
-- Follow `docs/DEVELOPMENT.md` for contributor guidelines.
-- Use GitHub flow, sign commits, include tests and changelog entries.
+- Follow docs/DEVELOPMENT.md for contributor guidelines, tests, and changelog requirements
+- Use GitHub flow, sign commits where required, include tests for new behavior
 
-### Future Enhancements
-
-We are actively planning the following high-priority enhancements for enterprise environments:
-
-1. **Securing API Tokens & Secrets Management**
-   - _Current State_: Tokens are loaded via `.env` files.
-   - _Enhancement_: Native integration with **AWS Secrets Manager**, **HashiCorp Vault**, and **Azure Key Vault**. This will eliminate the need to store raw API keys locally or in CI/CD pipelines, allowing dynamic secrets injection at runtime.
-
-2. **Cloud Provider Integrations (IAM & Managed LLMs)**
-   - _Current State_: Standard HTTP APIs to LLM endpoints.
-   - _Enhancement_: Deep integration with **AWS Bedrock**, **GCP Vertex AI**, and **Azure OpenAI**. Instead of API keys, the CLI gateway will securely authenticate using native cloud identities (e.g., AWS IAM Roles, GCP Workload Identity) for enhanced zero-trust security.
-
-3. **Multi-Region Failover & Edge Deployments**
-   - Implement intelligent edge routing using Cloudflare Workers or AWS Lambda@Edge to dispatch requests to the geographically nearest LLM inference node, dynamically routing around cloud outages.
-
-4. **Advanced RAG Orchestration & Workload Autoscaling**
-   - Native chunking, embedding generation, and vector-database querying pipelines directly from the CLI.
+Planned near-term items:
+- Expanded cloud-native auth integrations (Workload Identity, IAM Roles Anywhere)
+- Enhanced RAG orchestration and end-to-end vector DB pipelines
+- Improved multi-region edge routing and autoscaling primitives
 
 ---
 
@@ -233,7 +262,7 @@ We are actively planning the following high-priority enhancements for enterprise
 - configs/: example YAML profiles
 - plugins/: sample provider adapters
 - docs/dashboards/: Grafana templates
-- deploy/: Dockerfile, Helm chart, k8s manifests
+- deploy/: Dockerfile, Helm chart, k8s manifests, operator samples
 - tests/: integration and contract tests
 
 ---
