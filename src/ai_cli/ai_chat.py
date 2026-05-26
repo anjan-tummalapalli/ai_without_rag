@@ -41,6 +41,9 @@ try:
 except Exception:  # optional
     trace = None  # type: ignore
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # -----------------------------------------------------------------------------
 # Operational helpers (cache, retry, circuit breaker, rate limiter,
 # tracing)
