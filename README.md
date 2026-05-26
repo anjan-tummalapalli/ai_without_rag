@@ -7,18 +7,29 @@ Enterprise-grade multi-provider AI CLI gateway for intelligent AI operations, ob
 ## Quickstart
 
 1. Clone:
+
 ```bash
 git clone https://github.com/yourusername/ai-cli.git
 cd ai-cli
 ```
+
 2. Install (Poetry recommended):
+
 ```bash
 poetry install
 ```
+
 3. Create `.env` with required keys (see Environment Variables).
-4. Run single prompt:
+4. Run single prompt (Auto-Fallback mode by default):
+
 ```bash
-ai-cli --provider openai --prompt "Explain Kubernetes operators"
+PYTHONPATH=src python3 -m ai_cli.cli --prompt "Explain Kubernetes operators"
+```
+
+5. Start Interactive Chat Mode:
+
+```bash
+PYTHONPATH=src python3 -m ai_cli.cli -i
 ```
 
 ---
@@ -26,6 +37,7 @@ ai-cli --provider openai --prompt "Explain Kubernetes operators"
 ## What’s New / Enhancements Overview
 
 This release expands the original feature set with focused improvements:
+
 - Provider plugin system for add-ons and third-party adapters
 - Declarative YAML configuration and profile support
 - Secure secrets integration (KMS, HashiCorp Vault, AWS Secrets Manager)
@@ -45,6 +57,7 @@ This release expands the original feature set with focused improvements:
 Supports environment variables, CLI flags, and declarative YAML profiles.
 
 Example profile (ai-config.yaml):
+
 ```yaml
 profiles:
   default:
@@ -64,8 +77,9 @@ profiles:
 ```
 
 Profile usage:
+
 ```bash
-ai-cli --profile default --prompt "Summarize incident report"
+PYTHONPATH=src python3 -m ai_cli.cli --profile default --prompt "Summarize incident report"
 ```
 
 ---
@@ -75,6 +89,7 @@ ai-cli --profile default --prompt "Summarize incident report"
 - Discoverable plugins (pip-installable) with standardized adapter interface
 - Hot-reloadable provider registry
 - Example adapter entrypoint:
+
 ```python
 class ProviderAdapter(BaseProvider):
     def send(self, request): ...
@@ -97,12 +112,14 @@ class ProviderAdapter(BaseProvider):
 
 - OpenTelemetry native spans and traces
 - Prometheus metrics with example scrape config:
+
 ```yaml
 scrape_configs:
   - job_name: ai_cli
     static_configs:
-      - targets: ['ai-cli:9100']
+      - targets: ["ai-cli:9100"]
 ```
+
 - Key metrics:
   - ai_provider_requests_total
   - ai_provider_errors_total
@@ -136,10 +153,12 @@ scrape_configs:
 
 - Single-binary CLI (local)
 - Docker image:
+
 ```bash
 docker build -t ai-cli:latest .
 docker run --env-file .env ai-cli:latest --prompt "Hello"
 ```
+
 - Kubernetes:
   - Helm chart (charts/ai-cli)
   - Optional operator for autoscaling and multi-region failover
@@ -149,8 +168,8 @@ docker run --env-file .env ai-cli:latest --prompt "Hello"
 
 ## Developer Experience
 
+- **Interactive Chat REPL**: Launch a continuous chat loop with hot-swappable providers by running `PYTHONPATH=src python3 -m ai_cli.cli -i`. Type `/switch <provider>` to change models mid-conversation!
 - Shell completion (bash/zsh/fish)
-- Interactive REPL mode and Jupyter-friendly SDK
 - Devcontainer and local mock provider for tests
 - Auto-formatting and lint hooks: black, ruff, mypy
 
@@ -175,19 +194,37 @@ docker run --env-file .env ai-cli:latest --prompt "Hello"
 ## Troubleshooting
 
 - Common logs and diagnostic commands:
+
 ```bash
-ai-cli --debug --profile debug
-ai-cli health-check --provider openai
+PYTHONPATH=src python3 -m ai_cli.cli --debug --provider echo --prompt "Test"
 ```
+
 - Diagnostic bundle collection: `ai-cli collect-diagnostics --output diagnostics.tgz`
 
 ---
 
 ## Contributing & Roadmap
 
-- Follow docs/DEVELOPMENT.md for contributor guidelines
-- Use GitHub flow, sign commits, include tests and changelog entries
-- Roadmap highlights: multi-region replication, RAG orchestration, model explainability, workload autoscaling
+- Follow `docs/DEVELOPMENT.md` for contributor guidelines.
+- Use GitHub flow, sign commits, include tests and changelog entries.
+
+### Future Enhancements
+
+We are actively planning the following high-priority enhancements for enterprise environments:
+
+1. **Securing API Tokens & Secrets Management**
+   - _Current State_: Tokens are loaded via `.env` files.
+   - _Enhancement_: Native integration with **AWS Secrets Manager**, **HashiCorp Vault**, and **Azure Key Vault**. This will eliminate the need to store raw API keys locally or in CI/CD pipelines, allowing dynamic secrets injection at runtime.
+
+2. **Cloud Provider Integrations (IAM & Managed LLMs)**
+   - _Current State_: Standard HTTP APIs to LLM endpoints.
+   - _Enhancement_: Deep integration with **AWS Bedrock**, **GCP Vertex AI**, and **Azure OpenAI**. Instead of API keys, the CLI gateway will securely authenticate using native cloud identities (e.g., AWS IAM Roles, GCP Workload Identity) for enhanced zero-trust security.
+
+3. **Multi-Region Failover & Edge Deployments**
+   - Implement intelligent edge routing using Cloudflare Workers or AWS Lambda@Edge to dispatch requests to the geographically nearest LLM inference node, dynamically routing around cloud outages.
+
+4. **Advanced RAG Orchestration & Workload Autoscaling**
+   - Native chunking, embedding generation, and vector-database querying pipelines directly from the CLI.
 
 ---
 
