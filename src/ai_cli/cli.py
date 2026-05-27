@@ -1,6 +1,7 @@
 from __future__ import annotations
-import argparse, inspect, logging, sys
-from typing import Any, Sequence
+import argparse, asyncio, inspect, json, logging, sys, time
+from typing import Any, Iterable, AsyncIterable, Sequence
+from collections.abc import Generator
 from ai_cli.core.api import ask
 
 # -----------------------------------------------------------------------------
@@ -27,7 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ai-cli",
         description=(
-            "Enterprise AI CLI Gateway for multi-provider AI interactions."
+            "Enterprise AI CLI Gateway for multi-provider AI "
+            "interactions."
         ),
     )
 
@@ -74,7 +76,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable debug logging.",
     )
 
-    # Added: support --profile and --stream
     parser.add_argument(
         "--profile",
         type=str,
@@ -85,14 +86,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stream",
         action="store_true",
-        help="Enable streaming responses if supported by provider.",
+        help="Enable streaming responses if supported.",
     )
 
     parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {VERSION}",
-        help="Show program's version number and exit.",
+        help="Show program version and exit.",
     )
 
     return parser
@@ -110,26 +111,239 @@ def _build_ask_kwargs(
     stream: bool = False,
 ) -> dict[str, Any]:
     """
-    Build the kwargs to pass to ask() based on what parameters it accepts.
-    This uses inspect.signature so the CLI remains compatible with different
-    versions of ask().
+    Build the kwargs to pass to ask() based on what parameters it
+    accepts. Uses inspect.signature so the CLI remains compatible with
+    different ask() versions. Only keys accepted by ask() (or
+    variable kwargs) are passed. None values are omitted.
     """
-    base = {"provider": provider, "prompt": prompt, "model": model, "timeout": timeout}
+    # Normalize simple invalid inputs
+    provider = provider.strip() if provider and provider.strip() else "auto"
+    prompt = prompt or ""
+    model = (
+        model.strip() if isinstance(model, str) and model.strip() else None
+    )
+    profile = (
+        profile.strip() if isinstance(profile, str) and profile.strip() else None
+    )
+
+    candidate = {
+        "provider": provider,
+        "prompt": prompt,
+        "model": model,
+        "timeout": timeout,
+        "profile": profile,
+        "stream": stream,
+    }
+
     try:
         sig = inspect.signature(ask)
         params = sig.parameters
         accepts_var_kw = any(
             p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
         )
-        if accepts_var_kw or "profile" in params:
-            if profile is not None:
-                base["profile"] = profile
-        if accepts_var_kw or "stream" in params:
-            base["stream"] = stream
+        # Only include keys that ask accepts or if it accepts **kwargs
+        filtered: dict[str, Any] = {}
+        for k, v in candidate.items():
+            if v is None:
+                # omit None values to maximize compatibility
+                continue
+            if accepts_var_kw or k in params:
+                filtered[k] = v
+        # Ensure mandatory keys are present if ask expects them
+        if "prompt" in params and "prompt" not in filtered:
+            filtered["prompt"] = prompt
+        if "provider" in params and "provider" not in filtered:
+            filtered["provider"] = provider
+        return filtered
     except Exception:
-        # If introspection fails, fall back to the base args only.
-        logger.debug("Failed to inspect ask() signature; sending base args only")
-    return base
+        logger.debug("Failed to inspect ask() signature; sending best-effort args")
+        # Fallback: only base safe args
+        base: dict[str, Any] = {
+            "provider": provider,
+            "prompt": prompt,
+            "timeout": timeout,
+        }
+        if model is not None:
+            base["model"] = model
+        if profile is not None:
+            base["profile"] = profile
+        if stream:
+            base["stream"] = stream
+        return base
+
+
+# -----------------------------------------------------------------------------
+# Response handling (sync + async + streaming)
+# -----------------------------------------------------------------------------
+def _decode_chunk(chunk: Any) -> str:
+    if isinstance(chunk, bytes):
+        try:
+            return chunk.decode("utf-8")
+        except Exception:
+            return chunk.decode("utf-8", errors="replace")
+    if isinstance(chunk, str):
+        return chunk
+    try:
+        return json.dumps(chunk, default=str, ensure_ascii=False)
+    except Exception:
+        return str(chunk)
+
+
+async def _drain_async_result(result: Any, provider: str, stream: bool) -> int:
+    """
+    Handle coroutine results, async iterables or async generators from
+    ask(). Prints streaming pieces if iterable; otherwise prints final
+    value.
+    """
+    try:
+        # If it's an async iterable (async generator), iterate
+        if isinstance(result, AsyncIterable):
+            async for part in result:  # type: ignore
+                text = _decode_chunk(part)
+                print(text, end="", flush=True)
+            # newline at end
+            print()
+            return 0
+        # If it's an awaitable coroutine that returns a value
+        value = await result
+        # If the awaited value is async iterable, handle it (rare)
+        if isinstance(value, AsyncIterable):
+            async for part in value:  # type: ignore
+                print(_decode_chunk(part), end="", flush=True)
+            print()
+            return 0
+        # If the awaited value is an iterator/generator, iterate it
+        if isinstance(value, Iterable) and not isinstance(
+            value, (str, bytes, dict)
+        ):
+            for part in value:
+                print(_decode_chunk(part), end="", flush=True)
+            print()
+            return 0
+        # Scalar / dict / list etc.
+        text = _decode_chunk(value)
+        print(text)
+        return 0
+    except KeyboardInterrupt:
+        print("\n[Interrupted]", file=sys.stderr)
+        return 130
+    except Exception as exc:
+        logger.exception("async request failed: %s", exc)
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+def _handle_sync_result(result: Any, provider: str, stream: bool) -> int:
+    """
+    Handle synchronous results: scalars, bytes, dicts, iterables
+    (generators).
+    """
+    try:
+        # Asyncables slipped through
+        if inspect.isawaitable(result):
+            return asyncio.run(
+                _drain_async_result(result, provider, stream)
+            )
+
+        # If it's an async iterable object instance (rare)
+        if isinstance(result, AsyncIterable):
+            return asyncio.run(
+                _drain_async_result(result, provider, stream)
+            )
+
+        # Iterable streaming (but strings are iterable of chars -> avoid)
+        if isinstance(result, Iterable) and not isinstance(
+            result, (str, bytes, dict)
+        ):
+            for part in result:
+                print(_decode_chunk(part), end="", flush=True)
+            print()
+            return 0
+
+        # Bytes
+        if isinstance(result, bytes):
+            try:
+                print(result.decode("utf-8"))
+            except Exception:
+                print(result.decode("utf-8", errors="replace"))
+            return 0
+
+        # dict / list / scalar
+        if isinstance(result, (dict, list)):
+            print(
+                json.dumps(
+                    result, indent=2, ensure_ascii=False, default=str
+                )
+            )
+            return 0
+
+        print(str(result))
+        return 0
+    except KeyboardInterrupt:
+        print("\n[Interrupted]", file=sys.stderr)
+        return 130
+    except Exception as exc:
+        logger.exception("sync request failed: %s", exc)
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+# -----------------------------------------------------------------------------
+# Retry wrapper for transient errors
+# -----------------------------------------------------------------------------
+def _invoke_with_retries(kwargs: dict[str, Any], max_retries: int = 3,
+                         backoff: float = 0.5) -> int:
+    """
+    Invoke ask() with a small retry/backoff on transient errors.
+    Handles sync and async responses transparently. Returns an exit code.
+    """
+    attempt = 0
+    while True:
+        try:
+            attempt += 1
+            # Prepare a safe-to-log copy of kwargs
+            safe_kwargs = {
+                k: ("<redacted>" if k == "prompt" else v)
+                for k, v in kwargs.items()
+            }
+            logger.debug(
+                "Calling ask() attempt %d with kwargs=%s",
+                attempt,
+                safe_kwargs,
+            )
+            result = ask(**kwargs)
+            # If the result is awaitable or async iterable, handle via
+            # asyncio
+            if inspect.isawaitable(result) or isinstance(result, AsyncIterable):
+                return asyncio.run(
+                    _drain_async_result(
+                        result,
+                        kwargs.get("provider", "unknown"),
+                        kwargs.get("stream", False),
+                    )
+                )
+            # Otherwise handle sync
+            return _handle_sync_result(
+                result,
+                kwargs.get("provider", "unknown"),
+                kwargs.get("stream", False),
+            )
+        except (TimeoutError, ConnectionError, OSError) as exc:
+            logger.warning("Transient error on attempt %d: %s", attempt, exc)
+            if attempt >= max_retries:
+                logger.error("Max retries reached (%d). Failing.", max_retries)
+                print(f"ERROR: {exc}", file=sys.stderr)
+                return 124 if isinstance(exc, TimeoutError) else 1
+            sleep = backoff * (2 ** (attempt - 1))
+            time.sleep(sleep)
+            continue
+        except KeyboardInterrupt:
+            logger.warning("operation interrupted by user")
+            return 130
+        except Exception as exc:
+            logger.exception("ai request failed: %s", exc)
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
 
 
 # -----------------------------------------------------------------------------
@@ -143,12 +357,20 @@ def run_interactive(
     stream: bool = False,
 ) -> int:
     """Run an interactive chat session."""
-    print(f"--- AI CLI Interactive Mode ---")
-    print(f"Current Provider: {provider}")
-    print(f"Type /switch <provider> to change provider.")
-    print(f"Type /exit or /quit to exit.\n")
+    print("--- AI CLI Interactive Mode ---")
+    print(
+        f"Provider: {provider} | Model: {model or 'default'} | "
+        f"Profile: {profile or 'default'} | Stream: {stream}"
+    )
+    print(
+        "Type /switch <provider>, /model <model>, /profile <name>, "
+        "/stream, /exit or /quit. Type /help for this text.\n"
+    )
 
     current_provider = provider
+    current_model = model
+    current_profile = profile
+    current_stream = stream
 
     while True:
         try:
@@ -160,30 +382,69 @@ def run_interactive(
         if not user_input:
             continue
 
-        if user_input.lower() in ("/exit", "/quit", "exit", "quit"):
+        cmd = user_input.strip()
+        if cmd.lower() in ("/exit", "/quit", "exit", "quit"):
             print("Goodbye!")
             return 0
 
-        if user_input.startswith("/switch "):
-            _, new_p = user_input.split(maxsplit=1)
-            current_provider = new_p.strip()
-            print(f"Switched provider to: {current_provider}")
+        if cmd.lower() in ("/help",):
+            print("Commands:")
+            print("  /switch <provider>    Switch provider")
+            print("  /model <model>        Set model override")
+            print("  /profile <name>       Set profile")
+            print("  /stream               Toggle streaming mode")
+            print("  /exit, /quit          Exit")
             continue
 
+        if cmd.startswith("/switch"):
+            parts = cmd.split(maxsplit=1)
+            if len(parts) == 2 and parts[1].strip():
+                current_provider = parts[1].strip()
+                print(f"Switched provider to: {current_provider}")
+            else:
+                print("Usage: /switch <provider>", file=sys.stderr)
+            continue
+
+        if cmd.startswith("/model"):
+            parts = cmd.split(maxsplit=1)
+            if len(parts) == 2 and parts[1].strip():
+                current_model = parts[1].strip()
+                print(f"Model set to: {current_model}")
+            else:
+                current_model = None
+                print("Model cleared; using provider default.")
+            continue
+
+        if cmd.startswith("/profile"):
+            parts = cmd.split(maxsplit=1)
+            if len(parts) == 2 and parts[1].strip():
+                current_profile = parts[1].strip()
+                print(f"Profile set to: {current_profile}")
+            else:
+                current_profile = None
+                print("Profile cleared; using default.")
+            continue
+
+        if cmd.startswith("/stream"):
+            current_stream = not current_stream
+            print(f"Streaming {'enabled' if current_stream else 'disabled'}.")
+            continue
+
+        # Normal message
         print(f"[{current_provider}] Thinking...")
-        try:
-            kwargs = _build_ask_kwargs(
-                provider=current_provider,
-                prompt=user_input,
-                model=model,
-                timeout=timeout,
-                profile=profile,
-                stream=stream,
-            )
-            response = ask(**kwargs)
-            print(f"\n{current_provider}: {response}")
-        except Exception as e:
-            print(f"[ERROR] {e}", file=sys.stderr)
+        kwargs = _build_ask_kwargs(
+            provider=current_provider,
+            prompt=user_input,
+            model=current_model,
+            timeout=timeout,
+            profile=current_profile,
+            stream=current_stream,
+        )
+        exit_code = _invoke_with_retries(kwargs)
+        # continue interactive unless fatal
+        if exit_code not in (0, 130):
+            print(f"[ERROR] command failed with code {exit_code}", file=sys.stderr)
+        continue
 
     return 0
 
@@ -199,9 +460,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.debug:
         logger.setLevel(logging.DEBUG)
 
+    # Basic validation
+    if args.timeout is None or not isinstance(args.timeout, int) or args.timeout <= 0:
+        parser.error("timeout must be a positive integer")
+    if args.model is not None and not isinstance(args.model, str):
+        parser.error("model must be a string")
+    if args.profile is not None and not isinstance(args.profile, str):
+        parser.error("profile must be a string")
+
     if args.interactive:
         return run_interactive(
-            args.provider, args.model, args.timeout, profile=args.profile, stream=args.stream
+            args.provider,
+            args.model,
+            args.timeout,
+            profile=args.profile,
+            stream=args.stream,
         )
 
     prompt = args.prompt
@@ -210,7 +483,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not prompt:
         try:
             if not sys.stdin.isatty():
-                prompt = sys.stdin.read().strip()
+                # read all piped stdin
+                raw = sys.stdin.buffer.read()
+                if not raw:
+                    parser.error("Prompt is required via --prompt or stdin.")
+                try:
+                    prompt = raw.decode("utf-8").strip()
+                except Exception:
+                    prompt = raw.decode("utf-8", errors="replace").strip()
             else:
                 parser.error(
                     "Prompt is required via --prompt or stdin (piped). "
@@ -224,44 +504,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not prompt:
         parser.error("Prompt is required via --prompt or stdin.")
 
-    if args.timeout is None or args.timeout <= 0:
-        parser.error("timeout must be a positive integer")
-
-    logger.info("provider=%s model=%s profile=%s stream=%s", args.provider, args.model, args.profile, args.stream)
-
-    try:
-        kwargs = _build_ask_kwargs(
-            provider=args.provider,
-            prompt=prompt,
-            model=args.model,
-            timeout=args.timeout,
-            profile=args.profile,
-            stream=args.stream,
+    # safety checks on prompt size
+    if len(prompt) > 100_000:
+        print(
+            "Warning: prompt is very large; truncating to 100k "
+            "characters.",
+            file=sys.stderr,
         )
-        response = ask(**kwargs)
+        prompt = prompt[:100_000]
 
-        if isinstance(response, bytes):
-            try:
-                response_text = response.decode("utf-8")
-            except Exception:
-                response_text = response.decode("utf-8", errors="replace")
-        else:
-            response_text = str(response)
+    logger.info(
+        "provider=%s model=%s profile=%s stream=%s timeout=%s",
+        args.provider,
+        args.model,
+        args.profile,
+        args.stream,
+        args.timeout,
+    )
 
-        print(response_text)
-        return 0
+    kwargs = _build_ask_kwargs(
+        provider=args.provider,
+        prompt=prompt,
+        model=args.model,
+        timeout=args.timeout,
+        profile=args.profile,
+        stream=args.stream,
+    )
 
-    except KeyboardInterrupt:
-        logger.warning("operation interrupted by user")
-        return 130
-    except TimeoutError as exc:
-        logger.error("request timed out: %s", exc)
-        print(f"ERROR: request timed out: {exc}", file=sys.stderr)
-        return 124
-    except Exception as exc:
-        logger.exception("ai request failed: %s", exc)
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
+    return _invoke_with_retries(kwargs)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,9 @@
 from __future__ import annotations
-import os
 import time
 import uuid
 import logging
+import json
 from dataclasses import dataclass
-from typing import Any
 
 from ai_cli.core.exceptions import (
     ProviderConfigurationError,
@@ -60,6 +59,7 @@ class AIProvider:
         self.metrics = ModelQualityMetrics(
             provider=provider_name, model=self.model
         )
+        self._provider_meta = provider_meta
 
     def validate_prompt(self, prompt: str) -> str:
         """Validate and sanitize a prompt string."""
@@ -77,12 +77,49 @@ class AIProvider:
         )
         return sanitized
 
-    def _send_impl(self, prompt: str) -> str:
+    def _send_impl(self, _prompt: str) -> str:
         """Provider-specific implementation must override."""
         raise NotImplementedError(
             f"{self.__class__.__name__} must implement _send_impl()"
         )
-        
+
+    def _coerce_response_to_str(self, response) -> str:
+        """Handle non-string responses from providers and coerce to str."""
+        if response is None:
+            raise ProviderRequestError(
+                f"{self.provider_name} returned empty response (None)"
+            )
+        if isinstance(response, str):
+            return response
+        if isinstance(response, bytes):
+            try:
+                return response.decode("utf-8")
+            except Exception:
+                return response.decode("latin-1", errors="ignore")
+        if isinstance(response, (dict, list, tuple, int, float, bool)):
+            try:
+                return json.dumps(response, ensure_ascii=False)
+            except Exception as exc:
+                logger.warning(
+                    "response_serialization_failed provider=%s error=%s",
+                    self.provider_name,
+                    exc,
+                )
+                # Fallback to str()
+                return str(response)
+        # Best-effort fallback for arbitrary objects
+        try:
+            return str(response)
+        except Exception as exc:
+            logger.exception(
+                "response_coercion_failed provider=%s trace_id=%s error=%s",
+                self.provider_name,
+                self.trace_id,
+                exc,
+            )
+            raise ProviderRequestError(
+                f"{self.provider_name} returned an unsupported response type: {type(response)}"
+            ) from exc
 
     def send(self, prompt: str) -> str:
         """High-level send that validates prompt, runs retries, and checks."""
@@ -98,9 +135,13 @@ class AIProvider:
         )
 
         try:
-            response = self.retry_engine.execute(
+            raw_response = self.retry_engine.execute(
                 lambda: self._send_impl(validated_prompt)
             )
+
+            # Coerce non-string responses (e.g., dicts, bytes, numbers) into a string
+            response = self._coerce_response_to_str(raw_response)
+
             duration = time.monotonic() - start_time
             self.metrics.total_latency_seconds += duration
             self.response_validator.validate(response)
