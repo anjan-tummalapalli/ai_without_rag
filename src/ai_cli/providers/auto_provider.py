@@ -39,41 +39,27 @@ class AutoProvider(AIProvider):
             "fireworks",
         ]
 
-    def _send_impl(self, prompt: str) -> str:
-        errors = []
-        for p_name in self.fallback_order:
-            if p_name not in PROVIDER_MAP:
-                continue
+def _send_impl(self, prompt: str) -> str:
+    errors: list[str] = []
+    for provider_name in self.fallback_order:
+        try:
+            provider = PROVIDER_MAP.get(provider_name)
+            if provider is None:
+                raise ProviderRequestError(f"Provider '{provider_name}' not registered")
+            return provider.send(prompt)
 
-            provider_class = PROVIDER_MAP[p_name]
-            # Simple check: Does it have an env variable requirement?
-            if hasattr(provider_class, "api_key_env"):
-                env_var = provider_class.api_key_env
-                if not os.getenv(env_var):
-                    continue
-            elif p_name == "openai" and not os.getenv("OPENAI_API_KEY"):
-                continue
-            elif p_name == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
-                continue
+        except Exception as exc:
+            error_msg = f"{provider_name}: {str(exc)}"
+            errors.append(error_msg)
 
-            logger.info("AutoProvider attempting to use %s", p_name)
+            logger.warning(
+                "provider_fallback_failed provider=%s error=%s",
+                provider_name,
+                str(exc),
+            )
+            # continue to next provider on error
+            continue
 
-            try:
-                # Instantiate and route
-                instance = provider_class(model=None)  # use their default model
-                response = instance.send(prompt)
-
-                # Copy metrics over
-                self.metrics.total_prompt_tokens += (
-                    instance.metrics.total_prompt_tokens
-                )
-                self.metrics.total_completion_tokens += (
-                    instance.metrics.total_completion_tokens
-                )
-
-                return response
-            except Exception as exc:
-                logger.warning("AutoProvider %s failed: %s", p_name, exc)
-                errors.append(f"{p_name}: {exc}")
-
-        raise ProviderRequestError(f"Auto fallback exhausted. Errors: {errors}")
+    raise ProviderRequestError(
+        f"Auto fallback exhausted. Errors: {errors}"
+    )

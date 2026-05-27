@@ -79,7 +79,10 @@ class AIProvider:
 
     def _send_impl(self, prompt: str) -> str:
         """Provider-specific implementation must override."""
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement _send_impl()"
+        )
+        
 
     def send(self, prompt: str) -> str:
         """High-level send that validates prompt, runs retries, and checks."""
