@@ -5,6 +5,16 @@ from typing import Dict, Type
 
 from ai_cli.providers.base import AIProvider, ProviderMetadata, EchoProvider
 
+# Attempt to import the optional GeminiProvider dynamically to avoid static import
+# resolution errors in environments where the package isn't available.
+GeminiProvider = None
+try:
+    module = importlib.import_module("ai_cli.providers.gemini")
+    GeminiProvider = getattr(module, "GeminiProvider", None)
+except Exception:
+    # If the gemini provider isn't installed or importable, keep a None placeholder
+    GeminiProvider = None
+
 PROVIDERS: Dict[str, ProviderMetadata] = {
     "openai": ProviderMetadata(
         name="OpenAI",
@@ -141,13 +151,14 @@ PROVIDERS: Dict[str, ProviderMetadata] = {
 # The actual mapping is populated at runtime
 PROVIDER_MAP: Dict[str, Type[AIProvider]] = {"echo": EchoProvider}
 
+def register_provider(name: str, provider_cls: Type[AIProvider], metadata: ProviderMetadata) -> None:
+    """Register a provider class under a name and ensure metadata exists."""
+    PROVIDER_MAP[name.lower()] = provider_cls
+    PROVIDERS.setdefault(name.lower(), metadata)
 
-def register_provider(
-    name: str, provider_class: Type[AIProvider], metadata: ProviderMetadata
-) -> None:
-    """Register a provider dynamically."""
-    PROVIDERS[name] = metadata
-    PROVIDER_MAP[name] = provider_class
+# Register Google alias for Gemini if the Gemini provider is available
+if GeminiProvider is not None:
+    register_provider("google", GeminiProvider, PROVIDERS["gemini"])
 
 
 def build_provider(name: str, model: str | None = None) -> AIProvider:
