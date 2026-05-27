@@ -122,7 +122,6 @@ PROVIDERS: Dict[str, ProviderMetadata] = {
     ),
     "gemini": ProviderMetadata(
         name="Google Gemini",
-        version="6.0",
         default_model="gemini-3-pro",
         supported_models=[
             "gemini-3-pro",
@@ -189,7 +188,7 @@ def load_plugins() -> None:
     """Load providers from the plugins directory."""
     import ai_cli.plugins as plugins
 
-    for _, module_name, is_pkg in pkgutil.iter_modules(
+    for _, module_name, _ in pkgutil.iter_modules(
         plugins.__path__, plugins.__name__ + "."
     ):
         try:
