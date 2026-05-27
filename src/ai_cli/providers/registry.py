@@ -18,8 +18,9 @@ except Exception:
 PROVIDERS: Dict[str, ProviderMetadata] = {
     "openai": ProviderMetadata(
         name="OpenAI",
-        default_model="gpt-4o-realtime-preview",
+        default_model="gpt-5.5",
         supported_models=[
+            "gpt-5.5",
             "gpt-4o-realtime-preview",
             "gpt-4o",
             "gpt-4o-mini",
