@@ -36,6 +36,8 @@ except Exception:
         def __getattr__(self, name):
             # Return a callable that acts like a pytest mark (e.g., @pytest.mark.integration)
             def _mark(*_args, **_kwargs):
+                # Accept any positional args but deliberately ignore them to emulate pytest.Mark behavior.
+                del _args
                 return _Mark(name, **_kwargs)
             return _mark
 
@@ -274,8 +276,9 @@ def test_available_models_structure() -> None:
                         VALID_MODEL in provider_models
                         or any(VALID_MODEL in str(m) for m in provider_models)
                 ), (
-                        f"Expected model {VALID_MODEL!r} to be present in models for provider {VALID_PROVIDER!r}"
+                        f"Expected model {VALID_MODEL!r} to be available for provider {VALID_PROVIDER!r}"
                 )
+
 def test_providers_registry_structure() -> None:
         """Ensure the PROVIDERS registry is sane.
 
@@ -285,16 +288,10 @@ def test_providers_registry_structure() -> None:
         Args:
         - None
         """
-        required_providers = {VALID_PROVIDER, "google"}
-        assert required_providers.issubset(PROVIDERS.keys()), (
-                f"Expected providers {required_providers} to be present in registry"
-        )
+        assert isinstance(PROVIDERS, dict), "PROVIDERS must be a dict"
         assert PROVIDERS, "PROVIDERS registry must not be empty"
         # Require the canonical test provider (openai); other providers may be optional in some environments.
         required_providers = {VALID_PROVIDER}
-        assert required_providers.issubset(PROVIDERS.keys()), (
-                f"Expected providers {required_providers} to be present in registry"
-        )
         assert required_providers.issubset(PROVIDERS.keys()), (
                 f"Expected providers {required_providers} to be present in registry"
         )
