@@ -14,10 +14,8 @@ if TYPE_CHECKING:
     from ai_cli.utils.validation import HallucinationDetector  # type: ignore
     from ai_cli.telemetry.monitoring import ModelQualityMetrics  # type: ignore
 
-AVAILABLE_MODELS = {
-    provider: meta.supported_models
-    for provider, meta in PROVIDERS.items()
-}
+# Compute AVAILABLE_MODELS lazily to avoid importing PROVIDERS at module import time.
+# It will be constructed when requested via __getattr__.
 
 # Mapping of exported names to (module, attribute) for lazy import.
 _lazy_imports = {
@@ -54,6 +52,22 @@ def __getattr__(name: str):
     Raises a RuntimeError with a clear message if the import fails,
     and AttributeError if the name is not exported.
     """
+    # Special-case: construct AVAILABLE_MODELS lazily from PROVIDERS to avoid import-time access.
+    if name == "AVAILABLE_MODELS":
+        try:
+            registry = importlib.import_module("ai_cli.providers.registry")
+            providers = getattr(registry, "PROVIDERS")
+            result = {
+                provider: meta.supported_models
+                for provider, meta in providers.items()
+            }
+            globals()[name] = result
+            return result
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to build '{name}' from 'ai_cli.providers.registry': {exc}"
+            ) from exc
+
     if name not in _lazy_imports:
         raise AttributeError(f"module {__name__} has no attribute {name!r}")
 
@@ -68,8 +82,6 @@ def __getattr__(name: str):
         raise RuntimeError(
             f"Failed to import '{attr_name}' from '{module_name}': {exc}"
         ) from exc
-
-
 def __dir__():
     # Include the lazy exports in dir()
     return sorted(list(globals().keys()) + list(_lazy_imports.keys()))
