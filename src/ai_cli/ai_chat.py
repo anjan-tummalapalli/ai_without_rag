@@ -14,6 +14,11 @@ if TYPE_CHECKING:
     from ai_cli.utils.validation import HallucinationDetector  # type: ignore
     from ai_cli.telemetry.monitoring import ModelQualityMetrics  # type: ignore
 
+AVAILABLE_MODELS = {
+    provider: meta.supported_models
+    for provider, meta in PROVIDERS.items()
+}
+
 # Mapping of exported names to (module, attribute) for lazy import.
 _lazy_imports = {
     "ask": ("ai_cli.core.api", "ask"),
@@ -27,6 +32,7 @@ _lazy_imports = {
     "ModelQualityMetrics": ("ai_cli.telemetry.monitoring", "ModelQualityMetrics"),
 }
 
+
 __all__ = [
     "ask",
     "PROVIDERS",
@@ -37,6 +43,7 @@ __all__ = [
     "ModelQualityMetrics",
     "HallucinationDetector",
     "AIProviderError",
+    "AVAILABLE_MODELS",
 ]
 
 

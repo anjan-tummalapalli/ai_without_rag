@@ -14,7 +14,40 @@ monkeypatching the ask() entrypoint with a deterministic fake implementation.
 """
 from __future__ import annotations
 from typing import Optional, Callable
-import pytest
+try:
+    import pytest
+except Exception:
+    # Minimal shim for environments without pytest installed.
+    # This provides no-op decorators/fixtures so the test module can be imported
+    # by linters or tools that don't have pytest available.
+    class _Mark:
+        def __init__(self, name=None, **kwargs):
+            self.name = name
+            self.kwargs = kwargs
+
+        def __call__(self, *args, **kwargs):
+            def _decorator(func):
+                return func
+            return _decorator
+
+    class _Marks:
+        def __getattr__(self, name):
+            return _Mark(name)
+
+    class _PytestShim:
+        mark = _Marks()
+
+        def fixture(self, *args, **kwargs):
+            def _decorator(func):
+                return func
+            return _decorator
+
+        def parametrize(self, *args, **kwargs):
+            def _decorator(func):
+                return func
+            return _decorator
+
+    pytest = _PytestShim()
 import ai_cli.ai_chat as ai_chat_mod
 from ai_cli.ai_chat import AVAILABLE_MODELS, PROVIDERS, ask  # ask will be monkeypatched in tests
 
