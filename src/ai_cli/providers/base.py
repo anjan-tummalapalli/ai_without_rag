@@ -1,3 +1,17 @@
+"""Base classes for AI provider integrations.
+
+This module defines an abstract AIProvider used by provider-specific
+integrations. It centralizes prompt validation, retry handling,
+response coercion, response validation, hallucination detection, and
+model quality metrics so individual providers only implement transport
+and API specifics. The concrete EchoProvider provides a simple local
+echo implementation for testing.
+
+End result: calling send(prompt) returns a validated, coerced string
+response (or raises ProviderRequestError on failure) while updating
+metrics and logging relevant events.
+"""
+
 from __future__ import annotations
 import time
 import uuid

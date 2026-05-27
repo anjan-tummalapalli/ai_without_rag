@@ -167,6 +167,47 @@ if GeminiProvider is not None:
 
 
 def build_provider(name: str, model: str | None = None) -> AIProvider:
+    """
+    Registry and factory for AI provider implementations.
+
+    This module exposes build_provider(name: str, model: str | None = None) -> AIProvider,
+    a small factory function that constructs and returns a concrete AIProvider instance
+    based on a provider name. The function performs the following high-level steps:
+
+    - Normalizes the provided name to lower-case.
+    - Handles the special provider name "auto" by dynamically importing and returning
+        an AutoProvider initialized with the optional model argument.
+    - For other names, looks up the provider class in the PROVIDER_MAP mapping using
+        the normalized name and instantiates it with the model keyword argument.
+    - If the name is not found in PROVIDER_MAP, raises ProviderConfigurationError.
+
+    Parameters
+    - name (str): The provider identifier (case-insensitive). Special value "auto"
+        triggers automatic selection behavior.
+    - model (str | None): Optional model identifier to pass to the provider on
+        construction. May be None to request provider defaults.
+
+    Returns
+    - AIProvider: An initialized provider instance ready for use.
+
+    Raises
+    - ProviderConfigurationError: If the provided name is unknown (not "auto" and
+        not present in PROVIDER_MAP).
+    - ImportError / ModuleNotFoundError: If dynamic import of AutoProvider fails.
+    - TypeError / Exception: If a provider class in PROVIDER_MAP cannot be
+        instantiated with the given arguments.
+
+    Notes
+    - The provider classes stored in PROVIDER_MAP are expected to accept a
+        'model' keyword argument in their constructor (or otherwise handle the
+        provided signature).
+    - This function keeps import scope minimal by importing AutoProvider only when
+        the "auto" option is requested, avoiding unnecessary imports at module load
+        time.
+
+    End result: a concrete, configured AIProvider instance corresponding to the
+    requested provider name (or an error if the provider cannot be resolved).
+    """
     """Factory that constructs a provider instance by name."""
     normalized_name = name.lower()
 

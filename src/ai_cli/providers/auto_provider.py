@@ -9,7 +9,58 @@ logger = logging.getLogger("ai_gateway")
 
 
 class AutoProvider(AIProvider):
-    """Dynamically falls back to available providers based on API keys."""
+    """
+    AutoProvider module
+
+    Purpose:
+        Provide a single, synchronous AI provider that dynamically falls back to a sequence
+        of concrete providers registered in the global PROVIDER_MAP. AutoProvider attempts
+        to locate an available provider that can handle a request and returns the first
+        successful textual response. It centralizes logic for provider selection, capability
+        checks, instantiation, error handling, and logging so callers do not need to manage
+        provider-specific details or API key availability.
+
+    Behavior / end result:
+        - Maintains a prioritized fallback order of provider names. Each entry is looked up
+          in PROVIDER_MAP in sequence until a provider successfully returns a response.
+        - Supports being constructed with an optional requested model name; that model is
+          passed to providers when instantiating provider classes that subclass AIProvider.
+        - For each provider attempted, the following checks and actions occur:
+            - Skips providers that are not registered in PROVIDER_MAP, and logs a warning.
+            - If the registry entry is a class, it must be an AIProvider subclass; the class
+              is instantiated with the requested model. Instantiation failures are captured.
+            - Ensures the provider instance exposes a callable send(prompt) method; otherwise
+              the provider is skipped.
+            - If the provider publishes metadata (provider_meta) and a requested model is set,
+              verifies the provider claims to support that model (or "auto"); otherwise the
+              provider is skipped.
+            - Calls provider.send(prompt) synchronously. If send() raises, returns None, or
+              returns an awaitable (async provider), the provider is considered unsuccessful.
+            - Coerces non-string, non-None responses to str; if coercion fails the provider is
+              considered unsuccessful.
+            - On the first successful textual response, returns that string to the caller.
+        - Collects detailed error messages for each provider attempted and logs warnings,
+          info, or exceptions as appropriate.
+        - If all providers are exhausted without success, raises ProviderRequestError with an
+          aggregated diagnostic message listing all attempts and their failure reasons.
+
+    Important notes / caveats:
+        - AutoProvider._send_impl is synchronous and will skip providers whose send() returns
+          an awaitable (async implementations). Use an async-aware dispatcher if you must
+          support async providers.
+        - The module relies on external symbols (PROVIDER_MAP, ProviderRequestError, AIProvider,
+          ProviderMetadata, logger, inspect) being available in the runtime environment.
+        - Errors are informationally aggregated and logged; callers receive a single
+          ProviderRequestError when no provider succeeds.
+
+    Intended audience / usage:
+        - Useful in CLI tools, servers, or other environments where multiple LLM providers
+          may be available and you want a resilient, first-success fallback strategy.
+        - Callers pass a prompt to the provider and expect a synchronous string response
+          or a ProviderRequestError if no provider could produce a response.
+
+    Dynamically falls back to available providers based on API keys.
+    """
 
     def __init__(self, model: str | None = None) -> None:
         meta = ProviderMetadata(
