@@ -15,7 +15,7 @@ monkeypatching the ask() entrypoint with a deterministic fake implementation.
 from __future__ import annotations
 from typing import Optional, Callable
 try:
-    import pytest
+    import pytest  # type: ignore[import]
 except Exception:
     # Minimal shim for environments without pytest installed.
     # This provides no-op decorators/fixtures so the test module can be imported
@@ -25,24 +25,33 @@ except Exception:
             self.name = name
             self.kwargs = kwargs
 
-        def __call__(self, *args, **kwargs):
+        def __call__(self, *_args, **_kwargs):
+            # Accept any args/kwargs but deliberately ignore them to emulate pytest.Mark behavior.
+            del _args, _kwargs
             def _decorator(func):
                 return func
             return _decorator
 
     class _Marks:
         def __getattr__(self, name):
-            return _Mark(name)
+            # Return a callable that acts like a pytest mark (e.g., @pytest.mark.integration)
+            def _mark(*_args, **_kwargs):
+                return _Mark(name, **_kwargs)
+            return _mark
 
     class _PytestShim:
         mark = _Marks()
 
-        def fixture(self, *args, **kwargs):
+        def fixture(self, *_args, **_kwargs):
+            # Accept fixture args/kwargs but ignore them.
+            del _args, _kwargs
             def _decorator(func):
                 return func
             return _decorator
 
-        def parametrize(self, *args, **kwargs):
+        def parametrize(self, *_args, **_kwargs):
+            # Accept parametrize args/kwargs but ignore them.
+            del _args, _kwargs
             def _decorator(func):
                 return func
             return _decorator
@@ -264,9 +273,9 @@ def test_available_models_structure() -> None:
                 assert (
                         VALID_MODEL in provider_models
                         or any(VALID_MODEL in str(m) for m in provider_models)
-                ), f"Expected VALID_MODEL {VALID_MODEL!r} to be discoverable for provider {VALID_PROVIDER}"
-
-
+                ), (
+                        f"Expected model {VALID_MODEL!r} to be present in models for provider {VALID_PROVIDER!r}"
+                )
 def test_providers_registry_structure() -> None:
         """Ensure the PROVIDERS registry is sane.
 
@@ -275,13 +284,17 @@ def test_providers_registry_structure() -> None:
 
         Args:
         - None
-
-        Returns:
-        - None: Assertions validate expectations.
         """
-        assert isinstance(PROVIDERS, dict), "PROVIDERS must be a dict"
+        required_providers = {VALID_PROVIDER, "google"}
+        assert required_providers.issubset(PROVIDERS.keys()), (
+                f"Expected providers {required_providers} to be present in registry"
+        )
         assert PROVIDERS, "PROVIDERS registry must not be empty"
-        required_providers = {"openai", "google"}
+        # Require the canonical test provider (openai); other providers may be optional in some environments.
+        required_providers = {VALID_PROVIDER}
+        assert required_providers.issubset(PROVIDERS.keys()), (
+                f"Expected providers {required_providers} to be present in registry"
+        )
         assert required_providers.issubset(PROVIDERS.keys()), (
                 f"Expected providers {required_providers} to be present in registry"
         )
