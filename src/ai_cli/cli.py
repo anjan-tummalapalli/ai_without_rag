@@ -25,6 +25,7 @@ failures.
 import argparse, asyncio, inspect, json, logging, sys, time
 from typing import Any, Iterable, AsyncIterable, Sequence
 from ai_cli.core.api import ask
+from ai_cli.rag.pipeline import RAGPipeline
 
 # -----------------------------------------------------------------------------
 # Version
@@ -54,7 +55,6 @@ def build_parser() -> argparse.ArgumentParser:
                         "interactions."
                 ),
         )
-
         parser.add_argument(
                 "-p",
                 "--provider",
@@ -62,14 +62,12 @@ def build_parser() -> argparse.ArgumentParser:
                 type=str,
                 help="AI provider name (default: auto).",
         )
-
         parser.add_argument(
                 "-q",
                 "--prompt",
                 type=str,
                 help="Prompt/question to send to the AI provider.",
         )
-
         parser.add_argument(
                 "-m",
                 "--model",
@@ -77,40 +75,34 @@ def build_parser() -> argparse.ArgumentParser:
                 type=str,
                 help="Optional model override for the selected provider.",
         )
-
         parser.add_argument(
                 "-i",
                 "--interactive",
                 action="store_true",
                 help="Start an interactive REPL chat loop.",
         )
-
         parser.add_argument(
                 "--timeout",
                 type=int,
                 default=60,
                 help="Request timeout in seconds. Default: 60",
         )
-
         parser.add_argument(
                 "--debug",
                 action="store_true",
                 help="Enable debug logging.",
         )
-
         parser.add_argument(
                 "--profile",
                 type=str,
                 default=None,
                 help="Profile name or configuration to use (optional).",
         )
-
         parser.add_argument(
                 "--stream",
                 action="store_true",
                 help="Enable streaming responses if supported.",
         )
-
         parser.add_argument(
                 "--version",
                 action="version",
@@ -129,7 +121,24 @@ def build_parser() -> argparse.ArgumentParser:
         )
         return parser
 
+rag = RAGPipeline()
 
+if args.rag_docs:
+    for document in args.rag_docs:
+        rag.index_document(document)
+
+if args.rag:
+    context = rag.retrieve_context(prompt)
+
+    prompt = f"""
+Use the following context to answer the question.
+
+Context:
+{context}
+
+Question:
+{prompt}
+"""
 # -----------------------------------------------------------------------------
 # Helper to build kwargs for ask() robustly
 # -----------------------------------------------------------------------------
@@ -420,6 +429,10 @@ def run_interactive(
 
                 if cmd.lower() in ("/help",):
                         print("Commands:")
+                        print("index")
+                        print("search")
+                        print("rebuild-index")
+                        print("delete-index")
                         print("  /switch <provider>    Switch provider")
                         print("  /model <model>        Set model override")
                         print("  /profile <name>       Set profile")

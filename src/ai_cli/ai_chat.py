@@ -124,6 +124,19 @@ Question:
 {prompt}
 """
 
+if rag_enabled:
+    rag = RAGPipeline()
+    context = rag.retrieve_context(prompt)
+    prompt = f"""
+Use the following context to answer.
+
+Context:
+{context}
+
+Question:
+{prompt}
+"""
+
 response = provider.ask(
     prompt=enhanced_prompt,
 )

@@ -481,6 +481,53 @@ Prompt Augmentation
 LLM
 ---
 
+# Advanced RAG Support
+
+Features:
+
+- Semantic chunking
+- Embedding generation
+- FAISS vector database
+- Persistent vector indexes
+- PDF/TXT/Markdown ingestion
+- Semantic retrieval
+- Retrieval-augmented prompting
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+
+Example Usage
+
+ai-chat --rag --rag-docs docs/architecture.pdf "Explain the architecture"
+
+Supported File Types
+
+PDF
+
+TXT
+
+Markdown
+
+RAG Pipeline
+
+Documents
+↓
+Chunking
+↓
+Embeddings
+↓
+FAISS Index
+↓
+Similarity Search
+↓
+Prompt Augmentation
+↓
+LLM Response
+
+---
+
 ## Resilience & Reliability
 
 ### What's been enhanced in v0.3
@@ -808,6 +855,20 @@ Items moved from "planned" to "done" in v0.3 are marked ✅.
 ## Contributing
 
 Follow `docs/DEVELOPMENT.md`. Use GitHub flow, sign commits, include tests and a changelog entry. Run `black`, `ruff`, and `mypy` before opening a PR.
+
+---
+Recommended future upgrades
+
+- Hybrid BM25 + vector search
+- Cross-encoder reranking
+- Async indexing
+- GPU embeddings
+- Parent-child chunking
+- Metadata filtering
+- Qdrant integration
+- ChromaDB integration
+- pgvector support
+- Streaming retrieval
 
 ---
 
