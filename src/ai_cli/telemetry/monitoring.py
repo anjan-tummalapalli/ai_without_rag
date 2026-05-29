@@ -61,7 +61,10 @@ Operational notes
 from __future__ import annotations
 import contextlib
 import os
+import logging
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 try:
     from prometheus_client import Counter, Gauge, start_http_server # type: ignore
@@ -132,8 +135,12 @@ class Metrics:
         try:
             if start_http_server:
                 start_http_server(port)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+            "Failed to start monitoring server: %s",
+            exc,
+            exc_info=True,
+    )
 
     def record_request(self, provider: str) -> None:
         """Increment request counter."""

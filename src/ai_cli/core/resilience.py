@@ -1,12 +1,7 @@
 from __future__ import annotations
-import asyncio
-import functools
-import inspect
-import os
-import threading
-import time
-import random
-import logging
+import inspect, functools
+import os, time, secrets, logging
+import threading, asyncio
 from collections import deque
 from typing import Any, Callable, Deque, Optional, TypeVar
 
@@ -53,8 +48,12 @@ class Cache:
             try:
                 self._redis.set(self._key(key), value, ex=ttl)
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "Cache cleanup failed: %s",
+                    exc,
+                    exc_info=True,
+                )
         if key in self._local_cache:
             try:
                 self._local_order.remove(key)
@@ -89,7 +88,12 @@ class AsyncRetryEngine:
                 last_exc = exc
                 sleep_time = self.base_delay * (2 ** (attempt - 1))
                 await asyncio.sleep(sleep_time + (0.1 * attempt))
-        assert last_exc is not None
+        if last_exc is None:
+            raise RuntimeError(
+                "Retry operation failed without captured exception"
+            )
+        
+        raise last_exc
         raise last_exc
 
 logger = logging.getLogger("ai_gateway")
@@ -110,7 +114,7 @@ class RetryEngine:
             except Exception as exc:
                 last_error = exc
                 sleep_time = self.base_delay * (2 ** (attempt - 1))
-                jitter = random.uniform(0, 0.5)
+                jitter = secrets.SystemRandom().uniform(0, 0.5)
                 logger.warning(
                     "retry_attempt=%s sleep=%s error=%s",
                     attempt,

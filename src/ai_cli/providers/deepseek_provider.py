@@ -24,8 +24,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
-
-from openai import OpenAI
+from openai import OpenAI # type: ignore
 
 
 class DeepSeekProvider:

@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os
+import os, logging
 from ai_cli.providers.base import AIProvider
 from ai_cli.providers.registry import PROVIDERS, register_provider
 from ai_cli.core.exceptions import (
@@ -8,6 +8,7 @@ from ai_cli.core.exceptions import (
     ResponseValidationError,
 )
 
+logger = logging.getLogger(__name__)
 
 class OpenAIProvider(AIProvider):
     """Concrete provider using OpenAI SDK."""
@@ -224,8 +225,12 @@ class CohereProvider(AIProvider):
             ).get("token_count")
             if token_count is not None:
                 self.metrics.total_prompt_tokens += int(token_count)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(
+            "Token metric update failed: %s",
+            exc,
+            exc_info=True,
+    )
 
         return content.strip()
 
