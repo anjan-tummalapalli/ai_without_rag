@@ -442,7 +442,43 @@ from ai_cli.config.profiles import load_profile
 cfg = load_profile("production")
 print(cfg.provider, cfg.cost_budget_usd)
 ```
+---
 
+# Advanced RAG Support
+Features:
+- Semantic chunking
+- Embedding generation
+- FAISS vector database
+- Similarity search
+- Persistent vector indexes
+- Local document retrieval
+- PDF/TXT/Markdown ingestion
+
+
+# Installation
+
+pip install -r requirements.txt
+
+# Example Usage
+ai-chat --rag --rag-docs docs/*.pdf "Explain the architecture"
+
+# Index documents
+ai-chat index docs/
+
+# Architecture
+Documents
+   ↓
+Chunking
+   ↓
+Embeddings
+   ↓
+FAISS Index
+   ↓
+Similarity Retrieval
+   ↓
+Prompt Augmentation
+   ↓
+LLM
 ---
 
 ## Resilience & Reliability

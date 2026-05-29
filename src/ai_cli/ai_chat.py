@@ -23,6 +23,7 @@ __getattr__ and __dir__ to support lazy attribute access and discovery.
 
 from typing import TYPE_CHECKING
 import importlib
+from ai_cli.rag.pipeline import RAGPipeline
 
 # For static type checkers, import the real symbols so tools like mypy/IDE work.
 if TYPE_CHECKING:
@@ -110,3 +111,19 @@ def __getattr__(name: str):
 def __dir__():
         # Include the lazy exports in dir()
         return sorted(list(globals().keys()) + list(_lazy_imports.keys()))
+
+rag = RAGPipeline()
+context = rag.retrieve_context(prompt)
+enhanced_prompt = f"""
+Use the following context to answer.
+
+Context:
+{context}
+
+Question:
+{prompt}
+"""
+
+response = provider.ask(
+    prompt=enhanced_prompt,
+)

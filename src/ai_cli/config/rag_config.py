@@ -1,0 +1,5 @@
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 50
+TOP_K = 5
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+VECTOR_DB_PATH = ".rag_index"

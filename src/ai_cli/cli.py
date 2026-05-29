@@ -117,7 +117,16 @@ def build_parser() -> argparse.ArgumentParser:
                 version=f"%(prog)s {VERSION}",
                 help="Show program version and exit.",
         )
-
+        parser.add_argument(
+                "--rag",
+                action="store_true",
+                help="Enable RAG retrieval",
+        )
+        parser.add_argument(
+                "--rag-docs",
+                nargs="*",
+                help="Documents to index",
+        )
         return parser
 
 

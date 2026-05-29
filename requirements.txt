@@ -14,3 +14,9 @@ gitpython
 python-dotenv
 pytest
 language-tool-python
+sentence-transformers
+faiss-cpu
+numpy
+pypdf
+markdown
+tiktoken

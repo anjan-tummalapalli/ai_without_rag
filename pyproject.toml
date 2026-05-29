@@ -60,7 +60,13 @@ anyio = "^4.4.0"
 # Structured Logging
 structlog = "^24.2.0"
 # Tokenization / AI Utilities
-tiktoken = "^0.7.0"
+tiktoken = "^0.8.0"
+
+sentence-transformers = "^3.0.0"
+faiss-cpu = "^1.8.0"
+numpy = "^2.0.0"
+pypdf = "^5.0.0"
+markdown = "^3.7"
 
 # -----------------------------------------------------------------------------
 # Optional Dependency Groups
