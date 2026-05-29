@@ -13,3 +13,4 @@ fireworks
 gitpython
 python-dotenv
 pytest
+language-tool-python
