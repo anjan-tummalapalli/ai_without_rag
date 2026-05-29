@@ -1,6 +1,3 @@
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 50
-
 from __future__ import annotations
 
 import uuid
