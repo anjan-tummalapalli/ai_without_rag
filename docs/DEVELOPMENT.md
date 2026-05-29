@@ -32,7 +32,7 @@ This document outlines the guidelines for contributing to the AI CLI project. It
 
 - **Code Style**: Follow PEP 8 guidelines for Python code. Use tools like `flake8` or `black` for linting and formatting.
 - **Documentation**: Ensure that all functions and classes are well-documented. Use docstrings to describe the purpose, parameters, and return values.
-- **Testing**: Write unit tests for any new features or bug fixes. Place your tests in the `tests` directory and ensure they cover various scenarios.
+- **Testing**: Write unit tests for any new features or bug fixes. Place your tests in the `tests` directory. Run the comprehensive test suite using `poetry run pytest tests/test_enhanced.py -v` (and with coverage using `poetry run pytest --cov=src/ai_cli --cov-report=term-missing`). Ensure all tests pass and coverage is maintained or improved.
 
 ## Contributing
 

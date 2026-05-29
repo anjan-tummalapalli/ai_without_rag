@@ -36,6 +36,14 @@ The AI CLI is a command-line interface tool that allows users to interact with v
   - `color` (str): The color name (e.g., "cyan", "green").
 - **Returns**: The original text wrapped in ANSI escape sequences.
 
+### 5. `PromptCorrector` (Class & Instance)
+
+- **Description**: An intelligent, heuristic-based prompt correction utility that pre-processes prompts to resolve typos, balance brackets/quotes, normalize whitespace, and strip control/NUL characters before sending them to LLM providers.
+- **Instance**: `prompt_corrector` (pre-configured convenience instance).
+- **Methods**:
+  - `correct(prompt: str) -> str`: Sanitizes and corrects the input prompt, returning the clean string.
+  - `__init__(typo_map=None, collapse_spaces=True, fix_punctuation=True, balance_brackets=True, clean_control_chars=True)`: Customizes the enabled sanitization rules.
+
 ## Error Handling
 
 All functions are designed to handle errors gracefully. If an error occurs during execution, the functions will return a string that begins with "[ERROR]", providing information about the issue.

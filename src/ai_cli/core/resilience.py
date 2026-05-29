@@ -12,6 +12,8 @@ except Exception:  # optional
 
 T = TypeVar("T")
 
+logger = logging.getLogger("ai_gateway")
+
 
 class Cache:
     """Simple cache: Redis-backed when available, else in-memory LRU."""
@@ -41,7 +43,14 @@ class Cache:
                 return None if val is None else val
             except Exception:
                 return None
-        return self._local_cache.get(key)
+        if key in self._local_cache:
+            try:
+                self._local_order.remove(key)
+            except ValueError:
+                pass
+            self._local_order.appendleft(key)
+            return self._local_cache.get(key)
+        return None
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         if self._redis:
@@ -49,8 +58,8 @@ class Cache:
                 self._redis.set(self._key(key), value, ex=ttl)
                 return
             except Exception as exc:
-                logger.debug(
-                    "Cache cleanup failed: %s",
+                logger.warning(
+                    "Redis set failed, falling back to local cache: %s",
                     exc,
                     exc_info=True,
                 )
@@ -92,11 +101,8 @@ class AsyncRetryEngine:
             raise RuntimeError(
                 "Retry operation failed without captured exception"
             )
-        
-        raise last_exc
-        raise last_exc
 
-logger = logging.getLogger("ai_gateway")
+        raise last_exc
 
 
 class RetryEngine:
@@ -107,6 +113,9 @@ class RetryEngine:
         self.base_delay = base_delay
 
     def execute(self, func: Callable[[], T]) -> T:
+        if inspect.iscoroutinefunction(func):
+            raise TypeError("Use AsyncRetryEngine for async functions / coroutines")
+
         last_error: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             try:
@@ -126,7 +135,7 @@ class RetryEngine:
 
 
 class CircuitBreaker:
-    """Minimal thread-safe circuit breaker."""
+    """Minimal thread-safe circuit breaker supporting sync and async callables."""
 
     def __init__(self, threshold: int = 5, timeout: int = 30):
         self.threshold = threshold
@@ -151,24 +160,38 @@ class CircuitBreaker:
                 self.open_until = time.time() + self.timeout
 
     def wrap(self, fn: Callable[..., Any]) -> Callable[..., Any]:
-        @functools.wraps(fn)
-        def _wrapped(*args, **kwargs):
-            if not self.allow():
-                raise RuntimeError("circuit open")
-            try:
-                result = fn(*args, **kwargs)
-            except Exception:
-                self.failure()
-                raise
-            else:
-                self.success()
-                return result
-
-        return _wrapped
+        if inspect.iscoroutinefunction(fn):
+            @functools.wraps(fn)
+            async def _wrapped_async(*args, **kwargs):
+                if not self.allow():
+                    raise RuntimeError("circuit open")
+                try:
+                    result = await fn(*args, **kwargs)
+                except Exception:
+                    self.failure()
+                    raise
+                else:
+                    self.success()
+                    return result
+            return _wrapped_async
+        else:
+            @functools.wraps(fn)
+            def _wrapped_sync(*args, **kwargs):
+                if not self.allow():
+                    raise RuntimeError("circuit open")
+                try:
+                    result = fn(*args, **kwargs)
+                except Exception:
+                    self.failure()
+                    raise
+                else:
+                    self.success()
+                    return result
+            return _wrapped_sync
 
 
 class RateLimiter:
-    """Token-bucket rate limiter."""
+    """Token-bucket rate limiter supporting sync and async callables."""
 
     def __init__(self, capacity: int = 10, rate_per_second: float = 1.0):
         self.capacity = capacity
@@ -193,13 +216,20 @@ class RateLimiter:
             return False
 
     def wrap(self, fn: Callable[..., Any]) -> Callable[..., Any]:
-        @functools.wraps(fn)
-        def _wrapped(*args, **kwargs):
-            if not self.allow():
-                raise RuntimeError("rate limited")
-            return fn(*args, **kwargs)
-
-        return _wrapped
+        if inspect.iscoroutinefunction(fn):
+            @functools.wraps(fn)
+            async def _wrapped_async(*args, **kwargs):
+                if not self.allow():
+                    raise RuntimeError("rate limited")
+                return await fn(*args, **kwargs)
+            return _wrapped_async
+        else:
+            @functools.wraps(fn)
+            def _wrapped_sync(*args, **kwargs):
+                if not self.allow():
+                    raise RuntimeError("rate limited")
+                return fn(*args, **kwargs)
+            return _wrapped_sync
 
 
 class StreamConsumer:
@@ -213,10 +243,15 @@ class StreamConsumer:
             return self.provider.send_stream(prompt, on_token)
 
         def _worker():
-            resp = self.provider.send(prompt)
-            for token in resp.split():
-                on_token(token + " ")
-            on_token("")  # sentinel
+            try:
+                resp = self.provider.send(prompt)
+                for token in resp.split():
+                    on_token(token + " ")
+            except Exception as e:
+                logger.exception("StreamConsumer background worker failed: %s", e)
+                on_token(f"[ERROR: {e}]")
+            finally:
+                on_token("")  # sentinel
 
         thr = threading.Thread(target=_worker, daemon=True)
         thr.start()

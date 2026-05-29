@@ -76,20 +76,20 @@ class AIProvider:
         self._provider_meta = provider_meta
 
     def validate_prompt(self, prompt: str) -> str:
-        """Validate and sanitize a prompt string."""
+        """Validate, sanitize, and correct a prompt string."""
         if not isinstance(prompt, str):
             raise PromptValidationError("prompt must be string")
-        prompt = prompt.strip()
-        if not prompt:
-            raise PromptValidationError("prompt is empty")
-        if len(prompt) > DEFAULT_MAX_PROMPT_LENGTH:
-            raise PromptValidationError("prompt exceeds maximum length")
         if "\x00" in prompt:
             raise PromptValidationError("prompt contains NUL byte")
-        sanitized = "".join(
-            ch for ch in prompt if ch in ("\n", "\t") or ord(ch) >= 32
-        )
-        return sanitized
+
+        from ai_cli.core.prompt_corrector import prompt_corrector
+        corrected = prompt_corrector.correct(prompt)
+
+        if not corrected:
+            raise PromptValidationError("prompt is empty")
+        if len(corrected) > DEFAULT_MAX_PROMPT_LENGTH:
+            raise PromptValidationError("prompt exceeds maximum length")
+        return corrected
 
     def _send_impl(self, _prompt: str) -> str:
         """Provider-specific implementation must override."""

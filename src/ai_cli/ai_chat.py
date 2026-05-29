@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         from ai_cli.core.resilience import RetryEngine  # type: ignore
         from ai_cli.utils.validation import HallucinationDetector  # type: ignore
         from ai_cli.telemetry.monitoring import ModelQualityMetrics  # type: ignore
+        from ai_cli.core.prompt_corrector import PromptCorrector, prompt_corrector  # type: ignore
 
 # Compute AVAILABLE_MODELS lazily to avoid importing PROVIDERS at module import time.
 # It will be constructed when requested via __getattr__.
@@ -48,6 +49,8 @@ _lazy_imports = {
         "RetryEngine": ("ai_cli.core.resilience", "RetryEngine"),
         "HallucinationDetector": ("ai_cli.utils.validation", "HallucinationDetector"),
         "ModelQualityMetrics": ("ai_cli.telemetry.monitoring", "ModelQualityMetrics"),
+        "PromptCorrector": ("ai_cli.core.prompt_corrector", "PromptCorrector"),
+        "prompt_corrector": ("ai_cli.core.prompt_corrector", "prompt_corrector"),
 }
 
 
@@ -62,6 +65,8 @@ __all__ = [
         "HallucinationDetector",
         "AIProviderError",
         "AVAILABLE_MODELS",
+        "PromptCorrector",
+        "prompt_corrector",
 ]
 
 
