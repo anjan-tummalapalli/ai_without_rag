@@ -1,9 +1,10 @@
-SentenceTransformer(
-    "all-MiniLM-L6-v2"
-)
-
 from __future__ import annotations
-from sentence_transformers import SentenceTransformer
+
+try:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+except ImportError:
+    SentenceTransformer = None  # type: ignore
+
 from ai_cli.config.rag_config import EMBEDDING_MODEL
 
 
@@ -16,6 +17,11 @@ class EmbeddingGenerator:
         self,
         model_name: str = EMBEDDING_MODEL,
     ) -> None:
+        if SentenceTransformer is None:
+            raise ImportError(
+                "The 'sentence_transformers' package is required but not installed. "
+                "Install it with: pip install sentence-transformers"
+            )
         self.model = SentenceTransformer(model_name)
 
     def embed_text(
