@@ -1,14 +1,7 @@
-DISALLOWED_PATTERNS = [
-    "ignore previous instructions",
-    "system prompt",
-    "reveal secrets",
-]
-
 from __future__ import annotations
 from pathlib import Path
-from pypdf import PdfReader
+import importlib
 from ai_cli.rag.models import Document
-
 
 class DocumentLoader:
     """
@@ -56,12 +49,33 @@ class DocumentLoader:
         Extract PDF text.
         """
 
+        # Dynamically import a PDF reader backend to avoid hard top-level import
+        PdfReader = None
+        for module_name in ("pypdf", "PyPDF2"):
+            try:
+                module = importlib.import_module(module_name)
+                PdfReader = getattr(module, "PdfReader")
+                break
+            except ModuleNotFoundError:
+                PdfReader = None
+
+        if PdfReader is None:
+            raise RuntimeError(
+                "No PDF backend found. Install 'pypdf' or 'PyPDF2'."
+            )
+
         reader = PdfReader(str(path))
 
         text = []
 
-        for page in reader.pages:
-            extracted = page.extract_text()
+        # Support both pypdf and PyPDF2 page APIs and older method names
+        for page in getattr(reader, "pages", []):
+            if hasattr(page, "extract_text"):
+                extracted = page.extract_text()
+            elif hasattr(page, "extractText"):
+                extracted = page.extractText()
+            else:
+                extracted = None
 
             if extracted:
                 text.append(extracted)
