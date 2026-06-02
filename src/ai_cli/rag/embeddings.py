@@ -61,3 +61,8 @@ class EmbeddingGenerator:
             emb_batch = self._postprocess(emb_batch)
             embeddings.extend(list(emb_batch))
         return embeddings
+    
+# ------------------------------------------------------------------
+# Backward compatibility alias (legacy provider API)
+# ------------------------------------------------------------------
+EmbeddingsProvider = EmbeddingGenerator

@@ -25,7 +25,7 @@ Notes:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Dict
 import json
@@ -179,8 +179,8 @@ class RAGConfig:
 
         top_k: int = 5
 
-        embedding: EmbeddingConfig = EmbeddingConfig()
-        vector_store: VectorStoreConfig = VectorStoreConfig()
+        embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
+        vector_store: VectorStoreConfig = field(default_factory=VectorStoreConfig)
 
         metadata_path: Path = METADATA_DIR / "metadata.json"
 
