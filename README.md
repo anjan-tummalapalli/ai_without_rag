@@ -1,877 +1,245 @@
 # AI CLI Gateway — v0.3.0
 
-> Enterprise-grade multi-provider AI CLI gateway with Security & Identity Management, Tool Calling, ReAct Agents, and an enhanced Developer Experience.
+> Enterprise-grade multi-provider AI CLI gateway with Security & Identity Management, Tool Calling, ReAct Agents, and an enhanced Developer Experience — now with production-ready Advanced RAG: robust chunking, embedding orchestration, and vector DB querying.
 
 ---
 
 ## What's New in v0.3.0
 
-This release delivers four major capability pillars on top of the existing multi-provider routing and resilience foundation:
+This release extends the multi-provider routing and resilience foundation with production-grade RAG capabilities focused on:
 
-| Pillar | Key additions |
-|---|---|
-| **Security & Identity** | Identity context, RBAC, layered secrets backend (Vault / AWS SM / Azure KV), audit log with HMAC integrity, prompt sanitisation, per-identity rate limiting & budget guard |
-| **Tool Calling** | JSON-schema tool registry, 7 built-in tools, OpenAI & Anthropic schema export, RBAC-gated execution, execution trace |
-| **Agents** | ReAct (Reason-Act-Observe) loop, sliding-window memory, scratchpad, AgentPlanner, AgentRunner façade |
-| **Developer Experience** | Rich CLI output, `--agent`, `--with-tools`, `--list-tools`, `--login`, `--whoami`, `--budget`, `--audit`, `--trace` flags; YAML profiles; comprehensive test suite |
-
----
-
-## Project Structure
-
-```
-src/ai_cli/
-├── __init__.py               # ask(), ask_with_tools(), ask_agent() exports
-├── cli.py                    # Enhanced CLI entrypoint (v0.3)
-├── ai_chat.py                # Public convenience re-exports
-├── core/
-│   ├── api.py                # ask(), ask_with_tools(), ask_agent() + security pipeline
-│   ├── exceptions.py         # Full exception hierarchy (provider, security, tool, agent)
-│   └── resilience.py         # RetryEngine, CircuitBreaker, BulkheadLimiter,
-│                             #   RateLimiter, HealthTracker, StreamConsumer, Cache
-├── security/
-│   └── identity.py           # IdentityContext, RBAC, SecretsBackend, AuditLogger,
-│                             #   PromptSanitiser, IdentityRateLimiter, BudgetGuard
-├── tools/
-│   └── registry.py           # ToolRegistry, ToolDefinition, 7 built-in tools
-├── agents/
-│   └── agent.py              # AgentMemory, AgentPlanner, ReactAgent, AgentRunner
-├── config/
-│   └── profiles.py           # YAML profile loader (ai-cli.yaml)
-├── providers/
-│   ├── base.py               # AIProvider base class
-│   ├── registry.py           # Provider registry + auto-routing
-│   └── auto_provider.py      # Cost/latency-aware auto-selection
-├── plugins/
-│   └── builtins.py           # OpenAI, Anthropic, Groq, Gemini, Perplexity, etc.
-├── telemetry/
-│   └── monitoring.py         # Prometheus metrics, OpenTelemetry traces
-└── utils/
-    ├── secrets.py            # Legacy secrets helpers (superseded by security/)
-    └── validation.py         # HallucinationDetector, prompt validators
-```
+- Reliable semantic chunking (token-aware, overlap, adaptive sizing, OCR-aware)
+- Scalable embedding pipelines (batching, async, provider + local models)
+- Pluggable, consistent indexer interface with hybrid search (vector + metadata), filters, and upsert/delete operations
+- CLI and Python APIs to ingest, re-embed, index, query, and monitor vector stores
+- Tests, metrics and docs for reproducible integration with FAISS, Qdrant, Chroma, pgvector
 
 ---
 
-## Quickstart
+## Project Structure (RAG-focused files)
+
+```
+src/ai_cli/rag/
+├── __init__.py
+├── pipeline.py           # RAGPipeline: retrieval, augmentation, grounding, caching
+├── ingest.py             # CLI/programmatic ingestion: parse -> chunk -> embed -> index
+├── chunking.py           # SemanticChunker: token/char chunkers, overlap, adaptive sizing, OCR hooks
+├── embeddings.py         # EmbedderRegistry: provider adapters, sentence-transformers adapter, batching, async
+└── indexers/
+  ├── base.py           # Indexer interface: upsert(), search(), delete(), info()
+  ├── faiss_indexer.py  # Local FAISS indexer with disk snapshots + memory map
+  ├── qdrant_indexer.py # Qdrant client indexer with retry/CB and hybrid filtering
+  ├── chroma_indexer.py # Chroma client/local indexer
+  └── pgvector_indexer.py # pgvector (Postgres) indexer with SQL + vector ops
+```
+
+Files changed/added for Advanced RAG:
+- src/ai_cli/rag/{pipeline.py,ingest.py,chunking.py,embeddings.py}
+- src/ai_cli/rag/indexers/{faiss_indexer.py,qdrant_indexer.py,chroma_indexer.py,pgvector_indexer.py}
+- CLI: src/ai_cli/cli.py (new flags/subcommands for RAG)
+- config profiles updated: src/ai_cli/config/profiles.py (rag options)
+- docs: docs/rag/ (usage, deployment, qdrant-compose, contributor guide)
+
+---
+
+## Core RAG Concepts — Implementation Notes
+
+- Chunking
+  - SemanticChunker supports token-aware chunking (uses tokenizers when available), character fallback, and overlap parameters.
+  - Adaptive chunk sizing: tune per-document type (code, long text, PDF pages) and enforce max token limits for model context.
+  - Source metadata preserved (path, page, byte-range, text-hash) to support precise citations and provenance.
+
+- Embeddings
+  - EmbedderRegistry exposes adapters:
+  - sentence-transformers (local models, batch and GPU/CPU),
+  - provider-based (OpenAI/Anthropic) with rate-limited, batched requests.
+  - Supports configurable batch sizes, parallel workers, and retry/backoff.
+  - Re-embedding workflow available to migrate embeddings between models.
+
+- Indexers & Querying
+  - Indexer interface: upsert(documents), search(query_embedding, k, filter, hybrid_weight), delete(ids), info()
+  - Qdrant indexer implements:
+  - vector search with cosine/inner product,
+  - metadata filtering (JSON filters),
+  - hybrid scoring (vector_score * alpha + metadata_score * (1-alpha)),
+  - pagination and cursor support.
+  - FAISS indexer supports on-disk indices and periodic snapshot/restore.
+  - pgvector indexer exposes SQL-friendly hybrid queries for join/filter scenarios.
+
+- Pipeline Behavior
+  - RAGPipeline orchestrates: retrieve candidates -> dedupe -> augment prompt with trimmed context & citations -> LLM call
+  - Cache layer for embeddings and retrieval results to reduce cost and latency
+  - RBAC and audit pipeline wrap ingest/index operations
+
+---
+
+## Quickstart (Updated for Advanced RAG)
 
 ### 1. Clone & Install
 
 ```bash
 git clone https://github.com/yourusername/ai-cli.git
 cd ai-cli
+
 poetry install
+
+# Optional RAG extras
+pip install "faiss-cpu"                # local FAISS
+pip install qdrant-client              # Qdrant remote
+pip install chromadb                   # Chroma
+pip install "psycopg2-binary"          # pgvector (Postgres)
+pip install sentence-transformers      # local embeddings models
+```
+
+Or use extras:
+```bash
+poetry add .[rag]
 ```
 
 ### 2. Configure environment
 
 ```bash
 cp .env.example .env
-# Fill in your provider API keys
+# Fill provider API keys plus vector DB config
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+DATABASE_URL=postgresql://user:pass@localhost:5432/pgdb
+CHROMA_SETTINGS={"path":"/data/chroma"}
+EMBED_PROVIDER=openai
+EMBED_MODEL=text-embedding-3-small
 ```
 
-### 3. Basic usage
+### 3. CLI Examples
 
 ```bash
-# Single prompt (auto-selects best available provider)
+# Single prompt
 ai-cli -q "Explain Kubernetes operators"
 
-# Specific provider and model
-ai-cli -p groq -m llama3-8b-8192 -q "Write a haiku about Python"
+# Index a docs folder to Qdrant with sentence-transformers embeddings
+ai-cli rag index docs/ --db qdrant --namespace docs-2026 --embed-model all-MiniLM-L6-v2 --chunk-size 1000 --chunk-overlap 200
 
-# Read from stdin
-echo "Summarize this" | ai-cli -p openai
+# Query RAG pipeline (auto retrieval + augmentation)
+ai-cli --rag --rag-db qdrant --rag-namespace docs-2026 -q "Summarize our security model" --rag-k 5
 
-# Interactive REPL
-ai-cli -i
+# Re-embed an index with a new model
+ai-cli rag reembed --db qdrant --namespace docs-2026 --from-model all-MiniLM-L6-v2 --to-model multi-qa-MiniLM
 ```
 
 ---
 
-## Security & Identity Management
+## CLI RAG Commands & Flags (Highlights)
 
-### Identity & Authentication
+- ai-cli rag index <path> [--db DB] [--namespace NAME] [--embed-model MODEL] [--chunk-size N] [--chunk-overlap M] [--embed-batch-size B]
+- ai-cli rag query --db DB --namespace NAME --k N --filter '{"key":"value"}' [--hybrid-weight 0.5] "QUERY"
+- ai-cli rag status --db DB --namespace NAME
+- ai-cli rag reembed --db DB --namespace NAME --from-model X --to-model Y
 
-Every request carries an `IdentityContext` (auto-resolved from env or an explicit gateway API key).
-
-```bash
-# Authenticate with a gateway API key
-ai-cli --login aicli-developer-alice-<32hexchars>
-
-# Show current identity, roles, budget, and rate limit
-ai-cli --whoami
-```
-
-**Gateway API key format:** `aicli-<role>-<identity>-<32hexchars>`
-Roles: `admin` | `developer` | `user` | `service`
-
-```python
-from ai_cli.security.identity import authenticate_api_key
-
-ctx = authenticate_api_key("aicli-developer-alice-abcdef1234567890abcdef1234567890")
-# ctx.identity_id == "alice", ctx.roles == ["developer"]
-```
-
-### RBAC (Role-Based Access Control)
-
-Roles control which providers, tools, budgets, and rate limits apply.
-
-| Role | Providers | Tools | Budget | Rate limit |
-|---|---|---|---|---|
-| `admin` | all | all | $100 | 500 rpm |
-| `developer` | openai, anthropic, groq, gemini, auto | web_search, calculator, file_read, shell, … | $10 | 60 rpm |
-| `user` | openai, anthropic, groq, auto | web_search, calculator | $2 | 20 rpm |
-| `service` | all | all | $50 | 300 rpm |
-
-Override the policy by providing `ai-cli-policy.json` or setting `AI_CLI_POLICY`:
-
-```json
-{
-  "developer": {
-    "allowed_providers": ["openai", "groq", "auto"],
-    "allowed_tools": ["web_search", "calculator", "file_read"],
-    "cost_budget_usd": 20.0,
-    "rate_limit_rpm": 120
-  }
-}
-```
-
-### Layered Secrets Backend
-
-Secrets are resolved in priority order — no raw keys in code:
-
-```
-Environment variables  →  HashiCorp Vault  →  AWS Secrets Manager  →  Azure Key Vault
-```
-
-```python
-from ai_cli.security.identity import SECRETS
-
-api_key = SECRETS.get("OPENAI_API_KEY")   # resolved from whichever backend has it
-```
-
-Configure the backends via environment variables:
-
-```bash
-# HashiCorp Vault
-VAULT_ADDR=http://vault:8200
-VAULT_TOKEN=hvs.xxx
-VAULT_SECRET_PATH=secret/data/ai_cli
-
-# AWS Secrets Manager
-AWS_REGION=us-east-1
-AWS_SECRET_NAME=ai_cli_secrets
-
-# Azure Key Vault
-AZURE_VAULT_URL=https://my-vault.vault.azure.net
-```
-
-### Audit Logging
-
-Every `ask()` call writes an append-only JSONL entry with HMAC integrity:
-
-```bash
-# Tail the last 20 audit entries
-ai-cli --audit 20
-```
-
-```python
-from ai_cli.security.identity import AUDIT, IdentityContext
-
-ctx = IdentityContext(identity_id="alice", roles=["developer"])
-AUDIT.log("custom_event", ctx, {"action": "bulk_query", "count": 50})
-
-# Verify integrity of a log line
-is_valid = AUDIT.verify(line)
-```
-
-### Prompt Sanitisation & PII Redaction
-
-```python
-from ai_cli.security.identity import sanitize_prompt, redact_pii_for_log, detect_prompt_injection
-
-# Detect injection patterns (warning in normal mode, raises in strict mode)
-hits = detect_prompt_injection("Ignore all previous instructions!")
-
-# Raises PromptValidationError in strict mode
-sanitize_prompt(prompt, strict=True)
-
-# Redact PII before logging (SSN, credit cards, email, phone)
-safe_text = redact_pii_for_log("My SSN is 123-45-6789")
-# → "My SSN is [SSN]"
-```
-
-Use `--strict` on the CLI to enable strict injection detection:
-
-```bash
-ai-cli --strict -q "Your prompt here"
-```
-
-### Budget Guard
-
-```bash
-# Show current spend vs. budget
-ai-cli --budget
-```
-
-```python
-from ai_cli.security.identity import enforce_budget, estimate_cost
-
-cost = estimate_cost("openai", tokens=1500)   # → ~$0.003
-enforce_budget(ctx, "openai", tokens=1500)    # raises BudgetExceededError if over limit
-```
+Common flags:
+- --db qdrant|faiss|chroma|pgvector
+- --embed-model <model>
+- --embed-batch-size (default: 256)
+- --chunk-size (default: 1000 chars)
+- --chunk-overlap (default: 200 chars)
+- --hybrid-weight (0..1) (vector vs metadata weighting)
+- --filter JSON (metadata filter)
 
 ---
 
-## Tool Calling
+## Python API (Examples)
 
-### Built-in Tools
+```python
+from ai_cli.rag.ingest import ingest_documents, chunk_documents, embed_documents
+from ai_cli.rag.pipeline import RAGPipeline
+from ai_cli.rag.indexers.registry import IndexerRegistry
+from ai_cli.rag.embeddings import EmbedderRegistry
 
-| Tool | Category | Description |
-|---|---|---|
-| `web_search` | information | DuckDuckGo instant-answer search |
-| `calculator` | utility | Safe math expression evaluator (supports `sqrt`, `log`, etc.) |
-| `file_read` | filesystem | Read local text files (path-traversal protected) |
-| `shell` | system | Execute shell commands (**admin only**) |
-| `http_get` | network | HTTP GET request with body return |
-| `datetime_now` | utility | Current UTC date and time |
-| `env_lookup` | utility | Look up non-sensitive env vars (blocks key/secret/token) |
+# Ingest (parse -> chunk -> embed -> index)
+ingest_documents(path="docs/", db="qdrant", namespace="project-arch", embed_model="all-MiniLM-L6-v2", chunk_size=1000, chunk_overlap=200)
 
-### CLI Tool Usage
+# Programmatic chunking + embedding
+chunks = chunk_documents("docs/manual.md", chunk_size=1200, overlap=250)
+embeds = embed_documents(chunks, model="all-MiniLM-L6-v2", batch_size=128)
 
+# Direct search with indexer
+idx = IndexerRegistry.get("qdrant")
+results = idx.search(query="rotate secrets in production", k=6, embed_model="all-MiniLM-L6-v2", hybrid_weight=0.7, filter={"path": {"$eq": "docs/manual.md"}})
+
+# RAG pipeline ask
+pipeline = RAGPipeline(provider="openai", embed_model="all-MiniLM-L6-v2", indexer="qdrant", namespace="project-arch")
+answer = pipeline.ask("How do we rotate secrets in production?", k=6)
+print(answer.text)
+```
+
+Key APIs:
+- ingest_documents(path, db, namespace, embed_model, chunk_size, chunk_overlap, metadata_fn)
+- chunk_documents(file, chunk_size, overlap) -> list[Chunk]
+- embed_documents(chunks, model, batch_size) -> list[Embeddings]
+- Indexer.upsert/docs/search/delete/info
+- RAGPipeline.ask(query, k, filter, hybrid_weight)
+
+---
+
+## Testing & CI
+
+New tests:
+- rag/test_ingest.py (parsing, chunking, metadata)
+- rag/test_embeddings.py (batching, provider fallback)
+- rag/test_indexers.py (upsert/search/delete with mocks)
+- rag/test_pipeline.py (end-to-end with mocked providers)
+
+Run:
 ```bash
-# List all tools
-ai-cli --list-tools
-
-# Call a tool directly
-ai-cli --tool calculator '{"expression": "sqrt(144) * 3.14"}'
-ai-cli --tool datetime_now
-ai-cli --tool web_search '{"query": "Python 3.13 new features"}'
-
-# Ask with automatic tool calling enabled
-ai-cli --with-tools -q "What is 17 factorial, and what time is it now?"
-
-# Limit which tools are exposed
-ai-cli --with-tools --tools calculator,datetime_now -q "What time is it?"
+pytest tests/test_rag.py -v
+pytest tests/test_indexers.py -k qdrant -v
 ```
-
-### Python API
-
-```python
-from ai_cli.tools.registry import TOOL_REGISTRY
-from ai_cli.core.api import ask_with_tools
-
-# Execute a tool directly
-result = TOOL_REGISTRY.execute("calculator", {"expression": "2 ** 10"})
-print(result.result)          # {"expression": "2 ** 10", "result": 1024}
-print(result.duration_ms)     # e.g. 0.12
-
-# Export schemas for provider APIs
-openai_tools  = TOOL_REGISTRY.openai_schemas()
-anthropic_tools = TOOL_REGISTRY.anthropic_schemas()
-
-# Tool-aware ask (auto-detects and dispatches tool calls)
-response = ask_with_tools(
-    provider="openai",
-    prompt="What is the square root of 1764, and what's today's date?",
-    tools=["calculator", "datetime_now"],
-)
-```
-
-### Registering Custom Tools
-
-```python
-from ai_cli.tools.registry import TOOL_REGISTRY, ToolDefinition, ToolParameter
-
-def lookup_user(user_id: str) -> dict:
-    return {"user_id": user_id, "name": "Alice", "plan": "pro"}
-
-TOOL_REGISTRY.register(ToolDefinition(
-    name="lookup_user",
-    description="Look up a user by ID in the internal database.",
-    category="internal",
-    parameters=[
-        ToolParameter("user_id", "string", "The user's unique ID.", required=True),
-    ],
-    fn=lookup_user,
-))
-```
-
----
-
-## Agents (ReAct Loop)
-
-The agent framework implements the **Reason → Act → Observe** pattern. The LLM decides the next tool to call, the tool executes, the result feeds back, and the loop continues until a final answer is produced or `max_steps` is reached.
-
-### CLI Agent Mode
-
-```bash
-# Run a ReAct agent (multi-step)
-ai-cli --agent -q "Find today's date and calculate how many days until 2026-01-01"
-
-# Generate a plan first, then execute
-ai-cli --agent --plan -q "Research the top 3 Python web frameworks and compare them"
-
-# Verbose step-by-step trace
-ai-cli --agent --verbose -q "What is the square root of today's Unix timestamp?"
-
-# Print full execution trace after completion
-ai-cli --agent --trace -q "Calculate 42 * 1337"
-
-# Cap the number of steps
-ai-cli --agent --max-steps 5 -q "Search for the latest news on AI"
-```
-
-### Python API
-
-```python
-from ai_cli.core.api import ask_agent
-
-# Simple agent run
-answer = ask_agent(
-    goal="What is the current Unix timestamp divided by 86400?",
-    provider="openai",
-    max_steps=8,
-    verbose=True,
-)
-
-# Plan-then-execute
-answer = ask_agent(
-    goal="Research quantum computing and produce a 3-point summary",
-    provider="groq",
-    plan_first=True,
-    max_steps=12,
-)
-```
-
-### AgentRunner (full control)
-
-```python
-from ai_cli.agents.agent import AgentRunner, AgentMemory
-
-runner = AgentRunner(
-    provider="openai",
-    model="gpt-4o",
-    max_steps=10,
-    verbose=True,
-)
-
-result = runner.run("Find today's date and tell me the day of the week")
-trace  = runner.get_trace()   # full step-by-step execution trace
-```
-
-### Agent Memory & Scratchpad
-
-```python
-from ai_cli.agents.agent import AgentMemory, Message
-
-mem = AgentMemory(max_messages=20)
-
-mem.add(Message(role="user", content="Remember: my name is Alice"))
-mem.remember("username", "alice")          # persistent scratchpad
-mem.remember("preferences", {"lang": "Python"})
-
-name = mem.recall("username")              # → "alice"
-summary = mem.summary()                    # last N messages + scratchpad
-```
-
-### Interactive REPL Agent Commands
-
-Inside `ai-cli -i`:
-
-```
-/agent Find the current Bitcoin price and calculate 500 USD worth
-/tool  calculator {"expression": "500 / 45000"}
-/tools
-/switch groq
-/whoami
-```
-
----
-
-## Configuration Profiles
-
-Place `ai-cli.yaml` in your project root (or set `AI_CLI_CONFIG`):
-
-```yaml
-profiles:
-
-  default:
-    provider: auto
-    timeout: 60
-    max_steps: 10
-    strict_sanitize: false
-    cost_budget_usd: 10.0
-    tools:
-      enabled: true
-      allowed: []           # empty = all tools
-
-  production:
-    provider: openai
-    model: gpt-4o
-    timeout: 30
-    strict_sanitize: true
-    cost_budget_usd: 50.0
-    tools:
-      enabled: true
-      allowed: [web_search, calculator]
-
-  developer:
-    provider: groq
-    model: llama3-8b-8192
-    timeout: 30
-    cost_budget_usd: 5.0
-    tools:
-      enabled: true
-      allowed: [web_search, calculator, file_read, datetime_now, http_get]
-
-  agent:
-    provider: openai
-    model: gpt-4o
-    timeout: 120
-    max_steps: 15
-    verbose: true
-    tools:
-      enabled: true
-      allowed: []
-```
-
-```python
-from ai_cli.config.profiles import load_profile
-
-cfg = load_profile("production")
-print(cfg.provider, cfg.cost_budget_usd)
-```
----
-
-# Advanced RAG Support
-Features:
-- Semantic chunking
-- Embedding generation
-- FAISS vector database
-- Similarity search
-- Persistent vector indexes
-- Local document retrieval
-- PDF/TXT/Markdown ingestion
-
-
-# Installation
-
-pip install -r requirements.txt
-
-# Example Usage
-ai-chat --rag --rag-docs docs/*.pdf "Explain the architecture"
-
-# Index documents
-ai-chat index docs/
-
-# Architecture
-Documents
-   ↓
-Chunking
-   ↓
-Embeddings
-   ↓
-FAISS Index
-   ↓
-Similarity Retrieval
-   ↓
-Prompt Augmentation
-   ↓
-LLM
----
-
-# Advanced RAG Support
-
-Features:
-
-- Semantic chunking
-- Embedding generation
-- FAISS vector database
-- Persistent vector indexes
-- PDF/TXT/Markdown ingestion
-- Semantic retrieval
-- Retrieval-augmented prompting
-
-## Installation
-
-```bash
-pip install -r requirements.txt
-
-Example Usage
-
-ai-chat --rag --rag-docs docs/architecture.pdf "Explain the architecture"
-
-Supported File Types
-
-PDF
-
-TXT
-
-Markdown
-
-RAG Pipeline
-
-Documents
-↓
-Chunking
-↓
-Embeddings
-↓
-FAISS Index
-↓
-Similarity Search
-↓
-Prompt Augmentation
-↓
-LLM Response
-
----
-
-## Resilience & Reliability
-
-### What's been enhanced in v0.3
-
-- `CircuitBreaker` — now has three states: CLOSED → OPEN → HALF_OPEN recovery probe
-- `BulkheadLimiter` — new: caps concurrent requests per provider to prevent cascade failures
-- `HealthTracker` — new: tracks success rate and average latency per provider
-- `RetryEngine` — configurable `max_delay` cap and custom exception filtering
-- `RateLimiter` — new `wait_and_acquire()` method for blocking callers
-
-```python
-from ai_cli.core.resilience import (
-    CircuitBreaker, BulkheadLimiter, HealthTracker, RetryEngine
-)
-
-# Circuit breaker wrapping any callable
-cb = CircuitBreaker(threshold=5, timeout=30, name="openai")
-protected_fn = cb.wrap(my_provider_call)
-
-# Bulkhead: max 5 concurrent requests to this provider
-bh = BulkheadLimiter(max_concurrent=5, name="openai")
-isolated_fn = bh.wrap(my_provider_call)
-
-# Health tracking
-from ai_cli.core.resilience import HEALTH
-HEALTH.record("openai", success=True, latency_ms=320.0)
-health = HEALTH.get("openai")
-print(health.success_rate, health.avg_latency_ms)
-healthy = HEALTH.healthy_providers()
-```
-
----
-
-## Exception Hierarchy
-
-```
-AIProviderError
-├── PromptValidationError
-├── ProviderConfigurationError
-├── ProviderRequestError
-├── ResponseValidationError
-│
-├── AuthenticationError          # identity / API key invalid
-├── AuthorizationError           # RBAC denied
-├── SecretResolutionError        # secret not found in any backend
-├── RateLimitExceededError       # per-identity rate limit hit
-├── BudgetExceededError          # cost cap reached
-├── AuditError                   # audit log write failed (fail-secure)
-│
-├── ToolNotFoundError            # tool name not in registry
-├── ToolExecutionError           # tool raised an exception
-├── ToolInputValidationError     # missing/invalid tool arguments
-├── ToolOutputValidationError    # tool result failed schema check
-│
-├── AgentMaxStepsError           # agent exceeded max_steps
-├── AgentPlanningError           # planner produced no steps
-└── AgentMemoryError             # memory operation failed
-```
-
----
-
-## CLI Reference
-
-```
-usage: ai-cli [-h] [-p PROVIDER] [-q PROMPT] [-m MODEL] [-i]
-              [--timeout TIMEOUT] [--debug] [--version]
-              [-a] [--plan] [--max-steps N] [--trace] [--verbose]
-              [--with-tools] [--tools T1,T2] [--tool NAME [JSON]]
-              [--list-tools] [--list-providers]
-              [--login API_KEY] [--whoami] [--budget] [--audit N]
-              [--strict]
-
-Flags:
-  -p, --provider       AI provider (default: auto)
-  -q, --prompt         Prompt / goal text
-  -m, --model          Model override
-  -i, --interactive    Start interactive REPL
-  --timeout            Request timeout in seconds (default: 60)
-  --debug              Enable debug logging
-  --version            Show version
-
-Agent:
-  -a, --agent          Run ReAct agent loop
-  --plan               Generate a plan before running agent
-  --max-steps N        Maximum agent steps (default: 10)
-  --trace              Print tool execution trace after run
-  --verbose            Show step-by-step agent output
-
-Tool Calling:
-  --with-tools         Enable automatic tool dispatch in ask mode
-  --tools T1,T2        Comma-separated tools to expose
-  --tool NAME [JSON]   Call a single tool directly
-  --list-tools         List all registered tools
-  --list-providers     List all registered providers
-
-Security:
-  --login API_KEY      Authenticate with a gateway API key
-  --whoami             Show identity, roles, and budget
-  --budget             Show detailed budget usage
-  --audit N            Tail last N audit log entries
-  --strict             Strict prompt injection detection (raises on hit)
-```
-
-### Usage Examples
-
-```bash
-# Plain ask
-ai-cli -q "Explain Kubernetes operators"
-ai-cli -p groq -m llama3-8b-8192 -q "Write a haiku about Python"
-echo "Summarize this text" | ai-cli -p openai
-
-# Tool calling
-ai-cli --tool calculator '{"expression": "sqrt(144) * 3.14"}'
-ai-cli --tool datetime_now
-ai-cli --with-tools -q "What is 17! and what day is today?"
-ai-cli --list-tools
-
-# Agent mode
-ai-cli --agent -q "Find today's date, then calculate days left in 2025"
-ai-cli --agent --plan --verbose -q "Research the top Python web frameworks"
-ai-cli --agent --max-steps 5 --trace -q "What is the cube root of 1000000?"
-
-# Security
-ai-cli --login aicli-developer-alice-abcdef1234567890abcdef1234567890
-ai-cli --whoami
-ai-cli --budget
-ai-cli --audit 20
-ai-cli --strict -q "Your prompt here"
-
-# Interactive REPL
-ai-cli -i
-# then inside REPL:
-# /agent Find the current time and calculate 86400 - (seconds since midnight)
-# /tool calculator {"expression": "2**32"}
-# /switch anthropic
-# /whoami
-```
-
----
-
-## Developer Experience
-
-### Interactive REPL Commands
-
-| Command | Description |
-|---|---|
-| `/switch <provider>` | Hot-swap the AI provider mid-session |
-| `/agent <goal>` | Run a ReAct agent inline |
-| `/tool <name> [json]` | Call a tool and see the result |
-| `/tools` | List available tools |
-| `/whoami` | Show identity and roles |
-| `/clear` | Clear the terminal |
-| `/exit` | Quit |
-
-### Rich Terminal Output
-
-If `rich` is installed (`pip install rich`), the CLI automatically renders:
-- Markdown-formatted AI responses
-- Colour-coded errors and success messages
-- Formatted tables for `--list-tools` and `--list-providers`
-- Panels for tool results, agent answers, and identity info
-
-Without `rich`, plain-text output is used — no hard dependency.
-
-### Auto-formatting & Linting
-
-```bash
-black src/
-ruff check src/ --fix
-mypy src/
-```
-
----
-
-## Testing
-
-```bash
-# Run the full enhanced test suite
-pytest tests/test_enhanced.py -v
-
-# Run with coverage
-pytest tests/test_enhanced.py --cov=src/ai_cli --cov-report=term-missing
-
-# Run a specific group
-pytest tests/test_enhanced.py -v -k "Security"
-pytest tests/test_enhanced.py -v -k "Tool"
-pytest tests/test_enhanced.py -v -k "Agent"
-pytest tests/test_enhanced.py -v -k "Resilience"
-```
-
-The test suite covers:
-
-- Identity context, set/get, RBAC authorization
-- Secrets backend (env resolution, cache invalidation, missing key error)
-- Audit logger (write, verify, tamper detection)
-- Prompt sanitisation, PII redaction, injection detection
-- Per-identity rate limiting and budget enforcement
-- Tool registry (register, get, list, schema export, RBAC gating)
-- All 7 built-in tools including edge cases and security checks
-- Tool execution tracing and ToolResult properties
-- AgentMemory (add, sliding window, scratchpad, serialisation)
-- AgentPlanner step parsing
-- ReactAgent (immediate answer, tool-call-then-answer, prose fallback, max-steps)
-- CircuitBreaker state transitions (CLOSED → OPEN → HALF_OPEN → CLOSED)
-- RetryEngine, BulkheadLimiter, HealthTracker
-- ProfileConfig defaults and YAML loading
-- CLI argument parser flags
 
 ---
 
 ## Observability & Monitoring
 
-- OpenTelemetry native spans and traces (existing)
-- Prometheus metrics (existing):
-  - `ai_provider_requests_total`
-  - `ai_provider_errors_total`
-  - `ai_provider_tokens_total`
-  - `ai_provider_request_latency_seconds`
-  - `ai_provider_cost_estimated_total`
-- `HealthTracker` now provides programmatic success-rate and latency data per provider
-- Audit log (`audit.jsonl`) is HMAC-signed for tamper detection and SIEM export
+New metrics:
+- ai_rag_documents_indexed_total
+- ai_rag_index_latency_seconds
+- ai_rag_retrieval_requests_total
+- ai_rag_retrieval_latency_seconds
+- ai_rag_embedding_requests_total
+- ai_rag_hybrid_query_hits_total
 
-```yaml
-# Prometheus scrape config
-scrape_configs:
-  - job_name: ai_cli
-    static_configs:
-      - targets: ["ai-cli:9100"]
-```
-
-Grafana dashboard templates: `docs/dashboards/`
+Add Prometheus scrape configs for indexer services when deployed.
 
 ---
 
-## Environment Variables Reference
+## Security & Governance
 
-```bash
-# Provider API keys
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GEMINI_API_KEY=AIza...
-GROQ_API_KEY=gsk_...
-PERPLEXITY_API_KEY=pplx-...
-DEEPSEEK_API_KEY=sk-...
-TOGETHER_API_KEY=...
-COHERE_API_KEY=...
-OPENROUTER_API_KEY=...
-FIREWORKS_API_KEY=...
-XAI_API_KEY=...
-MISTRAL_API_KEY=...
-
-# Gateway security
-AI_CLI_GATEWAY_SECRET=change-me-in-production
-AI_CLI_IDENTITY=your_username
-AI_CLI_ROLES=developer
-AI_CLI_AUDIT_LOG=audit.jsonl
-AI_CLI_AUDIT_SECRET=audit-secret-change-me
-AI_CLI_POLICY=ai-cli-policy.json
-
-# Secrets backends (all optional)
-VAULT_ADDR=http://vault:8200
-VAULT_TOKEN=hvs.xxx
-VAULT_SECRET_PATH=secret/data/ai_cli
-AWS_REGION=us-east-1
-AWS_SECRET_NAME=ai_cli_secrets
-AZURE_VAULT_URL=https://my-vault.vault.azure.net
-
-# Infrastructure (optional)
-REDIS_URL=redis://localhost:6379/0
-AI_CLI_CONFIG=ai-cli.yaml
-```
+- All ingest/index operations go through RBAC & AuditLogger
+- Sensitive fields can be redacted during chunking (PromptSanitiser hooks)
+- Per-identity budget and rate limits apply to embedding and retrieval operations
 
 ---
 
-## Deployment
+## Deployment Notes
 
-### Local / Docker
+- Qdrant: prefer stateful deployment (docker-compose/helm); include snapshot/backup strategy for collections
+- FAISS: use mmap snapshots for large indices; maintain periodic snapshot cron
+- pgvector: use Postgres migrations for schema and index creation
+- Chroma: consider server mode for multi-instance setups
 
-```bash
-# Local
-poetry install
-ai-cli -q "Hello"
-
-# Docker
-docker build -t ai-cli:latest .
-docker run --env-file .env ai-cli:latest -q "Hello"
-
-# With agent mode
-docker run --env-file .env ai-cli:latest --agent -q "Find today's date"
-```
-
-### Kubernetes
-
-```bash
-helm install ai-cli charts/ai-cli \
-  --set secrets.openaiApiKey=$OPENAI_API_KEY \
-  --set gateway.secret=$AI_CLI_GATEWAY_SECRET
-```
+See docs/rag/ for sample docker-compose, helm charts, and scaling guides.
 
 ---
 
-## Roadmap
+## Roadmap (RAG)
 
-Items moved from "planned" to "done" in v0.3 are marked ✅.
-
-- ✅ Layered secrets backend (Vault, AWS SM, Azure KV)
-- ✅ RBAC with per-role provider and tool access control
-- ✅ Append-only audit log with HMAC integrity
-- ✅ Prompt injection detection and PII redaction
-- ✅ Per-identity rate limiting and budget enforcement
-- ✅ Tool calling registry with 7 built-in tools
-- ✅ ReAct agent loop with memory, scratchpad, and planner
-- ✅ YAML configuration profiles
-- ✅ CircuitBreaker half-open recovery, BulkheadLimiter, HealthTracker
-- ✅ Comprehensive test suite (50+ tests across all new modules)
-- ⬜ AWS Bedrock / GCP Vertex AI / Azure OpenAI native IAM auth
-- ⬜ Multi-region failover with Cloudflare Workers / Lambda@Edge
-- ⬜ Advanced RAG: chunking, embedding, vector-DB querying
-- ⬜ Streaming responses (SSE / gRPC)
-- ⬜ Shell autocompletion (bash / zsh / fish)
-- ⬜ REST + gRPC gateway server mode
-
----
-
-## Contributing
-
-Follow `docs/DEVELOPMENT.md`. Use GitHub flow, sign commits, include tests and a changelog entry. Run `black`, `ruff`, and `mypy` before opening a PR.
-
----
-Recommended future upgrades
-
-- Hybrid BM25 + vector search
-- Cross-encoder reranking
-- Async indexing
-- GPU embeddings
-- Parent-child chunking
-- Metadata filtering
-- Qdrant integration
-- ChromaDB integration
-- pgvector support
-- Streaming retrieval
+- ✅ Semantic chunking, embeddings, FAISS, Qdrant, Chroma, pgvector support
+- ✅ CLI ingestion and indexing, hybrid querying
+- ✅ RAGPipeline with prompt augmentation and caching
+- ⬜ Vector DB auto-scaling and multi-region replication
+- ⬜ Streaming retrieval + incremental re-ranking
+- ⬜ Multilingual embedding pipelines and online re-training
 
 ---
 
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
+

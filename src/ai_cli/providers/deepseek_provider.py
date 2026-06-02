@@ -5,84 +5,46 @@ DeepSeek provider implementation for AI Gateway / CLI applications.
 
 This provider uses the OpenAI-compatible DeepSeek API.
 
-Official docs:
- [oai_citation:0‡api-docs.deepseek.com](https://api-docs.deepseek.com/?utm_source=chatgpt.com)
+Added:
+ - embeddings() helper to create embeddings via the OpenAI-compatible embeddings endpoint.
+ - small docs for RAG workflows that use chat + embeddings.
 
 Environment Variables:
     DEEPSEEK_API_KEY   -> Required API key
-    DEEPSEEK_MODEL     -> Optional default model override
+    DEEPSEEK_MODEL     -> Optional default chat model override
+    DEEPSEEK_EMBEDDING_MODEL -> Optional default embedding model override
 
 Default Models:
     deepseek-v4-flash
     deepseek-v4-pro
-
-DeepSeek API is OpenAI-compatible, so this implementation
-uses the official OpenAI Python SDK.
+    text-embedding-3-small (for embeddings)
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any
-from openai import OpenAI # type: ignore
+from typing import Any, List
+from openai import OpenAI  # type: ignore
 
 
 class DeepSeekProvider:
-    """
-    DeepSeek AI provider implementation.
-
-    This class provides a simple wrapper around the
-    DeepSeek OpenAI-compatible chat completion API.
-
-    Attributes:
-        api_key (str):
-            DeepSeek API key.
-
-        model (str):
-            Default model used for requests.
-
-        client (OpenAI):
-            OpenAI-compatible client instance configured
-            for DeepSeek.
-    """
-
     DEFAULT_MODEL = "deepseek-v4-flash"
+    DEFAULT_EMBED_MODEL = "text-embedding-3-small"
     BASE_URL = "https://api.deepseek.com"
 
     def __init__(
         self,
         api_key: str | None = None,
         model: str | None = None,
+        embed_model: str | None = None,
     ) -> None:
-        """
-        Initialize DeepSeek provider.
-
-        Args:
-            api_key:
-                DeepSeek API key.
-                If not provided, reads from:
-                DEEPSEEK_API_KEY
-
-            model:
-                Optional model override.
-                If not provided, reads from:
-                DEEPSEEK_MODEL
-                otherwise falls back to DEFAULT_MODEL.
-
-        Raises:
-            ValueError:
-                If API key is missing.
-        """
-
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
-
         if not self.api_key:
             raise ValueError("DEEPSEEK_API_KEY not set")
 
-        self.model = (
-            model
-            or os.getenv("DEEPSEEK_MODEL")
-            or self.DEFAULT_MODEL
+        self.model = model or os.getenv("DEEPSEEK_MODEL") or self.DEFAULT_MODEL
+        self.embed_model = (
+            embed_model or os.getenv("DEEPSEEK_EMBEDDING_MODEL") or self.DEFAULT_EMBED_MODEL
         )
 
         self.client = OpenAI(
@@ -92,13 +54,6 @@ class DeepSeekProvider:
 
     @property
     def provider_name(self) -> str:
-        """
-        Provider display name.
-
-        Returns:
-            str: Provider name.
-        """
-
         return "deepseek"
 
     def ask(
@@ -111,60 +66,12 @@ class DeepSeekProvider:
         timeout: float | None = None,
         **kwargs: Any,
     ) -> str:
-        """
-        Send a prompt to DeepSeek and return response text.
-
-        Args:
-            prompt:
-                User input prompt.
-
-            model:
-                Optional per-request model override.
-
-            temperature:
-                Sampling temperature.
-                Lower = deterministic.
-                Higher = creative.
-
-            max_tokens:
-                Optional response token limit.
-
-            system_prompt:
-                Optional system instruction.
-
-            timeout:
-                Optional request timeout in seconds.
-
-            **kwargs:
-                Additional arguments forwarded to the API.
-
-        Returns:
-            str:
-                Model response text.
-
-        Raises:
-            RuntimeError:
-                If request fails.
-        """
-
         selected_model = model or self.model
 
         messages: list[dict[str, str]] = []
-
         if system_prompt:
-            messages.append(
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                }
-            )
-
-        messages.append(
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        )
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
 
         try:
             response = self.client.chat.completions.create(
@@ -175,32 +82,29 @@ class DeepSeekProvider:
                 timeout=timeout,
                 **kwargs,
             )
-
             content = response.choices[0].message.content
-
             return content.strip() if content else ""
-
         except Exception as exc:
-            raise RuntimeError(
-                f"DeepSeek request failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"DeepSeek request failed: {exc}") from exc
+
+    def embeddings(self, texts: List[str], model: str | None = None) -> List[List[float]]:
+        """
+        Create embeddings for a list of texts.
+
+        Returns a list of float vectors corresponding to each input text.
+        """
+        selected = model or self.embed_model
+        # OpenAI-compatible embeddings endpoint
+        try:
+            response = self.client.embeddings.create(model=selected, input=texts)
+            # response.data is a list with embeddings
+            return [item.embedding for item in response.data]
+        except Exception as exc:
+            raise RuntimeError(f"DeepSeek embedding request failed: {exc}") from exc
 
     def health_check(self) -> bool:
-        """
-        Verify provider connectivity.
-
-        Returns:
-            bool:
-                True if provider is reachable,
-                otherwise False.
-        """
-
         try:
-            self.ask(
-                prompt="Hello",
-                max_tokens=5,
-            )
+            self.ask(prompt="Hello", max_tokens=5)
             return True
-
         except Exception:
             return False

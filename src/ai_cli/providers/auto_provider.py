@@ -1,210 +1,212 @@
 from __future__ import annotations
-import inspect
+import os
 import logging
-from ai_cli.providers.base import AIProvider, ProviderMetadata
-from ai_cli.providers.registry import PROVIDER_MAP
-from ai_cli.core.exceptions import ProviderRequestError
+from typing import List, Tuple, Optional, Any, Dict
 
-logger = logging.getLogger("ai_gateway")
+try:
+    import numpy as np
+except Exception:
+    np = None
+
+# optional dependencies
+try:
+    from sentence_transformers import SentenceTransformer
+except Exception:
+    SentenceTransformer = None
+
+try:
+    import openai
+except Exception:
+    openai = None
+
+try:
+    import faiss
+except Exception:
+    faiss = None
+
+logger = logging.getLogger("ai_gateway.rag")
 
 
-class AutoProvider(AIProvider):
+def _require_numpy():
+    if np is None:
+        raise RuntimeError("numpy is required; install it with 'pip install numpy'")
+
+
+class EmbeddingBackendUnavailable(RuntimeError):
+    pass
+
+
+class AdvancedRAG:
     """
-    AutoProvider module
+    Advanced RAG helpers: chunking, embedding, FAISS vector store creation and querying.
 
-    Purpose:
-        Provide a single, synchronous AI provider that dynamically falls back to a sequence
-        of concrete providers registered in the global PROVIDER_MAP. AutoProvider attempts
-        to locate an available provider that can handle a request and returns the first
-        successful textual response. It centralizes logic for provider selection, capability
-        checks, instantiation, error handling, and logging so callers do not need to manage
-        provider-specific details or API key availability.
+    Design goals:
+    - Chunk arbitrary texts into overlapping passages.
+    - Produce embeddings using either OpenAI or SentenceTransformers.
+    - Build an in-memory FAISS index and simple metadata store.
+    - Query the index by embedding the query and returning nearest passages with scores.
 
-    Behavior / end result:
-        - Maintains a prioritized fallback order of provider names. Each entry is looked up
-          in PROVIDER_MAP in sequence until a provider successfully returns a response.
-        - Supports being constructed with an optional requested model name; that model is
-          passed to providers when instantiating provider classes that subclass AIProvider.
-        - For each provider attempted, the following checks and actions occur:
-            - Skips providers that are not registered in PROVIDER_MAP, and logs a warning.
-            - If the registry entry is a class, it must be an AIProvider subclass; the class
-              is instantiated with the requested model. Instantiation failures are captured.
-            - Ensures the provider instance exposes a callable send(prompt) method; otherwise
-              the provider is skipped.
-            - If the provider publishes metadata (provider_meta) and a requested model is set,
-              verifies the provider claims to support that model (or "auto"); otherwise the
-              provider is skipped.
-            - Calls provider.send(prompt) synchronously. If send() raises, returns None, or
-              returns an awaitable (async provider), the provider is considered unsuccessful.
-            - Coerces non-string, non-None responses to str; if coercion fails the provider is
-              considered unsuccessful.
-            - On the first successful textual response, returns that string to the caller.
-        - Collects detailed error messages for each provider attempted and logs warnings,
-          info, or exceptions as appropriate.
-        - If all providers are exhausted without success, raises ProviderRequestError with an
-          aggregated diagnostic message listing all attempts and their failure reasons.
-
-    Important notes / caveats:
-        - AutoProvider._send_impl is synchronous and will skip providers whose send() returns
-          an awaitable (async implementations). Use an async-aware dispatcher if you must
-          support async providers.
-        - The module relies on external symbols (PROVIDER_MAP, ProviderRequestError, AIProvider,
-          ProviderMetadata, logger, inspect) being available in the runtime environment.
-        - Errors are informationally aggregated and logged; callers receive a single
-          ProviderRequestError when no provider succeeds.
-
-    Intended audience / usage:
-        - Useful in CLI tools, servers, or other environments where multiple LLM providers
-          may be available and you want a resilient, first-success fallback strategy.
-        - Callers pass a prompt to the provider and expect a synchronous string response
-          or a ProviderRequestError if no provider could produce a response.
-
-    Dynamically falls back to available providers based on API keys.
+    Usage example:
+      rag = AdvancedRAG(backend_preference=["openai", "sbert"])
+      docs = ["Long document text ...", "Another doc ..."]
+      chunks, meta = rag.chunk_texts(docs, chunk_size=1000, overlap=200)
+      embeddings = rag.embed_texts(chunks)
+      index, store = rag.build_faiss_index(embeddings, meta)
+      results = rag.query_index(index, store, "What is the ...?", top_k=5)
     """
 
-    def __init__(self, model: str | None = None) -> None:
-        meta = ProviderMetadata(
-            name="Auto Fallback",
-            default_model="auto",
-            supported_models=["auto"],
-            supports_streaming=True,
-            supports_tools=True,
-            supports_vision=True,
-            max_context=128_000,
-            cost_per_1k_tokens=0.01,
-            avg_latency_ms=500,
-        )
-        super().__init__(provider_name="auto", model=model, provider_meta=meta)
+    def __init__(
+        self,
+        sbert_model: str = "all-MiniLM-L6-v2",
+        backend_preference: List[str] = ["openai", "sbert"],
+    ) -> None:
+        self.sbert_model = sbert_model
+        self.backend_preference = backend_preference
+        self._sbert: Optional[Any] = None
+        self._openai_key = os.environ.get("OPENAI_API_KEY")
+        if openai is not None and self._openai_key:
+            openai.api_key = self._openai_key
 
-        # Priority fallback order
-        self.fallback_order = [
-            "openai",
-            "anthropic",
-            "gemini",
-            "perplexity",
-            "cohere",
-            "deepseek",
-            "groq",
-            "xai",
-            "openrouter",
-            "together",
-            "fireworks",
-        ]
-
-    def _send_impl(self, prompt: str) -> str:
+    # ---- chunking ----
+    def chunk_texts(
+        self,
+        texts: List[str],
+        chunk_size: int = 1000,
+        overlap: int = 200,
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
         """
-        Try providers in order and return the first successful response.
-
-        Edge cases handled:
-        - provider not registered
-        - provider registered but not an AIProvider subclass (or missing send)
-        - provider class that cannot be instantiated with (model=...)
-        - provider does not support the requested model (if metadata present)
-        - provider.send is async / returns coroutine (not supported here)
-        - provider.send returns non-string (will be coerced to str)
-        All failures are collected and surface in the raised ProviderRequestError.
+        Chunk list of input texts into overlapping chunks.
+        Returns: (chunks, metas) where metas contains {source_doc_index, chunk_index, start, end}
         """
-        errors: list[str] = []
-        requested_model = getattr(self, "model", None)
-
-        for provider_name in self.fallback_order:
-            try:
-                provider_entry = PROVIDER_MAP.get(provider_name)
-                if provider_entry is None:
-                    msg = f"{provider_name}: not registered"
-                    errors.append(msg)
-                    logger.warning("provider_fallback_skipped provider=%s reason=%s", provider_name, "not registered")
-                    continue
-
-                # If registry stores a provider class, try to instantiate it if it's a subclass of AIProvider.
-                provider_instance = None
-                if isinstance(provider_entry, type):
-                    if issubclass(provider_entry, AIProvider):
-                        try:
-                            provider_instance = provider_entry(model=requested_model)
-                        except Exception as exc:
-                            msg = f"{provider_name}: failed to instantiate provider class: {exc}"
-                            errors.append(msg)
-                            logger.warning("provider_fallback_failed provider=%s error=%s", provider_name, str(exc))
-                            continue
-                    else:
-                        msg = f"{provider_name}: registered entry is a class but not an AIProvider subclass"
-                        errors.append(msg)
-                        logger.warning("provider_fallback_skipped provider=%s reason=%s", provider_name, "invalid class type")
-                        continue
-                else:
-                    provider_instance = provider_entry
-
-                # Ensure provider has a callable send method
-                send = getattr(provider_instance, "send", None)
-                if not callable(send):
-                    msg = f"{provider_name}: provider does not implement a callable send(prompt) method"
-                    errors.append(msg)
-                    logger.warning("provider_fallback_skipped provider=%s reason=%s", provider_name, "no send()")
-                    continue
-
-                # If provider has metadata, check if it supports the requested model.
-                provider_meta = getattr(provider_instance, "provider_meta", None)
-                if provider_meta is not None and requested_model:
-                    supported = getattr(provider_meta, "supported_models", None)
-                    if supported and requested_model not in supported and "auto" not in supported:
-                        msg = (
-                            f"{provider_name}: does not support model '{requested_model}' "
-                            f"(supported: {supported})"
-                        )
-                        errors.append(msg)
-                        logger.info("provider_fallback_skipped provider=%s reason=%s", provider_name, "model not supported")
-                        continue
-
-                # Call the provider
-                try:
-                    result = send(prompt)
-                except Exception as exc:
-                    # provider attempted to handle request but failed (e.g., missing API key, network error)
-                    msg = f"{provider_name}: error during send(): {exc}"
-                    errors.append(msg)
-                    logger.warning("provider_fallback_failed provider=%s error=%s", provider_name, str(exc))
-                    continue
-
-                # If the provider returned a coroutine (async provider), this caller is sync -> skip
-                if inspect.isawaitable(result):
-                    msg = f"{provider_name}: send() returned an awaitable (async provider). AutoProvider._send_impl is synchronous and cannot await."
-                    errors.append(msg)
-                    logger.warning("provider_fallback_skipped provider=%s reason=%s", provider_name, "async send()")
-                    continue
-
-                # Coerce non-string responses to string, but treat None as an error
-                if result is None:
-                    msg = f"{provider_name}: send() returned None"
-                    errors.append(msg)
-                    logger.warning("provider_fallback_failed provider=%s error=%s", provider_name, "None response")
-                    continue
-
-                if not isinstance(result, str):
-                    try:
-                        response_text = str(result)
-                    except Exception as exc:
-                        msg = f"{provider_name}: failed to coerce response to string: {exc}"
-                        errors.append(msg)
-                        logger.warning("provider_fallback_failed provider=%s error=%s", provider_name, str(exc))
-                        continue
-                else:
-                    response_text = result
-
-                # Success
-                return response_text
-
-            except Exception as exc:
-                # Catch-all for any unexpected issues per-provider to continue fallback loop
-                error_msg = f"{provider_name}: unexpected error: {exc}"
-                errors.append(error_msg)
-                logger.exception("provider_fallback_unexpected provider=%s", provider_name)
+        chunks: List[str] = []
+        metas: List[Dict[str, Any]] = []
+        for doc_idx, text in enumerate(texts):
+            if not text:
                 continue
+            length = len(text)
+            if length <= chunk_size:
+                chunks.append(text)
+                metas.append({"source_doc": doc_idx, "chunk_index": 0, "start": 0, "end": length})
+                continue
+            step = chunk_size - overlap
+            if step <= 0:
+                raise ValueError("chunk_size must be larger than overlap")
+            start = 0
+            chunk_idx = 0
+            while start < length:
+                end = min(start + chunk_size, length)
+                chunk = text[start:end]
+                chunks.append(chunk)
+                metas.append({"source_doc": doc_idx, "chunk_index": chunk_idx, "start": start, "end": end})
+                chunk_idx += 1
+                if end == length:
+                    break
+                start += step
+        return chunks, metas
 
-        # If we get here, no provider succeeded.
-        full_msg = (
-            "Auto fallback exhausted. No provider succeeded. "
-            "Checked providers in order: " + ", ".join(self.fallback_order) + ". "
-            "Errors: " + "; ".join(errors)
-        )
-        raise ProviderRequestError(full_msg)
+    def _init_sbert(self) -> None:
+        """
+        Lazily initialize the SentenceTransformer model.
+        """
+        if self._sbert is None:
+            if SentenceTransformer is None:
+                raise EmbeddingBackendUnavailable("SentenceTransformers is not installed")
+            self._sbert = SentenceTransformer(self.sbert_model)
+
+    def _embed_with_openai(self, texts: List[str], batch_size: int = 32) -> List[np.ndarray]:
+        """
+        Use OpenAI embeddings API (text-embedding-3-small or text-embedding-3-large).
+        """
+        _require_numpy()
+        if openai is None or not self._openai_key:
+            raise EmbeddingBackendUnavailable("OpenAI not configured")
+        model = "text-embedding-3-small"
+        embs: List[np.ndarray] = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            resp = openai.Embeddings.create(model=model, input=batch)
+            for item in resp["data"]:
+                vec = np.asarray(item["embedding"], dtype=np.float32)
+                embs.append(vec)
+        return embs
+
+    def embed_texts(self, texts: List[str], batch_size: int = 32) -> List[np.ndarray]:
+        """
+        Embed a list of texts. Selects backend according to preference and availability.
+        Returns list of 1D numpy arrays (float32).
+        """
+        _require_numpy()
+        backends = [b.lower() for b in self.backend_preference]
+        for b in backends:
+            if b == "openai":
+                if openai is not None and self._openai_key:
+                    try:
+                        return self._embed_with_openai(texts, batch_size=batch_size)
+                    except Exception as exc:
+                        logger.warning("openai embeddings failed: %s", exc)
+                        continue
+            if b in ("sbert", "sentence-transformers", "sentence_transformers"):
+                if SentenceTransformer is not None:
+                    try:
+                        self._init_sbert()
+                        embs: List[np.ndarray] = []
+                        for i in range(0, len(texts), batch_size):
+                            batch = texts[i : i + batch_size]
+                            arr = self._sbert.encode(batch, convert_to_numpy=True)
+                            # arr is a 2D numpy array
+                            for vec in arr:
+                                embs.append(np.asarray(vec, dtype=np.float32))
+                        return embs
+                    except Exception as exc:
+                        logger.warning("sbert embeddings failed: %s", exc)
+                        continue
+        raise EmbeddingBackendUnavailable("No embedding backend available or all backends failed")
+
+    def build_faiss_index(
+        self,
+        embeddings: List[np.ndarray],
+        metas: List[Dict[str, Any]],
+        use_index: Optional[Any] = None,
+    ) -> Tuple[Any, List[Dict[str, Any]]]:
+        """
+        Build an in-memory FAISS index from embeddings.
+        Returns (index, metadata_store) where metadata_store aligns with embeddings order.
+        """
+        _require_numpy()
+        if faiss is None:
+            raise RuntimeError("faiss is not installed")
+        if not embeddings:
+            raise ValueError("no embeddings provided")
+        dim = int(embeddings[0].shape[0])
+        xb = np.vstack([e.reshape(1, -1) for e in embeddings]).astype("float32")
+        # simple index: IndexFlatIP (inner product) after L2-normalize => cosine similarity
+        index = faiss.IndexFlatIP(dim)
+        # normalize
+        faiss.normalize_L2(xb)
+        index.add(xb)
+        # store metas as-is; user is responsible for persistence if needed
+        return index, metas
+
+    def query_index(
+        self,
+        index: Any,
+        metas: List[Dict[str, Any]],
+        query: str,
+        top_k: int = 5,
+    ) -> List[Tuple[Dict[str, Any], float]]:
+        """
+        Query the provided index with text query. Returns list of (meta, score) sorted by score desc.
+        """
+        _require_numpy()
+        q_embs = self.embed_texts([query])
+        q = q_embs[0].reshape(1, -1).astype("float32")
+        if faiss is None:
+            raise RuntimeError("faiss not installed")
+        faiss.normalize_L2(q)
+        D, I = index.search(q, top_k)
+        results: List[Tuple[Dict[str, Any], float]] = []
+        for idx, score in zip(I[0], D[0]):
+            if idx < 0 or idx >= len(metas):
+                continue
+            results.append((metas[int(idx)], float(score)))
+        return results

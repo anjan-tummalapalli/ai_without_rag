@@ -1,3 +1,4 @@
+# Core & LLM providers (keep or remove providers you don't use)
 openai
 google-generativeai
 anthropic
@@ -10,6 +11,8 @@ together
 cohere
 fireworks
 gitpython
+
+# Utilities & RAG
 python-dotenv
 pytest
 language-tool-python
@@ -19,3 +22,6 @@ numpy
 pypdf
 markdown
 tiktoken
+
+# Optional but recommended
+chromadb

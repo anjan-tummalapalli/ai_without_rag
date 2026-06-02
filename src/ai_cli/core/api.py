@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+from typing import List, Sequence, Dict, Any, Optional, Tuple
 
 from ai_cli.providers.registry import build_provider, load_plugins, PROVIDERS
 from ai_cli.core.exceptions import AIProviderError
@@ -18,78 +19,11 @@ def ask(
     timeout: float | None = 30.0,
 ) -> str:
     """
-    Module: ai_cli.core.api
-    Purpose:
-        Provide a small API surface for sending prompts to configured AI providers.
-        This module exposes a single high-level convenience function `ask(...)`
-        that validates inputs, selects/builds the requested provider, forwards the
-        prompt, and returns a plain string with the provider's response.
+    High-level convenience function to ask a provider a prompt.
 
-    End result:
-        On success, `ask` returns the provider's response as a stripped string.
-        On any validation or runtime error the function returns a user-facing
-        error string beginning with "[ERROR]" and logs details for diagnostics.
-
-    Ask a configured AI provider a prompt and return the provider's textual response.
-
-    Behavior summary:
-    - Validates `provider`, `prompt`, and (optionally) `model`.
-    - Normalizes `provider` by stripping and lowercasing it.
-    - Allows special provider names "auto" and "echo" in addition to keys in PROVIDERS.
-    - If a specific `model` is supplied and `provider != "auto"`, the model is validated
-      against PROVIDERS[provider].supported_models.
-    - Builds the provider instance via build_provider(name=provider, model=model).
-    - If `timeout` is provided and truthy, overrides the provider instance timeout
-      by setting ai_provider.timeout = int(timeout).
-    - Sends the prompt via ai_provider.send(prompt).
-    - If the provider returns a non-string or an empty string, returns an appropriate
-      "[ERROR]" message.
-    - Catches AIProviderError and general Exception, logs them, and returns
-      user-facing "[ERROR]" messages rather than raising.
-
-    Parameters:
-        provider (str):
-            The name of the provider to use. This will be stripped and lowercased.
-            Allowed values: "auto", "echo", or any key present in the global
-            PROVIDERS mapping. If invalid or empty, the function returns
-            "[ERROR] ..." describing available providers.
-        prompt (str):
-            The prompt to send to the provider. Must be a non-empty string after
-            stripping; otherwise the function returns "[ERROR] Invalid prompt".
-        model (Optional[str], default=None):
-            Optional model identifier. If provided and provider != "auto", it must be
-            a non-empty string and one of the provider's supported_models; otherwise
-            an "[ERROR] Invalid model ..." message is returned. When provider == "auto"
-            the model parameter is ignored.
-        timeout (Optional[float], default=30.0):
-            Optional timeout in seconds. If truthy, the value is converted to int
-            and assigned to the selected provider instance's timeout attribute before
-            sending the prompt.
-
-    Returns:
-        str:
-            On success: the provider's response, stripped of leading/trailing whitespace.
-            On error: a string beginning with "[ERROR]" describing the failure. Examples:
-              - "[ERROR] provider must be string"
-              - "[ERROR] Invalid provider 'x'. Available providers: auto, echo, ... "
-              - "[ERROR] Invalid model 'm' for provider 'p'. Supported models: ..."
-              - "[ERROR] Empty response"
-              - "[ERROR] Unexpected internal error. Check logs."
-
-    Side effects:
-    - Calls build_provider(...) and ai_provider.send(...).
-    - May set ai_provider.timeout if a timeout value is provided.
-    - Logs validation errors, provider-specific errors (AIProviderError), and unexpected
-      exceptions via the module logger for debugging/telemetry.
-
-    Notes:
-    - The function intentionally returns error messages as strings (prefixed with
-      "[ERROR]") rather than raising exceptions to keep a simple textual CLI-style
-      contract for callers.
-    - The exact semantics for provider/model discovery depend on the global PROVIDERS
-      mapping and the build_provider implementation.
+    Unchanged behavior: validates inputs, builds provider, overrides timeout,
+    calls provider.send(prompt) and returns a stripped string or an "[ERROR]" string.
     """
-    """High-level convenience function to ask a provider a prompt."""
     if not isinstance(provider, str):
         return "[ERROR] provider must be string"
     provider = provider.strip().lower()
@@ -149,6 +83,269 @@ def ask(
     except Exception as exc:
         logger.exception(
             "unexpected_ask_failure provider=%s model=%s error=%s",
+            provider,
+            model,
+            exc,
+        )
+        return "[ERROR] Unexpected internal error. Check logs."
+
+
+# --- Advanced RAG helpers: chunking, embeddings, in-memory vector DB querying ---
+
+
+def chunk_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[str]:
+    """
+    Simple text chunking that splits by whitespace to produce overlapping chunks.
+
+    - chunk_size: approximate max characters per chunk
+    - chunk_overlap: number of characters to overlap between adjacent chunks
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be str")
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be > 0")
+    if chunk_overlap < 0:
+        raise ValueError("chunk_overlap must be >= 0")
+
+    text = text.strip()
+    if not text:
+        return []
+
+    chunks: List[str] = []
+    start = 0
+    length = len(text)
+    while start < length:
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk.strip())
+        if end >= length:
+            break
+        start = max(0, end - chunk_overlap)
+    return chunks
+
+
+def _compute_embeddings(
+    ai_provider,
+    texts: Sequence[str],
+) -> List[List[float]]:
+    """
+    Compute embeddings via provider.
+
+    The provider is expected to implement one of:
+    - embed(text: str) -> List[float]
+    - embed_many(texts: Sequence[str]) -> List[List[float]]
+    or
+    - embed_batch(texts: Sequence[str]) -> List[List[float]]
+
+    Raises AIProviderError if provider does not support embedding.
+    """
+    if not texts:
+        return []
+
+    # Prefer batch APIs
+    for method_name in ("embed_many", "embed_batch", "embed"):
+        method = getattr(ai_provider, method_name, None)
+        if method:
+            break
+    else:
+        raise AIProviderError("provider does not support embeddings")
+
+    try:
+        if method_name == "embed":
+            # call per-text
+            return [method(t) for t in texts]
+        else:
+            return method(texts)
+    except Exception as exc:
+        logger.exception("embedding_failure error=%s", exc)
+        raise AIProviderError(f"embedding failed: {exc}") from exc
+
+
+def _build_in_memory_index(
+    embeddings: Sequence[Sequence[float]],
+    metas: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Build a simple in-memory vector index using lists and dot products.
+    Stored as:
+      { "embeddings": list[list[float]], "metadatas": list[dict] }
+    """
+    if len(embeddings) != len(metas):
+        raise ValueError("embeddings and metas length mismatch")
+    return {"embeddings": [list(map(float, e)) for e in embeddings], "metadatas": list(metas)}
+
+
+def _cosine_sim(a: Sequence[float], b: Sequence[float]) -> float:
+    # lightweight cosine similarity without extra deps
+    # handle zero vectors defensively
+    sa = sum(x * x for x in a) ** 0.5
+    sb = sum(x * x for x in b) ** 0.5
+    if sa == 0 or sb == 0:
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    return dot / (sa * sb)
+
+
+def _query_index_top_k(
+    index: Dict[str, Any],
+    query_embedding: Sequence[float],
+    top_k: int = 5,
+) -> List[Tuple[float, Dict[str, Any]]]:
+    """
+    Return top_k entries as (score, metadata) ordered descending by score.
+    """
+    embeddings = index["embeddings"]
+    metas = index["metadatas"]
+    scores = []
+    for emb, meta in zip(embeddings, metas):
+        score = _cosine_sim(emb, query_embedding)
+        scores.append((score, meta))
+    scores.sort(key=lambda t: t[0], reverse=True)
+    return scores[:top_k]
+
+
+def rag_query(
+    *,
+    provider: str,
+    prompt: str,
+    documents: Optional[Sequence[str]] = None,
+    model: str | None = None,
+    embedding_model: str | None = None,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 200,
+    k: int = 5,
+    timeout: float | None = 30.0,
+) -> str:
+    """
+    High-level RAG (Retrieval-Augmented Generation) helper.
+
+    Workflow:
+    1. Validate arguments like ask(...)
+    2. If documents provided: chunk them (chunk_size/overlap)
+    3. Build provider and compute embeddings for chunks using provider's embed API
+       (or a separate embedding_model if supported by your provider registry)
+    4. Build an in-memory vector index and retrieve top-k chunks for the prompt
+    5. Compose a context string containing top-k chunks and forward a combined prompt
+       to the provider's generate/send method to produce a final answer.
+
+    Notes:
+    - This function expects provider instances to expose embedding methods:
+      embed / embed_many / embed_batch and text generation via send(...)
+    - For production-grade vector DB and FAISS, replace in-memory index with external store.
+    - Returns "[ERROR] ..." on validation/runtime errors (keeps the same contract as ask).
+    """
+    # Basic validation reusing ask's rules where applicable
+    if not isinstance(provider, str):
+        return "[ERROR] provider must be string"
+    provider = provider.strip().lower()
+    if not provider:
+        return "[ERROR] provider is empty"
+
+    if provider not in ("auto", "echo") and provider not in PROVIDERS:
+        available = ", ".join(sorted(list(PROVIDERS.keys()) + ["auto", "echo"]))
+        return (
+            f"[ERROR] Invalid provider '{provider}'. "
+            f"Available providers: {available}"
+        )
+
+    if not isinstance(prompt, str):
+        return "[ERROR] prompt must be string"
+    prompt = prompt.strip()
+    if not prompt:
+        return "[ERROR] Invalid prompt"
+
+    # documents may be None or sequence of strings
+    docs: List[str] = []
+    if documents:
+        if not isinstance(documents, Sequence):
+            return "[ERROR] documents must be a sequence of strings"
+        for d in documents:
+            if not isinstance(d, str):
+                return "[ERROR] each document must be a string"
+            if d.strip():
+                docs.append(d.strip())
+
+    try:
+        # Build a provider for both embeddings and generation. Some providers support
+        # using a different model for embeddings; delegate to registry via model/embedding_model.
+        # First, try to instantiate an embedding-capable provider (embedding_model if provided)
+        emb_provider = build_provider(name=provider, model=embedding_model or model)
+        gen_provider = build_provider(name=provider, model=model)
+
+        if timeout:
+            emb_provider.timeout = int(timeout)
+            gen_provider.timeout = int(timeout)
+
+        # If we have no documents, just delegate to ask/generate
+        if not docs:
+            return gen_provider.send(prompt)
+
+        # Chunk documents
+        passages: List[Tuple[str, Dict[str, Any]]] = []
+        for i, doc in enumerate(docs):
+            chunks = chunk_text(doc, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+            for j, chunk in enumerate(chunks):
+                meta = {"doc_index": i, "chunk_index": j}
+                passages.append((chunk, meta))
+
+        texts = [p[0] for p in passages]
+        metas = [p[1] for p in passages]
+
+        # Compute embeddings for passages
+        embeddings = _compute_embeddings(emb_provider, texts)
+        if not embeddings:
+            return "[ERROR] Failed to compute embeddings"
+
+        index = _build_in_memory_index(embeddings, metas)
+
+        # Compute embedding for the query prompt
+        q_embs = _compute_embeddings(emb_provider, [prompt])
+        if not q_embs or not q_embs[0]:
+            return "[ERROR] Failed to compute query embedding"
+        query_embedding = q_embs[0]
+
+        # Retrieve top-k relevant chunks
+        top = _query_index_top_k(index, query_embedding, top_k=k)
+
+        # Compose context from top passages
+        context_parts = []
+        for score, meta in top:
+            # find the corresponding text from passages
+            meta_idx = meta["doc_index"], meta["chunk_index"]
+            # safe retrieval
+            candidate_text = ""
+            for t, m in passages:
+                if (m["doc_index"], m["chunk_index"]) == meta_idx:
+                    candidate_text = t
+                    break
+            context_parts.append(f"[score={score:.4f}] {candidate_text}")
+
+        context = "\n\n".join(context_parts)
+        # Compose a final prompt that includes context and user prompt
+        composed_prompt = (
+            "Use the following contextual passages to answer the question.\n\n"
+            "Context:\n"
+            f"{context}\n\n"
+            "Question:\n"
+            f"{prompt}\n\n"
+            "Answer concisely and cite relevant context passages when useful."
+        )
+
+        response = gen_provider.send(composed_prompt)
+        if not isinstance(response, str):
+            logger.error("invalid_response_type provider=%s type=%s", provider, type(response).__name__)
+            return "[ERROR] Invalid response type"
+        response = response.strip()
+        if not response:
+            return "[ERROR] Empty response"
+        return response
+
+    except AIProviderError as exc:
+        logger.error("rag_ai_provider_error provider=%s error=%s", provider, exc)
+        return f"[ERROR] {exc}"
+    except Exception as exc:
+        logger.exception(
+            "unexpected_rag_failure provider=%s model=%s error=%s",
             provider,
             model,
             exc,

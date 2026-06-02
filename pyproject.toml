@@ -1,14 +1,33 @@
 [tool.poetry]
 name = "ai-cli"
 version = "0.2.0"
-description = "Enterprise-grade AI CLI gateway for multi-provider LLM orchestration, observability, routing, and intelligent operations."
+description = "AI CLI gateway for multi-provider LLM orchestration and RAG."
 authors = ["Your Name <youremail@example.com>"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/yourusername/ai-cli"
 repository = "https://github.com/yourusername/ai-cli"
 documentation = "https://github.com/yourusername/ai-cli/docs"
-keywords = ["ai","llm","cli","openai","anthropic","gemini","grok","cohere","devops","sre","ai-gateway","observability"]
+keywords = [
+    "ai",
+    "llm",
+    "cli",
+    "openai",
+    "anthropic",
+    "gemini",
+    "grok",
+    "cohere",
+    "devops",
+    "sre",
+    "ai-gateway",
+    "observability",
+    "RAG",
+    "retrieval-augmented-generation",
+    "vector-db",
+    "chroma",
+    "qdrant",
+    "pinecone",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -83,12 +102,41 @@ mypy = "^1.10.0"
 pre-commit = "^3.7.1"
 types-requests = "^2.32.0.20240523"
 
+# Advanced RAG support: chunking, embedding, vector DB connectors, and helpers.
+[tool.poetry.group.rag.dependencies]
+# Higher level orchestration (optional)
+langchain = "^0.1.0"
+# Vector DB clients (choose as needed)
+chromadb = "^0.3.30"
+qdrant-client = "^1.6.0"
+pymilvus = "^2.2.0"
+weaviate-client = "^4.4.0"
+pinecone-client = "^1.0.0"
+# Document parsing / chunking / OCR helpers
+unstructured = "^0.7.0"
+nltk = "^3.8.1"
+# Tokenizers / transformer helpers for chunking/encoding
+transformers = "^4.35.0"
+sentencepiece = "^0.1.99"
+ftfy = "^6.1.1"
+# Optional utilities for embedding and similarity search
+scikit-learn = "^1.2.2"
+
+# Documentation tooling (docs related to RAG workflow, examples)
+[tool.poetry.group.docs.dependencies]
+mkdocs = "^1.6.0"
+mkdocs-material = "^9.0.0"
+mkdocstrings = "^0.18.0"
+sphinx = "^6.2.0"
+sphinx-autodoc-typehints = "^1.23.0"
+
 # -----------------------------------------------------------------------------
 # CLI Entrypoint
 # -----------------------------------------------------------------------------
 
 [tool.poetry.scripts]
 ai-cli = "ai_cli.cli:main"
+ai-cli-rag = "ai_cli.rag:main"
 
 # -----------------------------------------------------------------------------
 # Build System
@@ -143,7 +191,7 @@ addopts = """
 --cov=src/ai_cli
 --cov-report=term-missing
 """
-markers = ["integration","slow","provider"]
+markers = ["integration","slow","provider","rag"]
 
 # -----------------------------------------------------------------------------
 # Coverage
