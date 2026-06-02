@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from typing import Iterable, List, Optional
+from typing import List, Optional
 
 
 class TextChunker:
@@ -56,3 +56,37 @@ class TextChunker:
             chunks.append(" ".join(current))
         # optionally apply overlap by merging adjacent chunks (omitted for simplicity)
         return chunks
+
+
+class PromptCorrector:
+    """
+    Minimal PromptCorrector implementation to satisfy imports and provide
+    a simple, test-friendly interface.
+
+    - correct(prompt, by_sentences=True): returns chunked prompt joined by blank lines.
+      Currently performs no modifications to text content (identity).
+    """
+
+    def __init__(self, tokens_per_chunk: int = 200, overlap: int = 50) -> None:
+        self.chunker = TextChunker(tokens_per_chunk=tokens_per_chunk, overlap=overlap)
+
+    def correct(self, prompt: str, by_sentences: bool = True, max_tokens: Optional[int] = None) -> str:
+        """
+        Return the prompt possibly split into chunks; this is a no-op correction by default.
+        """
+        if not prompt:
+            return prompt
+        if by_sentences:
+            chunks = self.chunker.chunk_by_sentences(prompt, max_tokens=max_tokens)
+        else:
+            chunks = self.chunker.chunk_by_tokens(prompt)
+        # Join chunks with blank lines to make chunk boundaries visible but keep content intact.
+        return "\n\n".join(chunks)
+
+
+def prompt_corrector(prompt: str, *, tokens_per_chunk: int = 200, overlap: int = 50, by_sentences: bool = True, max_tokens: Optional[int] = None) -> str:
+    """
+    Convenience function that mirrors the old import style: prompt_corrector(...)
+    """
+    pc = PromptCorrector(tokens_per_chunk=tokens_per_chunk, overlap=overlap)
+    return pc.correct(prompt, by_sentences=by_sentences, max_tokens=max_tokens)
