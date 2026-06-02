@@ -111,7 +111,7 @@ chromadb = "^0.3.30"
 qdrant-client = "^1.6.0"
 pymilvus = "^2.2.0"
 weaviate-client = "^4.4.0"
-pinecone-client = "^1.0.0"
+pinecone = "^7.0.0"
 # Document parsing / chunking / OCR helpers
 unstructured = "^0.7.0"
 nltk = "^3.8.1"
