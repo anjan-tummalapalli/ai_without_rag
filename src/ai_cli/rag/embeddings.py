@@ -12,6 +12,9 @@ except ImportError:
     SentenceTransformer = None  # type: ignore
 
 from ai_cli.config.rag_config import EMBEDDING_MODEL
+import os
+
+TESTING = os.getenv("PYTEST_RUNNING") == "1"
 
 
 class EmbeddingGenerator:
