@@ -25,8 +25,11 @@ def test_embedding_generator_smoke(monkeypatch):
     Avoid real SentenceTransformer load.
     """
 
-    import pytest
-    np = pytest.importorskip("numpy")
+    try:
+        import numpy as np
+    except ImportError:
+        import unittest
+        raise unittest.SkipTest("numpy is not available")
 
     class FakeModel:
         def encode(self, texts, convert_to_numpy=True):

@@ -3,6 +3,12 @@ from __future__ import annotations
 from typing import Iterable, List, Optional, TYPE_CHECKING, Any
 from ai_cli.config.rag_config import EMBEDDING_MODEL
 import os
+# Import sentence_transformers at runtime; keep the TYPE_CHECKING import for static type checkers
+try:
+    from sentence_transformers import SentenceTransformer
+except Exception:
+    SentenceTransformer = None  # type: ignore
+
 try:
     import numpy as np
     from numpy.typing import NDArray  # type: ignore
@@ -49,7 +55,8 @@ class EmbeddingGenerator:
         self.batch_size = batch_size
         self.normalize = normalize
         self.model: SentenceTransformer = SentenceTransformer(model_name)
-    def _postprocess(self, emb: NDArray) -> NDArray:
+        
+    def _postprocess(self, emb: Any) -> Any:
         if not self.normalize:
             return emb
         if np is None:
@@ -58,24 +65,19 @@ class EmbeddingGenerator:
         norms = np.linalg.norm(arr, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         return arr / norms
-
-    def embed_text(self, text: str) -> NDArray:
-        emb = self.model.encode([text], convert_to_numpy=True)
-        return self._postprocess(emb)[0]
-
-    def embed_batch(self, texts: Iterable[str]) -> List[NDArray]:
+    
+    def embed_batch(self, texts: Iterable[str]) -> List[Any]:
         """
         Generate embeddings for an iterable of texts. Returns list of numpy arrays.
         Uses batching to avoid OOM on large lists.
         """
         texts = list(texts)
-        embeddings: List[NDArray] = []
+        embeddings: List[Any] = []
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i : i + self.batch_size]
             emb_batch = self.model.encode(batch, convert_to_numpy=True)
             emb_batch = self._postprocess(emb_batch)
             embeddings.extend(list(emb_batch))
-        return embeddings
         return embeddings
 
 
