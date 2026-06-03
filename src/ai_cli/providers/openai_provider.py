@@ -87,11 +87,9 @@ class OpenAIProvider(AIProvider):
         **kwargs,
     ) -> None:
         super().__init__(
-            model=model or "gpt-5.5",
-            api_key=api_key,
-            *args,
-            **kwargs,
-        )
+                         provider_name="openai",
+                         model=model or "gpt-5.5",
+                        )
 
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
 

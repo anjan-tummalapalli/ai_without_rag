@@ -58,7 +58,7 @@ def ask(
             )
 
     try:
-        ai_provider = build_provider(name=provider, model=model)
+        ai_provider = build_provider(provider_name=provider, model=model)
 
         # We override timeout via the base class if provided
         if timeout:

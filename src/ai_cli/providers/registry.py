@@ -22,7 +22,7 @@ PROVIDERS = {
 
 PROVIDER_MAP = PROVIDERS
 
-def build_provider(provider_name: str, **kwargs):
+def build_provider(*, provider_name: str, **kwargs):
     """
     Create a provider instance by name.
     """
