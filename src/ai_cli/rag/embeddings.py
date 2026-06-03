@@ -1,14 +1,16 @@
-# /Users/anjan/Documents/New project/ai_chat/ai_cli/src/ai_cli/rag/embeddings.py
 from __future__ import annotations
 from typing import Iterable, List, TYPE_CHECKING, Any
 from ai_cli.config.rag_config import EMBEDDING_MODEL
 import os
 import importlib
 
-# Use TYPE_CHECKING imports for static type checkers only
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore
+
 if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer  # type: ignore
-    import numpy as np  # type: ignore
+    from sentence_transformers import SentenceTransformer
 
 TESTING = os.getenv("PYTEST_RUNNING") == "1"
 
