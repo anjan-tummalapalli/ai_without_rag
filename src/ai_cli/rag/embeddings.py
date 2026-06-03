@@ -60,13 +60,17 @@ class EmbeddingGenerator:
         if not self.normalize:
             return emb
 
-        arr = self.np.asarray(emb)
+        if np is None:
+            raise ImportError("numpy is required for normalization")
+
+        arr = np.asarray(emb)
         if arr.ndim == 1:
-            norm = self.np.linalg.norm(arr)
+            norm = np.linalg.norm(arr)
             if norm == 0:
                 norm = 1.0
             return arr / norm
-        norms = self.np.linalg.norm(arr, axis=1, keepdims=True)
+
+        norms = np.linalg.norm(arr, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         return arr / norms
 
