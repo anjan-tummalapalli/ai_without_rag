@@ -20,7 +20,7 @@ def test_chunk_overlap_behavior():
     assert len(chunks) >= 1
 
 
-def test_embedding_generator_smoke(_monkeypatch):
+def test_embedding_generator_smoke():
     """
     Avoid real SentenceTransformer load.
     """
