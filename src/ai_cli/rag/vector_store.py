@@ -249,3 +249,8 @@ class VectorStore:
                 self.embeddings = np.empty((0, d), dtype="float32")
             else:
                 self.embeddings = None
+
+# ------------------------------------------------------------------
+# Backward compatibility alias
+# ------------------------------------------------------------------
+InMemoryVectorStore = VectorStore
