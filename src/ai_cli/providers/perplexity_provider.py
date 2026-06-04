@@ -115,108 +115,108 @@ class PerplexityProvider(AIProvider):
         if self.vector_store is None:
             self.vector_store = InMemoryVectorStore()
 
-def build_rag_index(
-    self,
-    documents: Sequence[str],
-    chunk_size: int = 500,
-    overlap: int = 50,
-    embed_model: Optional[str] = None,
-    ids_prefix: Optional[str] = None,
-) -> None:
-    """
-    Build an in-memory RAG index from given documents.
+    def build_rag_index(
+        self,
+        documents: Sequence[str],
+        chunk_size: int = 500,
+        overlap: int = 50,
+        embed_model: Optional[str] = None,
+        ids_prefix: Optional[str] = None,
+    ) -> None:
+        """
+        Build an in-memory RAG index from given documents.
 
-    - chunks documents with overlap
-    - computes embeddings for chunks
-    - stores embeddings and chunk text/metadata in the vector store
-    """
-    self._ensure_rag_components(embed_model=embed_model)
-    if self.vector_store is None or self.embeddings_provider is None:
-        raise ProviderRequestError("RAG components not initialized")
+        - chunks documents with overlap
+        - computes embeddings for chunks
+        - stores embeddings and chunk text/metadata in the vector store
+        """
+        self._ensure_rag_components(embed_model=embed_model)
+        if self.vector_store is None or self.embeddings_provider is None:
+            raise ProviderRequestError("RAG components not initialized")
 
-    all_chunks: List[str] = []
-    metadatas: List[dict] = []
-    ids: List[str] = []
-    for doc_idx, doc in enumerate(documents):
-        chunks = chunk_text(doc, chunk_size=chunk_size, overlap=overlap)
-        for i, c in enumerate(chunks):
-            all_chunks.append(c.text)
-            metadatas.append(
-                {
-                    "doc_index": doc_idx,
-                    "chunk_index": i,
-                    "source": c.source,
-                }
+        all_chunks: List[str] = []
+        metadatas: List[dict] = []
+        ids: List[str] = []
+        for doc_idx, doc in enumerate(documents):
+            chunks = chunk_text(doc, chunk_size=chunk_size, overlap=overlap)
+            for i, c in enumerate(chunks):
+                all_chunks.append(c.text)
+                metadatas.append(
+                    {
+                        "doc_index": doc_idx,
+                        "chunk_index": i,
+                        "source": c.source,
+                    }
+                )
+
+        if not all_chunks:
+            return
+
+        embeddings = self.embeddings_provider.embed_batch(all_chunks)
+
+        chunks_for_store = [
+            Chunk(
+                id=(f"{ids_prefix}doc_{meta['doc_index']}_chunk_{meta['chunk_index']}"
+                    if ids_prefix else f"doc_{meta['doc_index']}_chunk_{meta['chunk_index']}"),
+                text=text,
+                source=meta.get("source"),
+                chunk_index=meta["chunk_index"],
+                metadata=meta,
             )
+            for text, meta in zip(all_chunks, metadatas)
+        ]
 
-    if not all_chunks:
-        return
+        # Store embeddings and associated chunk objects in the vector store
+        self.vector_store.add_embeddings(self._to_np_array(embeddings, dtype="float32"), chunks_for_store)
 
-    embeddings = self.embeddings_provider.embed_batch(all_chunks)
+    def query_with_rag(
+        self,
+        query: str,
+        k: int = 3,
+        prompt_template: Optional[str] = None,
+        embed_model: Optional[str] = None,
+        temperature: float = 0.0,
+    ) -> Tuple[str, List[dict]]:
+        """
+        Perform a RAG query:
+        - embed the user query
+        - retrieve top-k relevant chunks
+        - construct a prompt combining the retrieved context and the query
+        - call the model and return (answer, retrieved_contexts)
 
-    chunks_for_store = [
-        Chunk(
-            id=(f"{ids_prefix}doc_{meta['doc_index']}_chunk_{meta['chunk_index']}"
-                if ids_prefix else f"doc_{meta['doc_index']}_chunk_{meta['chunk_index']}"),
-            text=text,
-            source=meta.get("source"),
-            chunk_index=meta["chunk_index"],
-            metadata=meta,
-        )
-        for text, meta in zip(all_chunks, metadatas)
-    ]
+        Returns:
+            answer (str), retrieved_contexts (list of metadata+text)
+        """
+        self._ensure_rag_components(embed_model=embed_model)
+        if self.vector_store is None or self.embeddings_provider is None:
+            raise ProviderRequestError("RAG components not initialized")
 
-    # Store embeddings and associated chunk objects in the vector store
-    self.vector_store.add_embeddings(self._to_np_array(embeddings, dtype="float32"), chunks_for_store)
+        q_emb = self.embeddings_provider.embed_batch([query])[0]
+        hits = self.vector_store.search(self._to_np_array(q_emb, dtype="float32"), k=k)
 
-def query_with_rag(
-    self,
-    query: str,
-    k: int = 3,
-    prompt_template: Optional[str] = None,
-    embed_model: Optional[str] = None,
-    temperature: float = 0.0,
-) -> Tuple[str, List[dict]]:
-    """
-    Perform a RAG query:
-    - embed the user query
-    - retrieve top-k relevant chunks
-    - construct a prompt combining the retrieved context and the query
-    - call the model and return (answer, retrieved_contexts)
+        contexts = []
+        context_text = []
+        for score, text, metadata in hits:
+            contexts.append({"score": float(score), "text": text, "metadata": metadata})
+            context_text.append(text)
 
-    Returns:
-        answer (str), retrieved_contexts (list of metadata+text)
-    """
-    self._ensure_rag_components(embed_model=embed_model)
-    if self.vector_store is None or self.embeddings_provider is None:
-        raise ProviderRequestError("RAG components not initialized")
+        if prompt_template is None:
+            prompt_template = (
+                "Use the following context to answer the question. If the context does not contain "
+                "the answer, answer based on your knowledge and be explicit about missing info.\n\n"
+                "Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+            )
+        prompt = prompt_template.format(context="\n\n".join(context_text), query=query)
 
-    q_emb = self.embeddings_provider.embed_batch([query])[0]
-    hits = self.vector_store.search(self._to_np_array(q_emb, dtype="float32"), k=k)
-
-    contexts = []
-    context_text = []
-    for score, text, metadata in hits:
-        contexts.append({"score": float(score), "text": text, "metadata": metadata})
-        context_text.append(text)
-
-    if prompt_template is None:
-        prompt_template = (
-            "Use the following context to answer the question. If the context does not contain "
-            "the answer, answer based on your knowledge and be explicit about missing info.\n\n"
-            "Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
-        )
-    prompt = prompt_template.format(context="\n\n".join(context_text), query=query)
-
-    try:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-        )
-        if not getattr(response, "choices", None):
-            raise ProviderRequestError("Perplexity returned no choices")
-        answer = response.choices[0].message.content.strip()
-        return answer, contexts
-    except Exception as exc:
-        raise ProviderRequestError(f"Perplexity RAG request failed: {exc}") from exc
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+            )
+            if not getattr(response, "choices", None):
+                raise ProviderRequestError("Perplexity returned no choices")
+            answer = response.choices[0].message.content.strip()
+            return answer, contexts
+        except Exception as exc:
+            raise ProviderRequestError(f"Perplexity RAG request failed: {exc}") from exc
