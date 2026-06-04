@@ -1,155 +1,123 @@
 from __future__ import annotations
 
-import time, uuid, logging, json
-from dataclasses import dataclass
-from typing import Optional, Any
+import os
+import requests
+from typing import Any, Optional
 
-from ai_cli.core.exceptions import (
-    ProviderRequestError,
-    PromptValidationError,
-)
-from ai_cli.core.resilience import RetryEngine
-from ai_cli.utils.validation import ResponseValidator, HallucinationDetector
-from ai_cli.telemetry.monitoring import ModelQualityMetrics
+from ..core.exceptions import ProviderRequestError
+from .types import AIProvider, ProviderMetadata
 
-logger = logging.getLogger("ai_gateway")
-
-DEFAULT_TIMEOUT_SECONDS = 60
-DEFAULT_MAX_PROMPT_LENGTH = 10_000
+ZAI_DEFAULT_BASE = "https://api.z.ai/v1/generate"
 
 
-@dataclass(frozen=True)
-class ProviderMetadata:
-    name: str
-    default_model: str
-    supported_models: list[str]
-    supports_streaming: bool
-    supports_tools: bool
-    supports_vision: bool
-    max_context: int
-    cost_per_1k_tokens: float
-    avg_latency_ms: int
-    supports_rag: bool = False
+class ZAIProvider(AIProvider):
+    """
+    Minimal z.AI provider adapter.
 
+    - Uses ZAI_API_KEY and optionally ZAI_API_BASE env vars.
+    - Posts JSON payload { "model": <model>, "prompt": <prompt> }.
+    - Attempts to extract textual response from common keys in the returned JSON.
+    """
 
-class AIProvider:
+    DEFAULT_META = ProviderMetadata(
+        name="z.ai",
+        default_model="zai-small",
+        supported_models=["zai-small", "zai-medium", "zai-large"],
+        supports_streaming=False,
+        supports_tools=False,
+        supports_vision=False,
+        max_context=65_000,
+        cost_per_1k_tokens=0.0,
+        avg_latency_ms=200,
+        supports_rag=False,
+    )
+
     def __init__(
         self,
-        provider_name: str,
+        provider_name: str = "z.ai",
         model: Optional[str] = None,
         provider_meta: Optional[ProviderMetadata] = None,
-        timeout: int = DEFAULT_TIMEOUT_SECONDS,
-        embedding_client: Optional[Any] = None,
-        vector_db: Optional[Any] = None,
-        chunk_size: int = 512,
-        chunk_overlap: int = 64,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
-
-        # FIX: do NOT hard-fail unless metadata is truly required
-        self.provider_meta = provider_meta or ProviderMetadata(
-            name=provider_name,
-            default_model=model or "unknown",
-            supported_models=[],
-            supports_streaming=False,
-            supports_tools=False,
-            supports_vision=False,
-            max_context=0,
-            cost_per_1k_tokens=0.0,
-            avg_latency_ms=0,
-            supports_rag=False,
+        meta = provider_meta or self.DEFAULT_META
+        super().__init__(
+            provider_name=provider_name,
+            model=model or meta.default_model,
+            provider_meta=meta,
+            **kwargs,
         )
+        # base URL and api key can be overridden with env vars
+        self.base_url = os.getenv("ZAI_API_BASE", ZAI_DEFAULT_BASE)
+        self.api_key = os.getenv("ZAI_API_KEY", "")
 
-        self.provider_name = provider_name
-        self.timeout = timeout
-        self.model = model or self.provider_meta.default_model
-
-        self.trace_id = str(uuid.uuid4())
-
-        self.retry_engine = RetryEngine()
-        self.response_validator = ResponseValidator()
-        self.hallucination_detector = HallucinationDetector()
-        self.metrics = ModelQualityMetrics(
-            provider=provider_name,
-            model=self.model,
-        )
-
-        # RAG
-        self.embedding_client = embedding_client
-        self.vector_db = vector_db
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-
-    # -------------------------
-    # Prompt validation
-    # -------------------------
-    def validate_prompt(self, prompt: str) -> str:
-        if not isinstance(prompt, str):
-            raise PromptValidationError("prompt must be string")
-
-        if "\x00" in prompt:
-            raise PromptValidationError("prompt contains NUL byte")
-
-        from ai_cli.core.prompt_corrector import prompt_corrector
-
-        corrected = prompt_corrector(prompt)
-
-        if not corrected:
-            raise PromptValidationError("prompt is empty")
-
-        if len(corrected) > DEFAULT_MAX_PROMPT_LENGTH:
-            raise PromptValidationError("prompt too long")
-
-        return corrected
-
-    # -------------------------
-    # Abstract transport
-    # -------------------------
     def _send_impl(self, prompt: str) -> str:
-        raise NotImplementedError()
+        if not self.api_key:
+            raise ProviderRequestError("z.AI API key not configured (ZAI_API_KEY)")
 
-    # -------------------------
-    # Response coercion
-    # -------------------------
-    def _coerce_response_to_str(self, response: Any) -> str:
-        if response is None:
-            raise ProviderRequestError("empty response")
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": f"ai_cli/{self.provider_name}",
+        }
 
-        if isinstance(response, str):
-            return response
-
-        if isinstance(response, (dict, list, tuple, int, float, bool)):
-            return json.dumps(response, ensure_ascii=False)
-
-        try:
-            return str(response)
-        except Exception as exc:
-            raise ProviderRequestError(
-                f"Unsupported response type: {type(response)}"
-            ) from exc
-
-    # -------------------------
-    # Main send
-    # -------------------------
-    def send(self, prompt: str) -> str:
-        validated = self.validate_prompt(prompt)
-
-        self.metrics.requests += 1
-        start = time.monotonic()
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+        }
 
         try:
-            raw = self.retry_engine.execute(
-                lambda: self._send_impl(validated)
+            resp = requests.post(
+                self.base_url,
+                json=payload,
+                headers=headers,
+                timeout=getattr(self, "timeout", None),
             )
+        except requests.RequestException as exc:
+            raise ProviderRequestError(f"network error: {exc}") from exc
 
-            result = self._coerce_response_to_str(raw)
+        if resp.status_code >= 400:
+            body = None
+            try:
+                body = resp.json()
+            except Exception:
+                body = resp.text
+            raise ProviderRequestError(f"z.AI error {resp.status_code}: {body}")
 
-            self.metrics.total_latency_seconds += time.monotonic() - start
-
-            self.response_validator.validate(result)
-
-            return result.strip()
-
+        try:
+            data = resp.json()
         except Exception as exc:
-            self.metrics.failures += 1
-            raise ProviderRequestError(str(exc)) from exc
+            # fallback to raw text if not json
+            text = resp.text
+            if not text:
+                raise ProviderRequestError("empty response from z.AI") from exc
+            return text
+
+        # common response shapes: {'text': ...}, {'output': ...}, {'choices': [...]}, {'data': ...}
+        if isinstance(data, dict):
+            if "text" in data and isinstance(data["text"], str):
+                return data["text"]
+            if "output" in data and isinstance(data["output"], str):
+                return data["output"]
+            if "result" in data and isinstance(data["result"], str):
+                return data["result"]
+            # choices array (openai-style)
+            choices = data.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                # try common keys
+                for k in ("text", "message", "content", "output"):
+                    if isinstance(first, dict) and k in first and isinstance(first[k], str):
+                        return first[k]
+                # nested message.content
+                message = first.get("message") if isinstance(first, dict) else None
+                if isinstance(message, dict):
+                    content = message.get("content")
+                    if isinstance(content, str):
+                        return content
+
+        # As a last resort, return the full JSON as string
+        try:
+            import json
+            return json.dumps(data, ensure_ascii=False)
+        except Exception as exc:
+            raise ProviderRequestError("unable to coerce z.AI response to string") from exc

@@ -5,46 +5,30 @@ ai_cli.cli - Command-line interface for the Enterprise AI CLI Gateway.
 Enhancements (Advanced RAG)
 - Chunking: configurable chunk size & overlap to break large documents into
         context windows for retrieval-augmented generation.
-- Embedding: deterministic, lightweight embedding function (crypto-hash based)
-        so the RAG pipeline is self-contained and has repeatable embeddings without
-        external ML dependencies. Designed for demo/local usage; replace with model
-        embeddings for production.
+- Embedding: deterministic, lightweight embedding function (crypto-hash
+        based) so the RAG pipeline is self-contained and has repeatable embeddings
+        without external ML dependencies. Designed for demo/local usage; replace
+        with model embeddings for production.
 - Vector DB querying: an in-memory vector store with upsert and top-k cosine
-        similarity retrieval. Stores chunk metadata and provides a retrieve_context()
-        API used by the CLI to prepend context to prompts.
+        similarity retrieval. Stores chunk metadata and provides a
+        retrieve_context() API used by the CLI to prepend context to prompts.
 - CLI integration: flags --rag, --rag-docs, --rag-chunk-size,
-        --rag-chunk-overlap, and --rag-top-k. REPL commands for indexing and search
-        added: "index <file|text>", "search <query>".
+        --rag-chunk-overlap, and --rag-top-k. REPL commands for indexing and
+        search added: "index <file|text>", "search <query>".
 
 Notes:
-- The embedded vector store is intentionally lightweight and dependency-free.
-        Swap in a production vector DB (FAISS, Milvus, Pinecone, etc.) and real
-        embedding models (OpenAI, sentence-transformers) as needed.
+- The embedded vector store is intentionally lightweight and
+        dependency-free. Swap in a production vector DB (FAISS, Milvus, Pinecone,
+        etc.) and real embedding models (OpenAI, sentence-transformers) as
+        needed.
 """
-import argparse
-import asyncio
-import hashlib
-import inspect
-import json
-import logging
-import math
-import os
-import sys
-import time
-import uuid
-from typing import Any, Iterable, AsyncIterable, Sequence, List, Dict, Optional
+import argparse, asyncio, hashlib, inspect, json, logging, math, os, sys, time, uuid
+from typing import Any, AsyncIterable, Dict, Iterable, List, Optional, Sequence
 
-# The core ask() API is expected to be provided elsewhere in the package.
 from ai_cli.core.api import ask
 
-# -----------------------------------------------------------------------------
-# Version
-# -----------------------------------------------------------------------------
 VERSION = "0.3.0"
 
-# -----------------------------------------------------------------------------
-# Logging
-# -----------------------------------------------------------------------------
 logging.basicConfig(
                 level=logging.INFO,
                 format="%(asctime)s %(levelname)s %(message)s",
@@ -53,9 +37,6 @@ logging.basicConfig(
 logger = logging.getLogger("ai_cli")
 
 
-# -----------------------------------------------------------------------------
-# Simple, self-contained RAG Pipeline implementation
-# -----------------------------------------------------------------------------
 class RAGPipeline:
                 """
                 Lightweight in-memory RAG pipeline:
@@ -70,13 +51,14 @@ class RAGPipeline:
                                 # store entries as dicts: {id, doc_id, chunk, embedding, meta}
                                 self._store: List[Dict[str, Any]] = []
 
-                def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+                def chunk_text(self, text: str, chunk_size: int = 500,
+                                                                         overlap: int = 50) -> List[str]:
                                 """Chunk a text into overlapping windows of roughly chunk_size chars."""
                                 if chunk_size <= 0:
                                                 raise ValueError("chunk_size must be positive")
                                 if overlap < 0:
                                                 overlap = 0
-                                texts = []
+                                texts: List[str] = []
                                 start = 0
                                 L = len(text)
                                 while start < L:
@@ -95,7 +77,7 @@ class RAGPipeline:
                                 produce embed_dim floats in [-1, 1]. Not a semantic embedding for
                                 production use — swap in a model-based embedder for real applications.
                                 """
-                                vec = []
+                                vec: List[float] = []
                                 for i in range(self.embed_dim):
                                                 h = hashlib.sha256()
                                                 # mix in counter and text, produce stable bytes
@@ -150,14 +132,15 @@ class RAGPipeline:
                                                                                 "meta": {"length": len(chunk)},
                                                                 }
                                                                 self._store.append(entry)
-                                logger.info("Indexed %d documents -> %d chunks total", len(doc_texts), len(self._store))
+                                logger.info("Indexed %d documents -> %d chunks total", len(doc_texts),
+                                                                                len(self._store))
 
                 def retrieve_context(self, query: str, top_k: int = 5) -> str:
                                 """Return the concatenated top-k chunks most similar to the query."""
                                 if not self._store:
                                                 return ""
                                 q_emb = self._embed_one(query)
-                                scored = []
+                                scored: List[tuple[float, Dict[str, Any]]] = []
                                 for entry in self._store:
                                                 score = self._cosine(q_emb, entry["embedding"])
                                                 scored.append((score, entry))
@@ -168,105 +151,45 @@ class RAGPipeline:
                                 return context
 
 
-# -----------------------------------------------------------------------------
-# CLI Argument Parsing
-# -----------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
                 """Build and return the CLI argument parser."""
                 parser = argparse.ArgumentParser(
                                 prog="ai-cli",
-                                description=(
-                                                "Enterprise AI CLI Gateway for multi-provider AI interactions."
-                                ),
+                                description="Enterprise AI CLI Gateway for multi-provider AI interactions.",
                 )
-                parser.add_argument(
-                                "-p",
-                                "--provider",
-                                default="auto",
-                                type=str,
-                                help="AI provider name (default: auto).",
-                )
-                parser.add_argument(
-                                "-q",
-                                "--prompt",
-                                type=str,
-                                help="Prompt/question to send to the AI provider.",
-                )
-                parser.add_argument(
-                                "-m",
-                                "--model",
-                                default=None,
-                                type=str,
-                                help="Optional model override for the selected provider.",
-                )
-                parser.add_argument(
-                                "-i",
-                                "--interactive",
-                                action="store_true",
-                                help="Start an interactive REPL chat loop.",
-                )
-                parser.add_argument(
-                                "--timeout",
-                                type=int,
-                                default=60,
-                                help="Request timeout in seconds. Default: 60",
-                )
-                parser.add_argument(
-                                "--debug",
-                                action="store_true",
-                                help="Enable debug logging.",
-                )
-                parser.add_argument(
-                                "--profile",
-                                type=str,
-                                default=None,
-                                help="Profile name or configuration to use (optional).",
-                )
-                parser.add_argument(
-                                "--stream",
-                                action="store_true",
-                                help="Enable streaming responses if supported.",
-                )
-                parser.add_argument(
-                                "--version",
-                                action="version",
-                                version=f"%(prog)s {VERSION}",
-                                help="Show program version and exit.",
-                )
-                parser.add_argument(
-                                "--rag",
-                                action="store_true",
-                                help="Enable RAG retrieval for the prompt.",
-                )
-                parser.add_argument(
-                                "--rag-docs",
-                                nargs="*",
-                                help="Documents to index into the RAG store (file paths or raw text).",
-                )
-                parser.add_argument(
-                                "--rag-chunk-size",
-                                type=int,
-                                default=500,
-                                help="Chunk size (characters) for RAG document chunking (default 500).",
-                )
-                parser.add_argument(
-                                "--rag-chunk-overlap",
-                                type=int,
-                                default=50,
-                                help="Overlap (characters) between chunks (default 50).",
-                )
-                parser.add_argument(
-                                "--rag-top-k",
-                                type=int,
-                                default=5,
-                                help="Number of top chunks to retrieve for context (default 5).",
-                )
+                parser.add_argument("-p", "--provider", default="auto", type=str,
+                                                                                                help="AI provider name (default: auto).")
+                parser.add_argument("-q", "--prompt", type=str,
+                                                                                                help="Prompt/question to send to the AI provider.")
+                parser.add_argument("-m", "--model", default=None, type=str,
+                                                                                                help="Optional model override for the selected provider.")
+                parser.add_argument("-i", "--interactive", action="store_true",
+                                                                                                help="Start an interactive REPL chat loop.")
+                parser.add_argument("--timeout", type=int, default=60,
+                                                                                                help="Request timeout in seconds. Default: 60")
+                parser.add_argument("--debug", action="store_true",
+                                                                                                help="Enable debug logging.")
+                parser.add_argument("--profile", type=str, default=None,
+                                                                                                help="Profile name or configuration to use (optional).")
+                parser.add_argument("--stream", action="store_true",
+                                                                                                help="Enable streaming responses if supported.")
+                parser.add_argument("--version", action="version",
+                                                                                                version=f"%(prog)s {VERSION}",
+                                                                                                help="Show program version and exit.")
+                parser.add_argument("--rag", action="store_true",
+                                                                                                help="Enable RAG retrieval for the prompt.")
+                parser.add_argument("--rag-docs", nargs="*",
+                                                                                                help="Documents to index into the RAG store "
+                                                                                                                 "(file paths or raw text).")
+                parser.add_argument("--rag-chunk-size", type=int, default=500,
+                                                                                                help="Chunk size (characters) for RAG chunking (default 500).")
+                parser.add_argument("--rag-chunk-overlap", type=int, default=50,
+                                                                                                help="Overlap (characters) between chunks (default 50).")
+                parser.add_argument("--rag-top-k", type=int, default=5,
+                                                                                                help="Number of top chunks to retrieve for context (default 5).")
                 return parser
 
 
-# -----------------------------------------------------------------------------
-# Helper to build kwargs for ask() robustly
-# -----------------------------------------------------------------------------
 def _build_ask_kwargs(
                 provider: str,
                 prompt: str,
@@ -276,18 +199,17 @@ def _build_ask_kwargs(
                 stream: bool = False,
 ) -> dict[str, Any]:
                 """
-                Build the kwargs to pass to ask() based on what parameters it
-                accepts. Uses inspect.signature so the CLI remains compatible with
-                different ask() versions. Only keys accepted by ask() (or
-                variable kwargs) are passed. None values are omitted.
+                Build the kwargs to pass to ask() based on what parameters it accepts.
+                Uses inspect.signature so the CLI remains compatible with different ask()
+                versions. Only keys accepted by ask() (or variable kwargs) are passed.
+                None values are omitted.
                 """
-                # Normalize simple invalid inputs
                 provider = provider.strip() if provider and provider.strip() else "auto"
                 prompt = prompt or ""
-                model = model.strip() if isinstance(model, str) and model.strip() else None
-                profile = profile.strip() if isinstance(profile, str) and profile.strip() else None
+                model = (model.strip() if isinstance(model, str) and model.strip() else None)
+                profile = (profile.strip() if isinstance(profile, str) and profile.strip() else None)
 
-                candidate = {
+                candidate: dict[str, Any] = {
                                 "provider": provider,
                                 "prompt": prompt,
                                 "model": model,
@@ -299,8 +221,8 @@ def _build_ask_kwargs(
                 try:
                                 sig = inspect.signature(ask)
                                 params = sig.parameters
-                                accepts_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
-                                # Only include keys that ask accepts or if it accepts **kwargs
+                                accepts_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD
+                                                                                                                 for p in params.values())
                                 filtered: dict[str, Any] = {}
                                 for k, v in candidate.items():
                                                 if v is None:
@@ -308,7 +230,6 @@ def _build_ask_kwargs(
                                                                 continue
                                                 if accepts_var_kw or k in params:
                                                                 filtered[k] = v
-                                # Ensure mandatory keys are present if ask expects them
                                 if "prompt" in params and "prompt" not in filtered:
                                                 filtered["prompt"] = prompt
                                 if "provider" in params and "provider" not in filtered:
@@ -316,7 +237,6 @@ def _build_ask_kwargs(
                                 return filtered
                 except Exception:
                                 logger.debug("Failed to inspect ask() signature; sending best-effort args")
-                                # Fallback: only base safe args
                                 base: dict[str, Any] = {"provider": provider, "prompt": prompt, "timeout": timeout}
                                 if model is not None:
                                                 base["model"] = model
@@ -327,9 +247,6 @@ def _build_ask_kwargs(
                                 return base
 
 
-# -----------------------------------------------------------------------------
-# Response handling (sync + async + streaming)
-# -----------------------------------------------------------------------------
 def _decode_chunk(chunk: Any) -> str:
                 if isinstance(chunk, bytes):
                                 try:
@@ -346,34 +263,27 @@ def _decode_chunk(chunk: Any) -> str:
 
 async def _drain_async_result(result: Any, provider: str, stream: bool) -> int:
                 """
-                Handle coroutine results, async iterables or async generators from
-                ask(). Prints streaming pieces if iterable; otherwise prints final
-                value.
+                Handle coroutine results, async iterables or async generators from ask().
+                Prints streaming pieces if iterable; otherwise prints final value.
                 """
                 try:
-                                # If it's an async iterable (async generator), iterate
                                 if isinstance(result, AsyncIterable):
                                                 async for part in result:  # type: ignore
                                                                 text = _decode_chunk(part)
                                                                 print(text, end="", flush=True)
-                                                # newline at end
                                                 print()
                                                 return 0
-                                # If it's an awaitable coroutine that returns a value
                                 value = await result
-                                # If the awaited value is async iterable, handle it (rare)
                                 if isinstance(value, AsyncIterable):
                                                 async for part in value:  # type: ignore
                                                                 print(_decode_chunk(part), end="", flush=True)
                                                 print()
                                                 return 0
-                                # If the awaited value is an iterator/generator, iterate it
                                 if isinstance(value, Iterable) and not isinstance(value, (str, bytes, dict)):
                                                 for part in value:
                                                                 print(_decode_chunk(part), end="", flush=True)
                                                 print()
                                                 return 0
-                                # Scalar / dict / list etc.
                                 text = _decode_chunk(value)
                                 print(text)
                                 return 0
@@ -388,38 +298,27 @@ async def _drain_async_result(result: Any, provider: str, stream: bool) -> int:
 
 def _handle_sync_result(result: Any, provider: str, stream: bool) -> int:
                 """
-                Handle synchronous results: scalars, bytes, dicts, iterables
-                (generators).
+                Handle synchronous results: scalars, bytes, dicts, iterables (generators).
                 """
                 try:
-                                # Asyncables slipped through
                                 if inspect.isawaitable(result):
                                                 return asyncio.run(_drain_async_result(result, provider, stream))
-
-                                # If it's an async iterable object instance (rare)
                                 if isinstance(result, AsyncIterable):
                                                 return asyncio.run(_drain_async_result(result, provider, stream))
-
-                                # Iterable streaming (but strings are iterable of chars -> avoid)
                                 if isinstance(result, Iterable) and not isinstance(result, (str, bytes, dict)):
                                                 for part in result:
                                                                 print(_decode_chunk(part), end="", flush=True)
                                                 print()
                                                 return 0
-
-                                # Bytes
                                 if isinstance(result, bytes):
                                                 try:
                                                                 print(result.decode("utf-8"))
                                                 except Exception:
                                                                 print(result.decode("utf-8", errors="replace"))
                                                 return 0
-
-                                # dict / list / scalar
                                 if isinstance(result, (dict, list)):
                                                 print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
                                                 return 0
-
                                 print(str(result))
                                 return 0
                 except KeyboardInterrupt:
@@ -431,10 +330,8 @@ def _handle_sync_result(result: Any, provider: str, stream: bool) -> int:
                                 return 1
 
 
-# -----------------------------------------------------------------------------
-# Retry wrapper for transient errors
-# -----------------------------------------------------------------------------
-def _invoke_with_retries(kwargs: dict[str, Any], max_retries: int = 3, backoff: float = 0.5) -> int:
+def _invoke_with_retries(kwargs: dict[str, Any], max_retries: int = 3,
+                                                                                                 backoff: float = 0.5) -> int:
                 """
                 Invoke ask() with a small retry/backoff on transient errors.
                 Handles sync and async responses transparently. Returns an exit code.
@@ -443,19 +340,24 @@ def _invoke_with_retries(kwargs: dict[str, Any], max_retries: int = 3, backoff: 
                 while True:
                                 try:
                                                 attempt += 1
-                                                # Prepare a safe-to-log copy of kwargs
-                                                safe_kwargs = {k: ("<redacted>" if k == "prompt" else v) for k, v in kwargs.items()}
-                                                logger.debug("Calling ask() attempt %d with kwargs=%s", attempt, safe_kwargs)
+                                                safe_kwargs = {k: ("<redacted>" if k == "prompt" else v)
+                                                                                                         for k, v in kwargs.items()}
+                                                logger.debug("Calling ask() attempt %d with kwargs=%s", attempt,
+                                                                                                 safe_kwargs)
                                                 result = ask(**kwargs)
-                                                # If the result is awaitable or async iterable, handle via asyncio
                                                 if inspect.isawaitable(result) or isinstance(result, AsyncIterable):
                                                                 return asyncio.run(
                                                                                 _drain_async_result(
-                                                                                                result, kwargs.get("provider", "unknown"), kwargs.get("stream", False)
+                                                                                                result,
+                                                                                                kwargs.get("provider", "unknown"),
+                                                                                                kwargs.get("stream", False),
                                                                                 )
                                                                 )
-                                                # Otherwise handle sync
-                                                return _handle_sync_result(result, kwargs.get("provider", "unknown"), kwargs.get("stream", False))
+                                                return _handle_sync_result(
+                                                                result,
+                                                                kwargs.get("provider", "unknown"),
+                                                                kwargs.get("stream", False),
+                                                )
                                 except (TimeoutError, ConnectionError, OSError) as exc:
                                                 logger.warning("Transient error on attempt %d: %s", attempt, exc)
                                                 if attempt >= max_retries:
@@ -474,9 +376,6 @@ def _invoke_with_retries(kwargs: dict[str, Any], max_retries: int = 3, backoff: 
                                                 return 1
 
 
-# -----------------------------------------------------------------------------
-# Interactive REPL Loop
-# -----------------------------------------------------------------------------
 def run_interactive(
                 provider: str,
                 model: str | None,
@@ -496,7 +395,8 @@ def run_interactive(
                 )
                 print(
                                 "Type /switch <provider>, /model <model>, /profile <name>, "
-                                "/stream, /index <file|text>, /search <query>, /exit or /quit. Type /help for this text.\n"
+                                "/stream, /index <file|text>, /search <query>, /exit or /quit. "
+                                "Type /help for this text.\n"
                 )
 
                 current_provider = provider
@@ -511,26 +411,22 @@ def run_interactive(
                                 except (EOFError, KeyboardInterrupt):
                                                 print("\nExiting...")
                                                 return 0
-
                                 if not user_input:
                                                 continue
-
                                 cmd = user_input.strip()
                                 if cmd.lower() in ("/exit", "/quit", "exit", "quit"):
                                                 print("Goodbye!")
                                                 return 0
-
                                 if cmd.lower() in ("/help",):
                                                 print("Commands:")
-                                                print("  /index <file|text>      Index a file path or raw text into the RAG store")
-                                                print("  /search <query>         Retrieve top-k context from RAG and print it")
+                                                print("  /index <file|text>      Index a file path or raw text into RAG")
+                                                print("  /search <query>         Retrieve top-k context from RAG")
                                                 print("  /switch <provider>      Switch provider")
                                                 print("  /model <model>          Set model override")
                                                 print("  /profile <name>         Set profile")
                                                 print("  /stream                 Toggle streaming mode")
                                                 print("  /exit, /quit            Exit")
                                                 continue
-
                                 if cmd.startswith("/switch"):
                                                 parts = cmd.split(maxsplit=1)
                                                 if len(parts) == 2 and parts[1].strip():
@@ -539,7 +435,6 @@ def run_interactive(
                                                 else:
                                                                 print("Usage: /switch <provider>", file=sys.stderr)
                                                 continue
-
                                 if cmd.startswith("/model"):
                                                 parts = cmd.split(maxsplit=1)
                                                 if len(parts) == 2 and parts[1].strip():
@@ -549,7 +444,6 @@ def run_interactive(
                                                                 current_model = None
                                                                 print("Model cleared; using provider default.")
                                                 continue
-
                                 if cmd.startswith("/profile"):
                                                 parts = cmd.split(maxsplit=1)
                                                 if len(parts) == 2 and parts[1].strip():
@@ -559,12 +453,10 @@ def run_interactive(
                                                                 current_profile = None
                                                                 print("Profile cleared; using default.")
                                                 continue
-
                                 if cmd.startswith("/stream"):
                                                 current_stream = not current_stream
                                                 print(f"Streaming {'enabled' if current_stream else 'disabled'}.")
                                                 continue
-
                                 if cmd.startswith("/index"):
                                                 parts = cmd.split(maxsplit=1)
                                                 if len(parts) == 2 and parts[1].strip():
@@ -574,17 +466,24 @@ def run_interactive(
                                                                                 try:
                                                                                                 with open(payload, "r", encoding="utf-8") as fh:
                                                                                                                 text = fh.read()
-                                                                                                pipeline.upsert_documents([text], doc_ids=[payload], chunk_size=rag_chunk_size, overlap=rag_chunk_overlap)
+                                                                                                pipeline.upsert_documents(
+                                                                                                                [text],
+                                                                                                                doc_ids=[payload],
+                                                                                                                chunk_size=rag_chunk_size,
+                                                                                                                overlap=rag_chunk_overlap,
+                                                                                                )
                                                                                                 print(f"Indexed file: {payload}")
                                                                                 except Exception as exc:
                                                                                                 print(f"Failed to index file: {exc}", file=sys.stderr)
                                                                 else:
-                                                                                pipeline.upsert_documents([payload], chunk_size=rag_chunk_size, overlap=rag_chunk_overlap)
+                                                                                pipeline.upsert_documents(
+                                                                                                [payload], chunk_size=rag_chunk_size,
+                                                                                                overlap=rag_chunk_overlap,
+                                                                                )
                                                                                 print("Indexed raw text provided.")
                                                 else:
                                                                 print("Usage: /index <file-path-or-raw-text>", file=sys.stderr)
                                                 continue
-
                                 if cmd.startswith("/search"):
                                                 parts = cmd.split(maxsplit=1)
                                                 if len(parts) == 2 and parts[1].strip():
@@ -602,7 +501,10 @@ def run_interactive(
                                 if pipeline is not None:
                                                 context = pipeline.retrieve_context(cmd, top_k=rag_top_k)
                                                 if context:
-                                                                used_prompt = f"Use the following context to answer the question.\n\nContext:\n{context}\n\nQuestion:\n{cmd}"
+                                                                used_prompt = (
+                                                                                "Use the following context to answer the question.\n\n"
+                                                                                f"Context:\n{context}\n\nQuestion:\n{cmd}"
+                                                                )
 
                                 print(f"[{current_provider}] Thinking...")
                                 kwargs = _build_ask_kwargs(
@@ -614,7 +516,6 @@ def run_interactive(
                                                 stream=current_stream,
                                 )
                                 exit_code = _invoke_with_retries(kwargs)
-                                # continue interactive unless fatal
                                 if exit_code not in (0, 130):
                                                 print(f"[ERROR] command failed with code {exit_code}", file=sys.stderr)
                                 continue
@@ -622,9 +523,6 @@ def run_interactive(
                 return 0
 
 
-# -----------------------------------------------------------------------------
-# Main Execution
-# -----------------------------------------------------------------------------
 def main(argv: Sequence[str] | None = None) -> int:
                 """Main CLI entrypoint."""
                 parser = build_parser()
@@ -648,24 +546,28 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 # Index documents provided on the command line (file paths or raw text)
                 if args.rag_docs and rag_pipeline is not None:
-                                docs = []
-                                doc_ids = []
-                                for payload in args.rag_docs:
-                                                if os.path.exists(payload):
-                                                                try:
-                                                                                with open(payload, "r", encoding="utf-8") as fh:
-                                                                                                text = fh.read()
-                                                                except Exception as exc:
-                                                                                logger.warning("Failed to read %s: %s", payload, exc)
-                                                                                text = ""
-                                                                docs.append(text)
-                                                                doc_ids.append(payload)
-                                                else:
-                                                                # treat as raw text
-                                                                docs.append(payload)
-                                                                doc_ids.append(str(uuid.uuid4()))
+                        docs: List[str] = []
+                        doc_ids: List[str] = []
+                        for payload in args.rag_docs:
+                                if os.path.exists(payload):
+                                        try:
+                                                with open(payload, "r", encoding="utf-8") as fh:
+                                                        text = fh.read()
+                                        except Exception as exc:
+                                                logger.warning("Failed to read %s: %s", payload, exc)
+                                                text = ""
+                                                docs.append(text)
+                                                doc_ids.append(payload)
+                                        else:
+                                                docs.append(payload)
+                                                doc_ids.append(str(uuid.uuid4()))
                                 if docs:
-                                                rag_pipeline.upsert_documents(docs, doc_ids=doc_ids, chunk_size=args.rag_chunk_size, overlap=args.rag_chunk_overlap)
+                                        rag_pipeline.upsert_documents(
+                                                                docs,
+                                                                doc_ids=doc_ids,
+                                                                chunk_size=args.rag_chunk_size,
+                                                                overlap=args.rag_chunk_overlap,
+                                                )
 
                 if args.interactive:
                                 return run_interactive(
@@ -684,52 +586,49 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 # Read from stdin only when piped
                 if not prompt:
-                                try:
-                                                if not sys.stdin.isatty():
-                                                                # read all piped stdin
-                                                                raw = sys.stdin.buffer.read()
-                                                                if not raw:
-                                                                                parser.error("Prompt is required via --prompt or stdin.")
-                                                                try:
-                                                                                prompt = raw.decode("utf-8").strip()
-                                                                except Exception:
-                                                                                prompt = raw.decode("utf-8", errors="replace").strip()
-                                                else:
-                                                                parser.error(
-                                                                                "Prompt is required via --prompt or stdin (piped). "
-                                                                                "Or use -i for interactive mode."
-                                                                )
-                                except Exception as exc:
-                                                logger.exception("failed to read stdin: %s", exc)
-                                                print(f"ERROR: failed to read stdin: {exc}", file=sys.stderr)
-                                                return 1
+                        try:
+                                if not sys.stdin.isatty():
+                                        raw = sys.stdin.buffer.read()
+                                        if not raw:
+                                                parser.error("Prompt is required via --prompt or stdin.")
+                                        try:
+                                                prompt = raw.decode("utf-8").strip()
+                                        except Exception:
+                                                prompt = raw.decode("utf-8", errors="replace").strip()
+                                        else:
+                                                parser.error(
+                                                        "Prompt is required via --prompt or stdin (piped). "
+                                                        "Or use -i for interactive mode."
+                                                )
+                        except Exception as exc:
+                                logger.exception("failed to read stdin: %s", exc)
+                                print(f"ERROR: failed to read stdin: {exc}", file=sys.stderr)
+                                return 1
 
                 if not prompt:
                                 parser.error("Prompt is required via --prompt or stdin.")
 
                 # safety checks on prompt size
                 if len(prompt) > 100_000:
-                                print(
-                                                "Warning: prompt is very large; truncating to 100k "
-                                                "characters.",
-                                                file=sys.stderr,
-                                )
+                                print("Warning: prompt is very large; truncating to 100k characters.", file=sys.stderr)
                                 prompt = prompt[:100_000]
 
                 # If RAG is enabled, retrieve context and prepend to the prompt
                 if args.rag and rag_pipeline is not None:
-                                context = rag_pipeline.retrieve_context(prompt, top_k=args.rag_top_k)
-                                if context:
-                                                prompt = f"Use the following context to answer the question.\n\nContext:\n{context}\n\nQuestion:\n{prompt}"
+                        context = rag_pipeline.retrieve_context(prompt, top_k=args.rag_top_k)
+                        if context:
+                                prompt = ("Use the following context to answer the question.\n\n"
+                                         f"Context:\n{context}\n\nQuestion:\n{prompt}"
+                                        )
 
                 logger.info(
-                                "provider=%s model=%s profile=%s stream=%s timeout=%s rag=%s",
-                                args.provider,
-                                args.model,
-                                args.profile,
-                                args.stream,
-                                args.timeout,
-                                bool(args.rag),
+                        "provider=%s model=%s profile=%s stream=%s timeout=%s rag=%s",
+                        args.provider,
+                        args.model,
+                        args.profile,
+                        args.stream,
+                        args.timeout,
+                        bool(args.rag),
                 )
 
                 kwargs = _build_ask_kwargs(
@@ -745,4 +644,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-                raise SystemExit(main())
+        raise SystemExit(main())
