@@ -49,6 +49,7 @@ packages = [{ include = "ai_cli", from = "src" }]
 # -----------------------------------------------------------------------------
 
 [tool.poetry.dependencies]
+sentence-transformers = "^5.0.0"
 python = "^3.10"
 # Core Providers
 openai = "^1.30.0"
@@ -81,7 +82,6 @@ structlog = "^24.2.0"
 # Tokenization / AI Utilities
 tiktoken = "^0.8.0"
 
-sentence-transformers = "^5.0.0"
 faiss-cpu = "^1.8.0"
 numpy = "^2.0.0"
 pypdf = "^5.0.0"
