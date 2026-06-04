@@ -139,9 +139,14 @@ class PerplexityProvider(AIProvider):
         for doc_idx, doc in enumerate(documents):
             chunks = chunk_text(doc, chunk_size=chunk_size, overlap=overlap)
             for i, c in enumerate(chunks):
-                all_chunks.append(c)
-                metadatas.append({"doc_index": doc_idx, "chunk_index": i})
-                ids.append(f"{ids_prefix or 'doc'}-{doc_idx}-{i}")
+                all_chunks.append(c.text)
+                metadatas.append(
+                     {
+                      "doc_index": doc_idx,
+                      "chunk_index": i,
+                      "source": c.source,
+                     }
+                )
 
         if not all_chunks:
             return

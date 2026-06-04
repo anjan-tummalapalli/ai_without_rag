@@ -81,7 +81,10 @@ class EmbeddingGenerator:
         Generate embeddings for an iterable of texts. Returns list of numpy arrays.
         Uses batching to avoid OOM on large lists.
         """
-        texts = list(texts)
+        texts = [
+                 t.text if hasattr(t, "text") else str(t)
+                 for t in texts
+                ]
         embeddings: List[Any] = []
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i : i + self.batch_size]
