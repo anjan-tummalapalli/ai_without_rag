@@ -119,6 +119,7 @@ unstructured = "^0.7.0"
 nltk = "^3.8.1"
 # Tokenizers / transformer helpers for chunking/encoding
 transformers = "^4.35.0"
+sentence-transformers = "^3.0.0"
 sentencepiece = "^0.1.99"
 ftfy = "^6.1.1"
 # Optional utilities for embedding and similarity search
