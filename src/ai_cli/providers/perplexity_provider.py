@@ -192,13 +192,25 @@ class PerplexityProvider(AIProvider):
             raise ProviderRequestError("RAG components not initialized")
 
         q_emb = self.embeddings_provider.embed_batch([query])[0]
-        hits = self.vector_store.search(self._to_np_array(q_emb, dtype="float32"), k=k)
+        hits = self.vector_store.search(
+                   self._to_np_array(q_emb, dtype="float32"),
+                   top_k=k,
+                )
 
         contexts = []
         context_text = []
-        for score, text, metadata in hits:
-            contexts.append({"score": float(score), "text": text, "metadata": metadata})
-            context_text.append(text)
+
+        for hit in hits:
+            chunk = hit["chunk"]
+            score = hit.get("score", 0.0)
+            contexts.append(
+            {
+             "score": score,
+             "text": chunk.text,
+             "metadata": chunk.metadata,
+            }
+            )
+        context_text.append(chunk.text)
 
         if prompt_template is None:
             prompt_template = (

@@ -34,6 +34,11 @@ class VectorStore:
     - persisted index + metadata + embeddings (.npy beside FAISS file)
     - filtered similarity search
     """
+    def __init__(self) -> None:
+        self.index = None
+        self.chunks = []
+        self.embeddings = None
+        self._embeddings_path = Path(str(FAISS_INDEX_PATH)).with_suffix(".npy")
 
     def create_index(self, dimension: int) -> None:
         if faiss is None:
@@ -47,9 +52,6 @@ class VectorStore:
 
         # derive embeddings path from index path (same directory, .npy)
         self._embeddings_path = Path(str(FAISS_INDEX_PATH)).with_suffix(".npy")
-
-    def create_index(self, dimension: int) -> None:
-        self.index = faiss.IndexFlatL2(dimension)
 
     def _rebuild_index(self) -> None:
         """Recreate FAISS index from current embeddings (used for upsert/delete)."""
