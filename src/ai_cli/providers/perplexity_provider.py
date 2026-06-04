@@ -30,7 +30,7 @@ from typing import List, Optional, Sequence, Tuple
 try:
     import numpy as np  # type: ignore
 except Exception:
-    np = None
+    np = None  # type: ignore
 from openai import OpenAI
 
 from ai_cli.core.exceptions import ProviderRequestError
@@ -50,29 +50,32 @@ class PerplexityProvider(AIProvider):
         *args,
         **kwargs,
     ) -> None:
-        super().__init__(model=model or "sonar-pro", api_key=api_key, *args, **kwargs)
+        super().__init__(provider_name="perplexity", model=model or "sonar-pro", api_key=api_key, *args, **kwargs)
         self.api_key = api_key or os.getenv("PERPLEXITY_API_KEY")
         if not self.api_key:
             raise ProviderRequestError("PERPLEXITY_API_KEY environment variable is not set")
 
         # OpenAI-compatible client
-            self.embeddings_provider: Optional[EmbeddingsProvider] = None
-            self.vector_store: Optional[InMemoryVectorStore] = None
-    
-        def _to_np_array(self, data, dtype=None):
-            """
-            Helper to convert data to a numpy array, or raise a clear error if numpy
-            is not available so callers get an actionable message instead of a
-            mysterious import/linter error.
-            """
-            if np is None:
-                raise ProviderRequestError(
-                    "numpy is required for RAG features; please install it (pip install numpy)"
-                )
-            return np.array(data, dtype=dtype)
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.BASE_URL,
+        )
+
         # RAG components (lazy-init)
         self.embeddings_provider: Optional[EmbeddingsProvider] = None
         self.vector_store: Optional[InMemoryVectorStore] = None
+
+    def _to_np_array(self, data, dtype=None):
+        """
+        Helper to convert data to a numpy array, or raise a clear error if numpy
+        is not available so callers get an actionable message instead of a
+        mysterious import/linter error.
+        """
+        if np is None:
+            raise ProviderRequestError(
+                "numpy is required for RAG features; please install it (pip install numpy)"
+            )
+        return np.array(data, dtype=dtype)
 
     def _send_impl(self, prompt: str) -> str:
         try:
@@ -98,17 +101,16 @@ class PerplexityProvider(AIProvider):
         except Exception:
             return False
 
-    @property
-    def provider_name(self) -> str:
-        return "perplexity"
-
     # -------------------------
     # Advanced RAG helpers
     # -------------------------
 
     def _ensure_rag_components(self, embed_model: Optional[str] = None) -> None:
         if self.embeddings_provider is None:
-            self.embeddings_provider = EmbeddingsProvider(self.client, model=embed_model)
+            # Only pass model_name if explicitly provided — None would override the class default
+            self.embeddings_provider = (
+                EmbeddingsProvider(model_name=embed_model) if embed_model else EmbeddingsProvider()
+            )
         if self.vector_store is None:
             self.vector_store = InMemoryVectorStore()
 
@@ -127,11 +129,13 @@ class PerplexityProvider(AIProvider):
         - computes embeddings for chunks
         - stores embeddings and chunk text/metadata in the vector store
         """
-        embeddings = self.embeddings_provider.embed_texts(all_chunks)
-        self.vector_store.add(self._to_np_array(embeddings, dtype=getattr(np, "float32", None)), all_chunks, metadatas, ids)
-        all_chunks = []
-        metadatas = []
-        ids = []
+        self._ensure_rag_components(embed_model=embed_model)
+        if self.vector_store is None or self.embeddings_provider is None:
+            raise ProviderRequestError("RAG components not initialized")
+
+        all_chunks: List[str] = []
+        metadatas: List[dict] = []
+        ids: List[str] = []
         for doc_idx, doc in enumerate(documents):
             chunks = chunk_text(doc, chunk_size=chunk_size, overlap=overlap)
             for i, c in enumerate(chunks):
@@ -142,8 +146,8 @@ class PerplexityProvider(AIProvider):
         if not all_chunks:
             return
 
-        embeddings = self.embeddings_provider.embed_texts(all_chunks)
-        self.vector_store.add(np.array(embeddings, dtype=np.float32), all_chunks, metadatas, ids)
+        embeddings = self.embeddings_provider.embed_batch(all_chunks)
+        self.vector_store.add(self._to_np_array(embeddings, dtype="float32"), all_chunks, metadatas, ids)
 
     def query_with_rag(
         self,
@@ -167,8 +171,8 @@ class PerplexityProvider(AIProvider):
         if self.vector_store is None or self.embeddings_provider is None:
             raise ProviderRequestError("RAG components not initialized")
 
-        q_emb = self.embeddings_provider.embed_texts([query])[0]
-        hits = self.vector_store.search(np.array(q_emb, dtype=np.float32), k=k)
+        q_emb = self.embeddings_provider.embed_batch([query])[0]
+        hits = self.vector_store.search(self._to_np_array(q_emb, dtype="float32"), k=k)
 
         contexts = []
         context_text = []

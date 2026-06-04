@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+import os
+import requests
+from typing import Any, Optional
+
+from ai_cli.core.exceptions import ProviderRequestError
+from ai_cli.providers.base import AIProvider, ProviderMetadata
+
+ZAI_DEFAULT_BASE = "https://api.z.ai/v1/generate"
+
+
+class ZAIProvider(AIProvider):
+    """
+    Minimal z.AI provider adapter.
+
+    - Uses ZAI_API_KEY and optionally ZAI_API_BASE env vars.
+    - Posts JSON payload { "model": <model>, "prompt": <prompt> }.
+    - Attempts to extract textual response from common keys in the returned JSON.
+    """
+
+    DEFAULT_META = ProviderMetadata(
+        name="z.ai",
+        default_model="zai-small",
+        supported_models=["zai-small", "zai-medium", "zai-large"],
+        supports_streaming=False,
+        supports_tools=False,
+        supports_vision=False,
+        max_context=65_000,
+        cost_per_1k_tokens=0.0,
+        avg_latency_ms=200,
+        supports_rag=False,
+    )
+
+    def __init__(
+        self,
+        provider_name: str = "z.ai",
+        model: Optional[str] = None,
+        provider_meta: Optional[ProviderMetadata] = None,
+        **kwargs: Any,
+    ) -> None:
+        meta = provider_meta or self.DEFAULT_META
+        super().__init__(
+            provider_name=provider_name,
+            model=model or meta.default_model,
+            provider_meta=meta,
+            **kwargs,
+        )
+        # base URL and api key can be overridden with env vars
+        self.base_url = os.getenv("ZAI_API_BASE", ZAI_DEFAULT_BASE)
+        self.api_key = os.getenv("ZAI_API_KEY", "")
+
+    def _send_impl(self, prompt: str) -> str:
+        if not self.api_key:
+            raise ProviderRequestError("z.AI API key not configured (ZAI_API_KEY)")
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": f"ai_cli/{self.provider_name}",
+        }
+
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+        }
+
+        try:
+            resp = requests.post(
+                self.base_url,
+                json=payload,
+                headers=headers,
+                timeout=getattr(self, "timeout", None),
+            )
+        except requests.RequestException as exc:
+            raise ProviderRequestError(f"network error: {exc}") from exc
+
+        if resp.status_code >= 400:
+            body = None
+            try:
+                body = resp.json()
+            except Exception:
+                body = resp.text
+            raise ProviderRequestError(f"z.AI error {resp.status_code}: {body}")
+
+        try:
+            data = resp.json()
+        except Exception as exc:
+            # fallback to raw text if not json
+            text = resp.text
+            if not text:
+                raise ProviderRequestError("empty response from z.AI") from exc
+            return text
+
+        # common response shapes: {'text': ...}, {'output': ...}, {'choices': [...]}, {'data': ...}
+        if isinstance(data, dict):
+            if "text" in data and isinstance(data["text"], str):
+                return data["text"]
+            if "output" in data and isinstance(data["output"], str):
+                return data["output"]
+            if "result" in data and isinstance(data["result"], str):
+                return data["result"]
+            # choices array (openai-style)
+            choices = data.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                # try common keys
+                for k in ("text", "message", "content", "output"):
+                    if isinstance(first, dict) and k in first and isinstance(first[k], str):
+                        return first[k]
+                # nested message.content
+                message = first.get("message") if isinstance(first, dict) else None
+                if isinstance(message, dict):
+                    content = message.get("content")
+                    if isinstance(content, str):
+                        return content
+
+        # As a last resort, return the full JSON as string
+        try:
+            import json
+            return json.dumps(data, ensure_ascii=False)
+        except Exception as exc:
+            raise ProviderRequestError("unable to coerce z.AI response to string") from exc

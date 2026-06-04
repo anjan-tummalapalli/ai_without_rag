@@ -87,8 +87,7 @@ class CohereProvider(AIProvider):
         *args,
         **kwargs,
     ) -> None:
-        super().__init__(model=model or "command-r", api_key=api_key, *args, **kwargs)
-
+        self.api_key = api_key or os.getenv("COHERE_API_KEY")
         if not self.api_key:
             raise ProviderRequestError("COHERE_API_KEY environment variable is not set")
 
@@ -102,11 +101,14 @@ class CohereProvider(AIProvider):
 
         self.client: "cohere.Client" = cohere.Client(self.api_key)
 
+        # Initialize base class (sets self.model, self.retry_engine, self.metrics, etc.)
+        super().__init__(provider_name="cohere", model=model, *args, **kwargs)
+
         # RAG configuration
-        self.rag_enabled = bool(rag_enabled)
+        self.rag_enabled = rag_enabled
         self.embed_model = embed_model or "embed-english-v2.0"
-        self.chunk_size = int(chunk_size)
-        self.chunk_overlap = int(chunk_overlap)
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
         self.vector_store_backend = vector_store_backend
 
         # Simple in-memory vector store: list of vectors and corresponding docs
@@ -182,16 +184,14 @@ class CohereProvider(AIProvider):
         if not texts:
             return
 
-        metadatas = metadatas or [None] * len(texts)
-
         # Prepare chunks with metadata references
         chunk_texts: List[str] = []
         chunk_meta: List[Dict[str, Any]] = []
         for doc_idx, doc_text in enumerate(texts):
-            doc_meta = metadatas[doc_idx] if doc_idx < len(metadatas) else None
+            doc_meta = metadatas[doc_idx] if metadatas and doc_idx < len(metadatas) else None
             chunks = self._chunk_text(doc_text)
             for i, chunk in enumerate(chunks):
-                meta = {"doc_index": doc_idx, "chunk_index": i}
+                meta: Dict[str, Any] = {"doc_index": doc_idx, "chunk_index": i}
                 if doc_meta:
                     meta["metadata"] = doc_meta
                 chunk_texts.append(chunk)
@@ -317,7 +317,3 @@ class CohereProvider(AIProvider):
             return True
         except Exception:
             return False
-
-    @property
-    def provider_name(self) -> str:
-        return "cohere"

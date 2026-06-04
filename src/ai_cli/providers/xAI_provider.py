@@ -88,7 +88,7 @@ class InMemoryVectorStore:
 
     def upsert(self, embeddings: List[List[float]], metadatas: List[Dict[str, Any]]) -> None:
         if np is None:
-            raise ProviderRequestError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
+            raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
         if len(embeddings) != len(metadatas):
             raise ValueError("embeddings and metadatas must have the same length")
         arr = np.array(embeddings, dtype=np.float32)
@@ -102,7 +102,7 @@ class InMemoryVectorStore:
 
     def _cosine_similarity(self, q: "np.ndarray", vecs: "np.ndarray") -> "np.ndarray":
         if np is None:
-            raise ProviderRequestError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
+            raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
         # q: (d,), vecs: (n, d)
         q_norm = q / (np.linalg.norm(q) + 1e-12)
         vecs_norm = vecs / (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12)
@@ -111,7 +111,7 @@ class InMemoryVectorStore:
 
     def query(self, embedding: List[float], top_k: int = 5) -> List[Tuple[Dict[str, Any], float]]:
         if np is None:
-            raise ProviderRequestError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
+            raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
         if self._vectors is None or len(self._metadatas) == 0:
             return []
         q = np.array(embedding, dtype=np.float32)
@@ -160,6 +160,7 @@ class XAIProvider(AIProvider):
         **kwargs,
     ) -> None:
         super().__init__(
+            provider_name="xai",
             model=model or "grok-2-latest",
             api_key=api_key,
             *args,
@@ -217,7 +218,7 @@ class XAIProvider(AIProvider):
             chunk = text[start:end].strip()
             if chunk:
                 chunks.append(chunk)
-            start = max(end - overlap, end) if end < text_len else end
+            start = max(start + 1, end - overlap) if end < text_len else end
         return chunks
 
     # --------------------
@@ -276,22 +277,16 @@ class XAIProvider(AIProvider):
     # --------------------
     # Generation (standard + RAG)
     # --------------------
-    def _send_impl(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def _call_model(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         """
-        Send prompt to Grok model and return generated response.
-
-        If system_prompt is provided, it will be included as the system message.
+        Internal helper: send prompt (with optional system message) to the Grok model.
         """
         try:
-            messages = []
+            messages: List[Dict[str, str]] = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.7,
-            )
+            response = self.client.chat.completions.create(model=self.model, messages=messages, temperature=0.7)
 
             if not getattr(response, "choices", None):
                 raise ProviderRequestError("xAI returned no completion choices")
@@ -303,12 +298,9 @@ class XAIProvider(AIProvider):
         except Exception as exc:
             raise ProviderRequestError(f"xAI request failed: {exc}") from exc
 
-    def send(self, prompt: str) -> str:
-        """
-        Public method to send a prompt (standard, no retrieval).
-        Kept for backwards compatibility with previous AIProvider interface.
-        """
-        return self._send_impl(prompt)
+    def _send_impl(self, prompt: str) -> str:
+        """Send prompt to Grok model (required by AIProvider base class)."""
+        return self._call_model(prompt)
 
     def send_rag(self, prompt: str, top_k: int = 4, instruction: Optional[str] = None) -> str:
         """
@@ -346,7 +338,7 @@ class XAIProvider(AIProvider):
             # Craft combined prompt with context and user question
             augmented_prompt = f"Context:\n{context}\n\nUser question:\n{prompt}\n\nAnswer using the context above."
 
-            return self._send_impl(augmented_prompt, system_prompt=system_prompt)
+            return self._call_model(augmented_prompt, system_prompt=system_prompt)
         except Exception as exc:
             raise ProviderRequestError(f"RAG request failed: {exc}") from exc
 
@@ -367,7 +359,3 @@ class XAIProvider(AIProvider):
             return bool(getattr(response, "choices", None))
         except Exception:
             return False
-
-    @property
-    def provider_name(self) -> str:
-        return "xai"
