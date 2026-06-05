@@ -87,6 +87,30 @@ class RAGConfig:
                         v = os.getenv(prefix + key)
                         return int(v) if v and v.isdigit() else default
 
+                # Default configuration instance to pull defaults from, especially for nested configs. 
+                # This ensures that if we add new fields
+                default_config = RAGConfig(
+                                           base_dir=Path("."),
+                                           index_dir=Path("./index"),
+                                           docs_dir=Path("./docs"),
+                                           metadata_dir=Path("./metadata"),
+                                           metadata_path=Path("./metadata/metadata.json"),
+                                           chunk_size=500,
+                                           chunk_overlap=50,
+                                           chunk_strategy="recursive",
+                                           top_k=5,
+                                           embedding=EmbeddingConfig(),
+                                           vector_store=VectorStoreConfig(),
+                                          )
+
+                                # ------------------------------------------------------------------
+                                # Backward compatibility exports
+                                # ------------------------------------------------------------------
+
+                CHUNK_SIZE = default_config.chunk_size
+                CHUNK_OVERLAP = default_config.chunk_overlap
+                TOP_K = default_config.top_k
+                
                 # start from default and override simple fields
                 cfg = default_config
 
