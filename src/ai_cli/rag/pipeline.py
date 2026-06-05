@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import re
-from typing import List
+from typing import List, Callable, Optional, Tuple
 
 
 @dataclass
@@ -15,86 +15,151 @@ class Chunk:
 
 class SemanticChunker:
     """
-    Sentence-aware, token-approximate chunker with overlap.
-    - max_tokens: approximate maximum tokens per chunk (counts by whitespace).
-    - overlap_tokens: number of tokens to overlap between adjacent chunks.
-    - sentence_splitter: basic regex-based sentence splitter; replace with spaCy/NLTK for higher quality.
+    Improved sentence-aware, token-accurate chunker with overlap and real character spans.
+
+    Key improvements:
+    - Computes exact character start/end indices for chunks (based on the original text).
+    - Splits very long sentences by token count so no single "sentence" exceeds max_tokens.
+    - Performs chunking at token granularity and preserves overlap by token count.
+    - Validates and clamps overlap to avoid infinite loops.
+    - Allows passing a custom sentence splitter callable (optional).
     """
 
-    def __init__(self, max_tokens: int = 512, overlap_tokens: int = 64):
+    SENT_RE = re.compile(r'.+?(?:[.!?](?:["\'])?\s+|$)', re.DOTALL)
+    TOKEN_RE = re.compile(r'\S+')
+
+    def __init__(
+        self,
+        max_tokens: int = 512,
+        overlap_tokens: int = 64,
+        sentence_splitter: Optional[Callable[[str], List[Tuple[str, int, int]]]] = None,
+    ):
+        if max_tokens <= 0:
+            raise ValueError("max_tokens must be > 0")
         self.max_tokens = max_tokens
-        self.overlap_tokens = overlap_tokens
-        # regex to split sentences (simple heuristic)
-        self._sent_split_re = re.compile(r'(?<=[.!?])\s+')
+        # clamp overlap so that progress is guaranteed when splitting
+        self.overlap_tokens = max(0, min(overlap_tokens, max_tokens - 1))
+        self._custom_splitter = sentence_splitter
 
-    def _sentences(self, text: str) -> List[str]:
-        # fallback single-split if text is short / no punctuation
-        sents = [s.strip() for s in self._sent_split_re.split(text) if s.strip()]
-        if not sents:
-            return [text.strip()]
-        return sents
+    def _default_sentence_spans(self, text: str) -> List[Tuple[str, int, int]]:
+        """
+        Returns list of (sentence_text, start_index, end_index) using a simple regex.
+        Falls back to whole text if nothing matched.
+        """
+        spans = []
+        for m in self.SENT_RE.finditer(text):
+            s = m.group(0).strip()
+            if not s:
+                continue
+            # compute trimmed span to remove leading/trailing whitespace while preserving indices
+            abs_start = m.start()
+            abs_end = m.end()
+            # trim leading whitespace
+            leading_ws = len(s) - len(s.lstrip())
+            trailing_ws = len(s) - len(s.rstrip())
+            sent_start = abs_start + (m.group(0).find(s))
+            sent_end = sent_start + len(s)
+            spans.append((s, sent_start, sent_end))
+        if not spans and text.strip():
+            ts = text.strip()
+            start = text.find(ts)
+            spans.append((ts, start, start + len(ts)))
+        return spans
 
-    def _token_count(self, text: str) -> int:
-        # approximate tokens by whitespace. Replace with actual tokenizer if needed.
-        return len(text.split())
+    def _sentence_spans(self, text: str) -> List[Tuple[str, int, int]]:
+        if self._custom_splitter:
+            return self._custom_splitter(text)
+        return self._default_sentence_spans(text)
+
+    def _token_spans(self, text: str) -> List[Tuple[int, int]]:
+        """Return list of (start, end) spans for tokens across the whole text."""
+        return [(m.start(), m.end()) for m in self.TOKEN_RE.finditer(text)]
 
     def chunk_text(self, text: str, source: str) -> List[Chunk]:
-        sents = self._sentences(text)
+        sentences = self._sentence_spans(text)
+        if not sentences:
+            return []
+
+        token_spans = self._token_spans(text)
+        # precompute token index -> (start,end)
+        # for fast mapping, build a list of token indices belonging to each sentence
+        sent_token_indices: List[List[int]] = []
+        tok_idx = 0
+        N_tokens = len(token_spans)
+
+        for _, s_start, s_end in sentences:
+            indices = []
+            # advance tok_idx until token_start >= s_start
+            while tok_idx < N_tokens and token_spans[tok_idx][0] < s_start:
+                tok_idx += 1
+            j = tok_idx
+            while j < N_tokens and token_spans[j][1] <= s_end:
+                indices.append(j)
+                j += 1
+            sent_token_indices.append(indices)
+            # next sentence may reuse current j as starting point
+            tok_idx = j
+
         chunks: List[Chunk] = []
+        cur_tokens_idxs: List[int] = []
 
-        cur_tokens = 0
-        cur_text_parts: List[str] = []
-        cur_start = 0  # approximate character index
-
-        char_cursor = 0
-        for sent in sents:
-            sent_tokens = self._token_count(sent)
-            if cur_tokens + sent_tokens <= self.max_tokens or not cur_text_parts:
-                cur_text_parts.append(sent)
-                cur_tokens += sent_tokens
-            else:
-                chunk_text = " ".join(cur_text_parts).strip()
-                chunk_end = char_cursor  # approximate; char positions not exact
-                chunks.append(
-                    Chunk(
-                        text=chunk_text,
-                        source=source,
-                        start=cur_start,
-                        end=chunk_end,
-                        metadata={},
-                    )
-                )
-                # prepare next chunk with overlap
-                # compute overlap by token count from the end of cur_text_parts
-                overlapped = []
-                overlap_count = 0
-                # iterate reversed sentences and add until overlap_tokens reached
-                for back_sent in reversed(cur_text_parts):
-                    tcount = self._token_count(back_sent)
-                    if overlap_count + tcount > self.overlap_tokens:
-                        break
-                    overlapped.insert(0, back_sent)
-                    overlap_count += tcount
-                cur_text_parts = overlapped + [sent]
-                cur_tokens = sum(self._token_count(s) for s in cur_text_parts)
-                cur_start = chunk_end
-            char_cursor += len(sent) + 1
-
-        # flush final chunk
-        if cur_text_parts:
-            chunk_text = " ".join(cur_text_parts).strip()
-            chunks.append(
-                Chunk(
-                    text=chunk_text,
-                    source=source,
-                    start=cur_start,
-                    end=char_cursor,
-                    metadata={},
-                )
+        def flush_current_chunk():
+            if not cur_tokens_idxs:
+                return
+            start = token_spans[cur_tokens_idxs[0]][0]
+            end = token_spans[cur_tokens_idxs[-1]][1]
+            chunk_text = text[start:end]
+            chunk = Chunk(
+                text=chunk_text,
+                source=source,
+                start=start,
+                end=end,
+                metadata={},
             )
+            chunks.append(chunk)
 
-        # add simple metadata (can be extended)
+        # iterate over sentence token lists, splitting oversized sentences into token groups
+        for sent_indices in sent_token_indices:
+            if not sent_indices:
+                continue
+
+            # break sentence token indices into groups of at most max_tokens
+            i = 0
+            L = len(sent_indices)
+            while i < L:
+                group = sent_indices[i : i + self.max_tokens]
+                i += len(group)
+                group_len = len(group)
+
+                if not cur_tokens_idxs:
+                    # start new chunk
+                    cur_tokens_idxs.extend(group)
+                    continue
+
+                if len(cur_tokens_idxs) + group_len <= self.max_tokens:
+                    cur_tokens_idxs.extend(group)
+                    continue
+
+                # need to flush current chunk and start a new one with overlap
+                flush_current_chunk()
+                # prepare overlap from the tail of the just-flushed token list
+                # ensure we don't exceed max_tokens and overlap is clamped earlier
+                overlap_count = min(self.overlap_tokens, len(cur_tokens_idxs))
+                overlapped = cur_tokens_idxs[-overlap_count:] if overlap_count > 0 else []
+                # start new current tokens with overlapped tokens + current group
+                cur_tokens_idxs = overlapped + group
+
+        # final flush
+        flush_current_chunk()
+
+        # add metadata
         for i, c in enumerate(chunks):
-            c.metadata = {"chunk_id": i, "source": c.source, "start": c.start, "end": c.end}
+            c.metadata = {
+                "chunk_id": i,
+                "source": c.source,
+                "start": c.start,
+                "end": c.end,
+                "token_count": len(self.TOKEN_RE.findall(c.text)),
+            }
 
         return chunks

@@ -1,43 +1,16 @@
 """
-Cohere provider implementation for ai_cli with Advanced RAG support.
+Cohere provider for ai_cli with Advanced RAG support.
 
-This module integrates Cohere large language models into the ai_cli
-provider framework using the official Cohere Python SDK and adds
-Advanced Retrieval-Augmented Generation (RAG) features:
+Integrates Cohere LLMs via the Cohere SDK and adds basic RAG:
+- chunking (configurable size/overlap)
+- embeddings via Cohere Embeddings API
+- simple in-memory vector DB
+- cosine similarity retrieval
+- automatic context augmentation for chat requests
 
-- Text chunking (configurable chunk size and overlap)
-- Embedding generation via Cohere Embeddings API
-- In-memory vector DB (optional backends can be added)
-- Vector similarity querying (cosine similarity)
-- Automatic context retrieval and augmentation for chat requests
-
-Environment Variables
----------------------
-COHERE_API_KEY
-    API key used to authenticate with Cohere API.
-
-Example
--------
-export COHERE_API_KEY="your_api_key"
-
-Usage
------
-provider = CohereProvider(
-    model="command-r",
-    rag_enabled=True,                    # enable RAG
-    embed_model="embed-english-v2.0",    # embedding model name
-    chunk_size=500,
-    chunk_overlap=50,
-)
-
-# add documents to vector DB (they will be chunked and embedded)
-provider.upsert_documents(["Long document text ..."], metadatas=[{"title": "Doc1"}])
-
-# send a query that uses retrieved context
-response = provider.send("Explain Kubernetes operators")
-print(response)
+Environment:
+COHERE_API_KEY must be set.
 """
-
 from __future__ import annotations
 
 import os
@@ -55,24 +28,17 @@ from ai_cli.providers.base import AIProvider
 
 class CohereProvider(AIProvider):
     """
-    AI provider implementation for Cohere models with RAG support.
+    Cohere AI provider with optional RAG.
 
     Parameters
     ----------
-    model : Optional[str]
-        Cohere model name for chat/completions (default "command-r").
-    api_key : Optional[str]
-        Cohere API key; if omitted, will use COHERE_API_KEY environment var.
-    rag_enabled : bool
-        Whether Retrieval Augmented Generation is enabled (default False).
-    embed_model : Optional[str]
-        Cohere embedding model name. Defaults to "embed-english-v2.0".
-    chunk_size : int
-        Character-based chunk size for long documents (default 500).
-    chunk_overlap : int
-        Character overlap between consecutive chunks (default 50).
-    vector_store_backend : str
-        Which backend to use for the vector DB. Currently "memory" (default).
+    model: Cohere model name, default "command-r".
+    api_key: Cohere API key or use COHERE_API_KEY env var.
+    rag_enabled: enable Retrieval Augmented Generation.
+    embed_model: embedding model, default "embed-english-v2.0".
+    chunk_size: char chunk size, default 500.
+    chunk_overlap: char overlap between chunks, default 50.
+    vector_store_backend: backend for vector DB, default "memory".
     """
 
     def __init__(
@@ -89,19 +55,22 @@ class CohereProvider(AIProvider):
     ) -> None:
         self.api_key = api_key or os.getenv("COHERE_API_KEY")
         if not self.api_key:
-            raise ProviderRequestError("COHERE_API_KEY environment variable is not set")
+            raise ProviderRequestError(
+                "COHERE_API_KEY environment variable is not set"
+            )
 
         # Import Cohere SDK at runtime to keep dependency optional
         try:
             cohere = importlib.import_module("cohere")
         except Exception as exc:
             raise ProviderRequestError(
-                "Cohere SDK is not installed; install it with 'pip install cohere'"
+                "Cohere SDK is not installed; install with "
+                "'pip install cohere'"
             ) from exc
 
         self.client: "cohere.Client" = cohere.Client(self.api_key)
 
-        # Initialize base class (sets self.model, self.retry_engine, self.metrics, etc.)
+        # Initialize base class (sets self.model, retry, metrics, etc.)
         super().__init__(provider_name="cohere", model=model, *args, **kwargs)
 
         # RAG configuration
@@ -111,7 +80,7 @@ class CohereProvider(AIProvider):
         self.chunk_overlap = chunk_overlap
         self.vector_store_backend = vector_store_backend
 
-        # Simple in-memory vector store: list of vectors and corresponding docs
+        # Simple in-memory vector store
         self._vectors: List[List[float]] = []
         self._docs: List[Dict[str, Any]] = []
 
@@ -122,10 +91,7 @@ class CohereProvider(AIProvider):
         """
         Chunk text into overlapping character windows.
 
-        This is a simple, dependency-free chunker. It aims to create chunks
-        roughly chunk_size characters long with chunk_overlap characters of overlap.
-
-        Returns a list of text chunks (strings).
+        Returns a list of text chunks.
         """
         if not text:
             return []
@@ -150,48 +116,59 @@ class CohereProvider(AIProvider):
     # -------------------------
     def _create_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
-        Create embeddings for a list of texts using Cohere Embeddings API.
+        Create embeddings for a list of texts via Cohere Embeddings API.
 
-        Returns a list of float vectors (one per text). Raises ProviderRequestError on failure.
+        Returns list of float vectors, one per input text.
         """
         if not texts:
             return []
 
         try:
-            # Cohere embed API: client.embed(model=..., texts=[...])
             resp = self.client.embed(model=self.embed_model, texts=texts)
             if not hasattr(resp, "embeddings"):
-                raise ProviderRequestError("Cohere embed response missing embeddings field")
+                raise ProviderRequestError(
+                    "Cohere embed response missing embeddings field"
+                )
             embeddings = resp.embeddings  # type: ignore
-            # Basic validation
-            if not isinstance(embeddings, list) or len(embeddings) != len(texts):
-                raise ProviderRequestError("Invalid embeddings returned by Cohere")
+            if not isinstance(embeddings, list) or len(embeddings) != len(
+                texts
+            ):
+                raise ProviderRequestError("Invalid embeddings returned")
             return embeddings  # type: ignore
         except Exception as exc:
-            raise ProviderRequestError(f"Cohere embedding request failed: {exc}") from exc
+            raise ProviderRequestError(
+                f"Cohere embedding request failed: {exc}"
+            ) from exc
 
     # -------------------------
     # Vector store (in-memory)
     # -------------------------
-    def upsert_documents(self, texts: List[str], metadatas: Optional[List[Dict[str, Any]]] = None) -> None:
+    def upsert_documents(
+        self,
+        texts: List[str],
+        metadatas: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
         """
-        Add or update documents into the vector store. Documents will be chunked
+        Add or update documents into the vector store. Documents are chunked
         and each chunk embedded and stored.
-
-        texts: list of full document strings
-        metadatas: optional list of metadata dicts per document (same len as texts)
         """
         if not texts:
             return
 
-        # Prepare chunks with metadata references
         chunk_texts: List[str] = []
         chunk_meta: List[Dict[str, Any]] = []
         for doc_idx, doc_text in enumerate(texts):
-            doc_meta = metadatas[doc_idx] if metadatas and doc_idx < len(metadatas) else None
+            doc_meta = (
+                metadatas[doc_idx]
+                if metadatas and doc_idx < len(metadatas)
+                else None
+            )
             chunks = self._chunk_text(doc_text)
             for i, chunk in enumerate(chunks):
-                meta: Dict[str, Any] = {"doc_index": doc_idx, "chunk_index": i}
+                meta: Dict[str, Any] = {
+                    "doc_index": doc_idx,
+                    "chunk_index": i,
+                }
                 if doc_meta:
                     meta["metadata"] = doc_meta
                 chunk_texts.append(chunk)
@@ -200,29 +177,22 @@ class CohereProvider(AIProvider):
         if not chunk_texts:
             return
 
-        # Create embeddings for chunks
         embeddings = self._create_embeddings(chunk_texts)
 
-        # Upsert into in-memory vectors and docs list
         for vec, txt, meta in zip(embeddings, chunk_texts, chunk_meta):
-            doc_record = {
-                "text": txt,
-                "meta": meta,
-            }
+            doc_record = {"text": txt, "meta": meta}
             self._vectors.append(vec)
             self._docs.append(doc_record)
 
     def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
         """
-        Compute cosine similarity between two vectors. Uses math only to avoid heavy deps.
+        Compute cosine similarity between two vectors.
         """
         if not a or not b:
             return 0.0
-        # dot product and norms
         dot = 0.0
         na = 0.0
         nb = 0.0
-        # assume same length
         for ai, bi in zip(a, b):
             dot += ai * bi
             na += ai * ai
@@ -233,7 +203,8 @@ class CohereProvider(AIProvider):
 
     def query_documents(self, query: str, top_k: int = 5) -> List[Tuple[Dict[str, Any], float]]:
         """
-        Query the vector store using the query string. Returns top_k (doc_record, score) tuples.
+        Query the vector store using the query string. Returns top_k tuples
+        of (doc_record, score).
         """
         if not query:
             return []
@@ -246,13 +217,11 @@ class CohereProvider(AIProvider):
             return []
         qvec = query_vecs[0]
 
-        # score all documents
         scored: List[Tuple[int, float]] = []
         for idx, vec in enumerate(self._vectors):
             score = self._cosine_similarity(qvec, vec)
             scored.append((idx, score))
 
-        # sort by score descending
         scored.sort(key=lambda x: x[1], reverse=True)
         results: List[Tuple[Dict[str, Any], float]] = []
         for idx, score in scored[:top_k]:
@@ -266,52 +235,53 @@ class CohereProvider(AIProvider):
         """
         Send prompt to Cohere model and return response.
 
-        If RAG is enabled and the vector store has documents, a retrieval
-        step is performed to prepend relevant context to the prompt.
+        If RAG is enabled and there are docs, perform retrieval and
+        prepend context to the prompt.
         """
         try:
             final_prompt = prompt
             if self.rag_enabled and self._vectors:
-                # retrieve top-k docs
                 retrieved = self.query_documents(prompt, top_k=3)
                 if retrieved:
                     context_pieces = []
                     for doc, score in retrieved:
-                        # include a short header and the chunk text
-                        context_pieces.append(f"[score={score:.4f}] {doc.get('text','')}")
+                        context_pieces.append(
+                            f"[score={score:.4f}] {doc.get('text','')}"
+                        )
                     context = "\n\n---\n\n".join(context_pieces)
-                    # Build augmented prompt (simple concatenation; can be adapted)
-                    final_prompt = f"Context:\n{context}\n\nUser: {prompt}"
+                    final_prompt = (
+                        f"Context:\n{context}\n\nUser: {prompt}"
+                    )
 
-            response = self.client.chat(model=self.model, message=final_prompt)
+            response = self.client.chat(
+                model=self.model, message=final_prompt
+            )
             if not response:
                 raise ProviderRequestError("Cohere returned empty response")
-            # some SDK versions return .text, others .message or .output - prefer .text
             text = getattr(response, "text", None)
             if text is None:
-                # fallback to string representation
                 text = str(response)
             if not text:
-                raise ProviderRequestError("Cohere returned empty text response")
+                raise ProviderRequestError("Cohere returned empty text")
             return text.strip()
 
         except Exception as exc:
-            raise ProviderRequestError(f"Cohere request failed: {exc}") from exc
+            raise ProviderRequestError(
+                f"Cohere request failed: {exc}"
+            ) from exc
 
     def health_check(self) -> bool:
         """
-        Perform lightweight Cohere connectivity test.
+        Perform a lightweight Cohere connectivity test.
 
-        If RAG is enabled, also verify embedding endpoint by creating a tiny embedding.
+        If RAG is enabled, also test the embedding endpoint.
         """
         try:
-            # quick chat ping
             resp = self.client.chat(model=self.model, message="ping")
             chat_ok = bool(resp and getattr(resp, "text", None))
             if not chat_ok:
                 return False
             if self.rag_enabled:
-                # lightweight embed test
                 emb = self._create_embeddings(["ping"])
                 return bool(emb and isinstance(emb[0], list))
             return True

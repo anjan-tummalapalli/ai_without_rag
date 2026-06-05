@@ -1,13 +1,18 @@
 from __future__ import annotations
 import os
 import logging
-from typing import List, Tuple, Optional, Any, Dict
+from typing import List, Tuple, Optional, Any, Dict, TYPE_CHECKING
 
 # Optional imports for embeddings/vector math
-try:
-    import numpy as np
-except Exception:  # pragma: no cover - optional dependency
-    np = None  # type: ignore
+# Use TYPE_CHECKING to allow static type checkers to see numpy typings while avoiding
+# hard import-time errors for environments that don't have numpy installed.
+if TYPE_CHECKING:
+    import numpy as np  # pragma: no cover - type checking only  # type: ignore
+else:
+    try:
+        import numpy as np
+    except Exception:  # pragma: no cover - optional dependency
+        np = None  # type: ignore
 
 from ai_cli.providers.base import AIProvider
 from ai_cli.providers.registry import PROVIDERS, register_provider
@@ -46,7 +51,8 @@ class OpenAIProvider(AIProvider):
 
     def _send_impl(self, prompt: str) -> str:
         try:
-            from openai import OpenAI
+            import importlib
+            OpenAI = importlib.import_module("openai").OpenAI
         except Exception as exc:
             raise ProviderConfigurationError("Install openai package") from exc
 
@@ -87,7 +93,8 @@ class OpenAIProvider(AIProvider):
         Return embeddings for a list of texts using OpenAI embeddings API.
         """
         try:
-            from openai import OpenAI
+            import importlib
+            OpenAI = importlib.import_module("openai").OpenAI
         except Exception as exc:
             raise ProviderConfigurationError("Install openai package") from exc
 
@@ -124,19 +131,21 @@ class OpenAICompatibleProvider(AIProvider):
             provider_meta=PROVIDERS[provider_name],
         )
 
-    def _send_impl(self, prompt: str) -> str:
+    def _get_openai_client(self):
         try:
-            from openai import OpenAI
+            import importlib
+            OpenAI = importlib.import_module("openai").OpenAI
         except Exception as exc:
-            raise ProviderConfigurationError(
-                "Install OpenAI SDK: pip install openai"
-            ) from exc
+            raise ProviderConfigurationError("Install OpenAI SDK: pip install openai") from exc
 
         api_key = os.getenv(self.api_key_env)
         if not api_key:
             raise ProviderConfigurationError(f"{self.api_key_env} not set")
 
-        client = OpenAI(api_key=api_key, base_url=self.api_base_url, timeout=self.timeout)
+        return OpenAI(api_key=api_key, base_url=self.api_base_url, timeout=self.timeout)
+
+    def _send_impl(self, prompt: str) -> str:
+        client = self._get_openai_client()
         try:
             response = client.chat.completions.create(
                 model=self.model,
@@ -145,18 +154,12 @@ class OpenAICompatibleProvider(AIProvider):
                 max_tokens=2048,
             )
         except Exception as exc:
-            raise ProviderRequestError(
-                f"{self.provider_name} request failed: {exc}"
-            ) from exc
+            raise ProviderRequestError(f"{self.provider_name} request failed: {exc}") from exc
 
         usage = getattr(response, "usage", None)
         if usage:
-            self.metrics.total_prompt_tokens += getattr(
-                usage, "prompt_tokens", 0
-            )
-            self.metrics.total_completion_tokens += getattr(
-                usage, "completion_tokens", 0
-            )
+            self.metrics.total_prompt_tokens += getattr(usage, "prompt_tokens", 0)
+            self.metrics.total_completion_tokens += getattr(usage, "completion_tokens", 0)
 
         try:
             content = response.choices[0].message.content
@@ -168,18 +171,9 @@ class OpenAICompatibleProvider(AIProvider):
 
     def get_embeddings(self, texts: List[str], model: Optional[str] = None) -> List[List[float]]:
         """
-        Return embeddings for a list of texts using the OpenAI-compatible embeddings endpoint.
+        Return embeddings for a list of texts using an OpenAI-compatible embeddings endpoint.
         """
-        try:
-            from openai import OpenAI
-        except Exception as exc:
-            raise ProviderConfigurationError("Install OpenAI SDK: pip install openai") from exc
-
-        api_key = os.getenv(self.api_key_env)
-        if not api_key:
-            raise ProviderConfigurationError(f"{self.api_key_env} not set")
-
-        client = OpenAI(api_key=api_key, base_url=self.api_base_url, timeout=self.timeout)
+        client = self._get_openai_client()
         emb_model = model or (self.model if self.model else "text-embedding-3-small")
         try:
             response = client.embeddings.create(model=emb_model, input=texts)
@@ -269,7 +263,8 @@ class CohereProvider(AIProvider):
 
     def _send_impl(self, prompt: str) -> str:
         try:
-            import cohere
+            import importlib
+            cohere = importlib.import_module("cohere")
         except Exception as exc:
             raise ProviderConfigurationError(
                 "Install cohere package: pip install cohere"

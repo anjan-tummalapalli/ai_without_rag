@@ -8,30 +8,21 @@ using Perplexity's OpenAI-compatible API and adds utilities to:
 - embed chunks
 - store embeddings in a lightweight in-memory vector DB
 - retrieve context and perform RAG-style calls
-
-Environment Variables
----------------------
-PERPLEXITY_API_KEY
-    API key used to authenticate with Perplexity API.
-
-Usage
------
-provider = PerplexityProvider(model="sonar-pro")
-provider.build_rag_index(["Long document text..."])
-answer = provider.query_with_rag("What is the summary?", k=3)
-print(answer)
 """
 
 from __future__ import annotations
 
-import os
 from typing import List, Optional, Sequence, Tuple
 
 try:
     import numpy as np  # type: ignore
 except Exception:
     np = None  # type: ignore
-from openai import OpenAI
+
+try:
+    from openai import OpenAI  # type: ignore
+except Exception:
+    OpenAI = None  # type: ignore
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider
@@ -52,15 +43,20 @@ class PerplexityProvider(AIProvider):
         **kwargs,
     ) -> None:
         super().__init__(provider_name="perplexity", model=model or "sonar-pro", api_key=api_key, *args, **kwargs)
-        self.api_key = api_key or os.getenv("PERPLEXITY_API_KEY")
-        if not self.api_key:
-            raise ProviderRequestError("PERPLEXITY_API_KEY environment variable is not set")
 
-        # OpenAI-compatible client
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.BASE_URL,
-        )
+        if OpenAI is None:
+            # lazy import to provide a helpful error if package missing
+            global OpenAI
+            try:
+                from openai import OpenAI as _OpenAI  # type: ignore
+                OpenAI = _OpenAI
+            except Exception:
+                raise ProviderRequestError(
+                    "The 'openai' package is required to use PerplexityProvider; install it with `pip install openai`"
+                )
+
+        # single client initialization
+        self.client = OpenAI(api_key=self.api_key, base_url=self.BASE_URL)
 
         # RAG components (lazy-init)
         self.embeddings_provider: Optional[EmbeddingsProvider] = None
@@ -68,22 +64,24 @@ class PerplexityProvider(AIProvider):
 
     def _to_np_array(self, data, dtype=None):
         """
-        Helper to convert data to a numpy array, or raise a clear error if numpy
-        is not available so callers get an actionable message instead of a
-        mysterious import/linter error.
+        Convert data to a numpy array; raise a clear error if numpy is not installed.
+        dtype may be a numpy dtype object or a string like 'float32'.
         """
         if np is None:
-            raise ProviderRequestError(
-                "numpy is required for RAG features; please install it (pip install numpy)"
-            )
-        return np.array(data, dtype=dtype)
+            raise ProviderRequestError("numpy is required for RAG features; please install it (pip install numpy)")
+        if dtype is not None:
+            return np.asarray(data, dtype=dtype)
+        return np.asarray(data)
 
-    def _send_impl(self, prompt: str) -> str:
+    def _create_chat_completion(self, prompt: str, temperature: Optional[float] = None):
+        """
+        Wrapper for chat completion calls to centralize error handling.
+        """
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            kwargs = {"model": self.model, "messages": [{"role": "user", "content": prompt}]}
+            if temperature is not None:
+                kwargs["temperature"] = temperature
+            response = self.client.chat.completions.create(**kwargs)
             if not getattr(response, "choices", None):
                 raise ProviderRequestError("Perplexity returned no choices")
             message = response.choices[0].message
@@ -93,8 +91,12 @@ class PerplexityProvider(AIProvider):
         except Exception as exc:
             raise ProviderRequestError(f"Perplexity request failed: {exc}") from exc
 
+    def _send_impl(self, prompt: str) -> str:
+        return self._create_chat_completion(prompt)
+
     def health_check(self) -> bool:
         try:
+            # lightweight ping
             response = self.client.chat.completions.create(
                 model=self.model, messages=[{"role": "user", "content": "ping"}]
             )
@@ -108,10 +110,7 @@ class PerplexityProvider(AIProvider):
 
     def _ensure_rag_components(self, embed_model: Optional[str] = None) -> None:
         if self.embeddings_provider is None:
-            # Only pass model_name if explicitly provided — None would override the class default
-            self.embeddings_provider = (
-                EmbeddingsProvider(model_name=embed_model) if embed_model else EmbeddingsProvider()
-            )
+            self.embeddings_provider = EmbeddingsProvider(model_name=embed_model) if embed_model else EmbeddingsProvider()
         if self.vector_store is None:
             self.vector_store = InMemoryVectorStore()
 
@@ -125,10 +124,6 @@ class PerplexityProvider(AIProvider):
     ) -> None:
         """
         Build an in-memory RAG index from given documents.
-
-        - chunks documents with overlap
-        - computes embeddings for chunks
-        - stores embeddings and chunk text/metadata in the vector store
         """
         self._ensure_rag_components(embed_model=embed_model)
         if self.vector_store is None or self.embeddings_provider is None:
@@ -136,38 +131,36 @@ class PerplexityProvider(AIProvider):
 
         all_chunks: List[str] = []
         metadatas: List[dict] = []
-        ids: List[str] = []
         for doc_idx, doc in enumerate(documents):
             chunks = chunk_text(doc, chunk_size=chunk_size, overlap=overlap)
             for i, c in enumerate(chunks):
                 all_chunks.append(c.text)
-                metadatas.append(
-                    {
-                        "doc_index": doc_idx,
-                        "chunk_index": i,
-                        "source": c.source,
-                    }
-                )
+                metadatas.append({"doc_index": doc_idx, "chunk_index": i, "source": c.source})
 
         if not all_chunks:
             return
 
         embeddings = self.embeddings_provider.embed_batch(all_chunks)
+        # ensure embeddings are a numpy array of correct dtype
+        emb_array = self._to_np_array(embeddings, dtype=np.float32)
 
-        chunks_for_store = [
-            Chunk(
-                id=(f"{ids_prefix}doc_{meta['doc_index']}_chunk_{meta['chunk_index']}"
-                    if ids_prefix else f"doc_{meta['doc_index']}_chunk_{meta['chunk_index']}"),
-                text=text,
-                source=meta.get("source"),
-                chunk_index=meta["chunk_index"],
-                metadata=meta,
+        chunks_for_store = []
+        for text, meta in zip(all_chunks, metadatas):
+            chunk_id = f"doc_{meta['doc_index']}_chunk_{meta['chunk_index']}"
+            if ids_prefix:
+                chunk_id = f"{ids_prefix}{chunk_id}"
+            chunks_for_store.append(
+                Chunk(
+                    id=chunk_id,
+                    text=text,
+                    source=meta.get("source"),
+                    chunk_index=meta["chunk_index"],
+                    metadata=meta,
+                )
             )
-            for text, meta in zip(all_chunks, metadatas)
-        ]
 
         # Store embeddings and associated chunk objects in the vector store
-        self.vector_store.add_embeddings(self._to_np_array(embeddings, dtype="float32"), chunks_for_store)
+        self.vector_store.add_embeddings(emb_array, chunks_for_store)
 
     def query_with_rag(
         self,
@@ -178,57 +171,36 @@ class PerplexityProvider(AIProvider):
         temperature: float = 0.0,
     ) -> Tuple[str, List[dict]]:
         """
-        Perform a RAG query:
-        - embed the user query
-        - retrieve top-k relevant chunks
-        - construct a prompt combining the retrieved context and the query
-        - call the model and return (answer, retrieved_contexts)
-
-        Returns:
-            answer (str), retrieved_contexts (list of metadata+text)
+        Perform a RAG query and return (answer, retrieved_contexts).
         """
         self._ensure_rag_components(embed_model=embed_model)
         if self.vector_store is None or self.embeddings_provider is None:
             raise ProviderRequestError("RAG components not initialized")
 
         q_emb = self.embeddings_provider.embed_batch([query])[0]
-        hits = self.vector_store.search(
-                   self._to_np_array(q_emb, dtype="float32"),
-                   top_k=k,
-                )
+        q_arr = self._to_np_array(q_emb, dtype=np.float32)
 
-        contexts = []
-        context_text = []
+        hits = self.vector_store.search(q_arr, top_k=k)
 
+        contexts: List[dict] = []
+        context_texts: List[str] = []
         for hit in hits:
             chunk = hit["chunk"]
             score = hit.get("score", 0.0)
-            contexts.append(
-            {
-             "score": score,
-             "text": chunk.text,
-             "metadata": chunk.metadata,
-            }
-            )
-        context_text.append(chunk.text)
+            contexts.append({"score": score, "text": chunk.text, "metadata": chunk.metadata})
+            context_texts.append(chunk.text)
 
-        if prompt_template is None:
+        if not prompt_template:
             prompt_template = (
                 "Use the following context to answer the question. If the context does not contain "
                 "the answer, answer based on your knowledge and be explicit about missing info.\n\n"
                 "Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
             )
-        prompt = prompt_template.format(context="\n\n".join(context_text), query=query)
+
+        prompt = prompt_template.format(context="\n\n".join(context_texts), query=query)
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-            )
-            if not getattr(response, "choices", None):
-                raise ProviderRequestError("Perplexity returned no choices")
-            answer = response.choices[0].message.content.strip()
+            answer = self._create_chat_completion(prompt, temperature=temperature)
             return answer, contexts
         except Exception as exc:
             raise ProviderRequestError(f"Perplexity RAG request failed: {exc}") from exc

@@ -60,15 +60,15 @@ except Exception:
 # numpy import: keep static typing happy and provide a runtime-safe fallback
 if TYPE_CHECKING:
     import numpy as np  # type: ignore
-else:
-    try:
-        import numpy as np  # type: ignore
-    except Exception:
-        np = None  # type: ignore
+
+try:
+    import numpy as np  # type: ignore
+except Exception:
+    np = None  # type: ignore
 
 # OpenAI / xAI client import with a safe fallback for environments without the package.
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # type: ignore
 except Exception:
     OpenAI = None  # type: ignore
 
@@ -83,7 +83,8 @@ class InMemoryVectorStore:
 
     def __init__(self) -> None:
         # lazy import guard: numpy may be missing in some environments
-        self._vectors: Optional["np.ndarray"] = None
+        # use Any for runtime-safe typing to avoid referencing the `np` variable
+        self._vectors: Optional[Any] = None
         self._metadatas: List[Dict[str, Any]] = []
 
     def upsert(self, embeddings: List[List[float]], metadatas: List[Dict[str, Any]]) -> None:
@@ -99,14 +100,14 @@ class InMemoryVectorStore:
             # stack new embeddings onto existing matrix and extend metadatas
             self._vectors = np.vstack([self._vectors, arr])
             self._metadatas.extend(metadatas)
-
-    def _cosine_similarity(self, q: "np.ndarray", vecs: "np.ndarray") -> "np.ndarray":
+    def _cosine_similarity(self, q: Any, vecs: Any) -> Any:
         if np is None:
             raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
         # q: (d,), vecs: (n, d)
         q_norm = q / (np.linalg.norm(q) + 1e-12)
         vecs_norm = vecs / (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12)
         sims = vecs_norm.dot(q_norm)
+        return sims
         return sims
 
     def query(self, embedding: List[float], top_k: int = 5) -> List[Tuple[Dict[str, Any], float]]:

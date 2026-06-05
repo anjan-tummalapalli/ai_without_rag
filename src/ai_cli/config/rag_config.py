@@ -1,290 +1,147 @@
-"""
-Advanced RAG configuration and utilities.
-
-This file centralizes configuration and small helper utilities used across the
-RAG pipeline: chunking, embedding options, and vector DB (FAISS) configuration.
-
-How to use:
-- Import the default_config object for global defaults.
-- Call default_config.ensure_dirs() early in your app to create folders.
-- Use chunk_text(...) to split long documents into overlapping chunks suitable
-    for embedding.
-- The VectorStoreConfig describes which vector DB to use; currently it includes
-    file paths for FAISS. The actual indexing/querying code should use these
-    values (see comments below).
-
-Notes:
-- The chunking implementation here is tokenizer-agnostic (splits on words or
-    sentence boundaries). For production use, replace `simple_tokenize` with a
-    tokenizer that matches your embedding model (e.g., tiktoken for OpenAI,
-    or a sentence splitter for better boundaries).
-- Embedding integration and FAISS indexing/querying are intentionally kept as
-    small helpers/stubs. They document how to wire things up; the heavy lifting
-    should be implemented where the project's dependencies are managed.
-"""
-
-from __future__ import annotations
-
-from dataclasses import dataclass, asdict, field
-from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Dict
+# Add these imports near the top
+import os
+import importlib
 import json
 import logging
+from dataclasses import dataclass, asdict
+from typing import Optional, Callable, List, Dict
+from pathlib import Path
 
+# module logger
 logger = logging.getLogger(__name__)
 
-
-# Default folder layout (relative to project root or running CWD).
-BASE_DIR = Path("ai_cli/data/rag")
-INDEX_DIR = BASE_DIR / "indexes"
-DOCS_DIR = BASE_DIR / "documents"
-METADATA_DIR = BASE_DIR / "metadata"
-
-# Ensure directories exist on import (safe no-op if already present).
-INDEX_DIR.mkdir(parents=True, exist_ok=True)
-DOCS_DIR.mkdir(parents=True, exist_ok=True)
-METADATA_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def simple_tokenize(text: str) -> List[str]:
-        """
-        Fast, dependency-free tokenization: split on whitespace.
-        Replace with a model/tokenizer-aware implementation for production.
-        """
-        return text.split()
-
-
-def sentence_split(text: str) -> List[str]:
-        """
-        Very simple sentence splitter using punctuation. Use a proper sentence
-        tokenizer (e.g., nltk.sent_tokenize or spacy) for robust behavior.
-        """
-        import re
-
-        parts = re.split(r'(?<=[.!?])\s+', text.strip())
-        return [p for p in parts if p]
-
-
-def chunk_text(
-        text: str,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
-        strategy: str = "sliding",
-        tokenizer: Optional[Callable[[str], List[str]]] = None,
-) -> List[str]:
-        """
-        Chunk `text` into pieces suitable for embedding.
-
-        Parameters:
-        - text: the full document text
-        - chunk_size: target number of tokens/words per chunk
-        - chunk_overlap: overlap between chunks (in tokens/words)
-        - strategy: "sliding" (default) or "sentence" (attempt to split by sentences)
-        - tokenizer: function(text) -> list(tokens). If None, uses simple_tokenize.
-
-        Returns:
-        - list of text chunks
-        """
-        tokenizer = tokenizer or simple_tokenize
-
-        if strategy == "sentence":
-                sentences = sentence_split(text)
-                chunks = []
-                current = []
-                current_len = 0
-                for s in sentences:
-                        toks = tokenizer(s)
-                        if current_len + len(toks) <= chunk_size:
-                                current.append(s)
-                                current_len += len(toks)
-                        else:
-                                if current:
-                                        chunks.append(" ".join(current))
-                                # if single sentence longer than chunk_size, fallback to word-splitting
-                                if len(toks) > chunk_size:
-                                        words = tokenizer(s)
-                                        i = 0
-                                        while i < len(words):
-                                                part = words[i : i + chunk_size]
-                                                chunks.append(" ".join(part))
-                                                i += chunk_size - chunk_overlap
-                                        current = []
-                                        current_len = 0
-                                else:
-                                        current = [s]
-                                        current_len = len(toks)
-                if current:
-                        chunks.append(" ".join(current))
-                return chunks
-
-        # sliding window by tokens (default)
-        tokens = tokenizer(text)
-        if not tokens:
-                return []
-
-        chunks = []
-        i = 0
-        while i < len(tokens):
-                chunk_tokens = tokens[i : i + chunk_size]
-                chunks.append(" ".join(chunk_tokens))
-                if i + chunk_size >= len(tokens):
-                        break
-                i += chunk_size - chunk_overlap
-        return chunks
-
+# Small dataclasses for embedding and vector store used by RAGConfig when constructing nested configs.
+# These provide the minimal fields referenced in from_env and from_json so the names are defined.
+@dataclass
+class EmbeddingConfig:
+    model_name: str = "all-MiniLM-L6-v2"
+    batch_size: int = 1
+    normalize: bool = False
 
 @dataclass
 class VectorStoreConfig:
+    store_type: str = "faiss"
+    faiss_index_path: Path = Path("index.faiss")
+    recreate: bool = False
+    metric: str = "cosine"
+
+# Tokenizer helper: prefer tiktoken when available
+import re
+
+def simple_tokenize(text: str) -> List[str]:
         """
-        Minimal vector-store configuration.
-
-        - store_type: currently "faiss" or "memory" (in-memory fallback).
-        - faiss_index_path: path to persist FAISS index (if using FAISS).
-        - recreate: whether to recreate index on save/load (useful in tests).
-        - metric: similarity metric used by index (e.g., "cosine", "l2").
+        Simple fallback tokenizer: split text into word and punctuation tokens using a regex.
+        Returns a list of string tokens.
         """
-        store_type: str = "faiss"
-        faiss_index_path: Path = INDEX_DIR / "index.faiss"
-        recreate: bool = False
-        metric: str = "cosine"
+        # \w+ matches word characters (letters, digits, underscore), [^\s\w] matches any single
+        # non-whitespace non-word character (punctuation). This keeps punctuation separate.
+        return re.findall(r"\w+|[^\s\w]", text, flags=re.UNICODE)
 
-
-@dataclass
-class EmbeddingConfig:
+def get_tokenizer(prefer: Optional[str] = None) -> Callable[[str], List[str]]:
         """
-        Embedding model parameters.
-        - model_name: identifier for embedding model/library (sentence-transformers,
-            OpenAI embedding name, etc.)
-        - batch_size: recommended batch size when batching embedding requests.
-        - normalize: whether to l2-normalize embeddings for cosine similarity.
+        Return a tokenizer function. If 'tiktoken' is available and prefer is 'tiktoken',
+        use it (requires tiktoken package). Otherwise fall back to simple_tokenize.
         """
-        model_name: str = "all-MiniLM-L6-v2"
-        batch_size: int = 32
-        normalize: bool = True
+        if prefer == "tiktoken":
+                try:
+                        tiktoken = importlib.import_module("tiktoken")
+                        enc = tiktoken.get_encoding("cl100k_base")
+
+                        def tok(text: str) -> List[str]:
+                                # encode -> tokens are ints; map to strings for chunking semantics
+                                return [str(x) for x in enc.encode(text)]
+                        return tok
+                except Exception:
+                        logger.debug("tiktoken not available, falling back to simple_tokenize")
+        return simple_tokenize
 
 
+# Update/extend RAGConfig with post-init validation and env loading
 @dataclass
 class RAGConfig:
-        """
-        Central RAG configuration.
-        """
-        base_dir: Path = BASE_DIR
-        index_dir: Path = INDEX_DIR
-        docs_dir: Path = DOCS_DIR
-        metadata_dir: Path = METADATA_DIR
+        # ... existing fields unchanged ...
 
-        chunk_size: int = 500
-        chunk_overlap: int = 50
-        chunk_strategy: str = "sliding"  # or "sentence"
-
-        top_k: int = 5
-
-        embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
-        vector_store: VectorStoreConfig = field(default_factory=VectorStoreConfig)
-
-        metadata_path: Path = METADATA_DIR / "metadata.json"
-
-        def ensure_dirs(self) -> None:
-                """Create configured directories if they don't exist."""
-                for p in (self.base_dir, self.index_dir, self.docs_dir, self.metadata_dir):
-                        p.mkdir(parents=True, exist_ok=True)
-
-        def to_dict(self) -> Dict:
-                """Return serializable dict representation."""
-                d = asdict(self)
-                # convert paths to strings
-                for k in ("base_dir", "index_dir", "docs_dir", "metadata_dir", "metadata_path"):
-                        if k in d and isinstance(d[k], Path):
-                                d[k] = str(d[k])
-                # nested dataclasses already converted by asdict
-                return d
-
-        def save(self, path: Optional[Path] = None) -> None:
-                """Save config as JSON for reproducibility."""
-                path = Path(path) if path else self.metadata_dir / "rag_config.json"
-                self.ensure_dirs()
-                with open(path, "w", encoding="utf-8") as f:
-                        json.dump(self.to_dict(), f, indent=2)
-                logger.info("Saved RAG config to %s", path)
+        def __post_init__(self) -> None:
+                # Ensure directories and validate sensible numeric params.
+                try:
+                        self.ensure_dirs()
+                except Exception as e:
+                        logger.warning("Could not create configured directories: %s", e)
+                # normalize numeric settings
+                if self.chunk_size <= 0:
+                        raise ValueError("chunk_size must be > 0")
+                if not (0 <= self.chunk_overlap < self.chunk_size):
+                        raise ValueError("0 <= chunk_overlap < chunk_size must hold")
+                if self.top_k <= 0:
+                        logger.info("top_k <= 0, defaulting to 1")
+                        self.top_k = 1
 
         @classmethod
-        def load(cls, path: Path) -> "RAGConfig":
-                """Load a config previously saved with save()."""
+        def from_env(cls, prefix: str = "RAG_") -> "RAGConfig":
+                """
+                Create config with overrides from environment variables.
+                Supported keys: RAG_CHUNK_SIZE, RAG_CHUNK_OVERLAP, RAG_TOP_K,
+                RAG_STORE_TYPE, RAG_FAISS_INDEX_PATH, RAG_EMBEDDING_MODEL
+                """
+                def getenv_int(key: str, default: int) -> int:
+                        v = os.getenv(prefix + key)
+                        return int(v) if v and v.isdigit() else default
+
+                # start from default and override simple fields
+                cfg = default_config
+
+                chunk_size = getenv_int("CHUNK_SIZE", cfg.chunk_size)
+                chunk_overlap = getenv_int("CHUNK_OVERLAP", cfg.chunk_overlap)
+                top_k = getenv_int("TOP_K", cfg.top_k)
+
+                store_type = os.getenv(prefix + "STORE_TYPE", cfg.vector_store.store_type)
+                faiss_path = os.getenv(prefix + "FAISS_INDEX_PATH", str(cfg.vector_store.faiss_index_path))
+
+                emb_model = os.getenv(prefix + "EMBEDDING_MODEL", cfg.embedding.model_name)
+
+                # build new nested configs
+                emb = EmbeddingConfig(model_name=emb_model, batch_size=cfg.embedding.batch_size, normalize=cfg.embedding.normalize)
+                vs = VectorStoreConfig(store_type=store_type, faiss_index_path=Path(faiss_path), recreate=cfg.vector_store.recreate, metric=cfg.vector_store.metric)
+
+                return cls(
+                        base_dir=cfg.base_dir,
+                        index_dir=cfg.index_dir,
+                        docs_dir=cfg.docs_dir,
+                        metadata_dir=cfg.metadata_dir,
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                        chunk_strategy=cfg.chunk_strategy,
+                        top_k=top_k,
+                        embedding=emb,
+                        vector_store=vs,
+                        metadata_path=cfg.metadata_path,
+                )
+
+        def to_dict(self) -> Dict:
+                """Return serializable dict representation. Converts Path objects to strings."""
+                d = asdict(self)
+                # asdict already handles nested dataclasses, but convert Path -> str recursively
+                def convert(obj):
+                        if isinstance(obj, dict):
+                                return {k: convert(v) for k, v in obj.items()}
+                        if isinstance(obj, list):
+                                return [convert(v) for v in obj]
+                        if isinstance(obj, str):
+                                return obj
+                        if isinstance(obj, Path):
+                                return str(obj)
+                        return obj
+                return convert(d)
+
+        @classmethod
+        def from_json(cls, path: Path) -> "RAGConfig":
                 with open(path, "r", encoding="utf-8") as f:
                         data = json.load(f)
-                # convert path strings back to Path objects where relevant
-                for key in ("base_dir", "index_dir", "docs_dir", "metadata_dir", "metadata_path"):
-                        if key in data and data[key]:
-                                data[key] = Path(data[key])
-                # reconstruct nested dataclasses
+                # coerce path strings
+                for k in ("base_dir", "index_dir", "docs_dir", "metadata_dir", "metadata_path"):
+                        if k in data and data[k]:
+                                data[k] = Path(data[k])
                 emb = EmbeddingConfig(**data.get("embedding", {}))
                 vs = VectorStoreConfig(**data.get("vector_store", {}))
-                # take remaining keys for RAGConfig
-                cfg_kwargs = {
-                        k: v
-                        for k, v in data.items()
-                        if k
-                        in {
-                                "base_dir",
-                                "index_dir",
-                                "docs_dir",
-                                "metadata_dir",
-                                "chunk_size",
-                                "chunk_overlap",
-                                "chunk_strategy",
-                                "top_k",
-                                "metadata_path",
-                        }
-                }
-                cfg = cls(**cfg_kwargs, embedding=emb, vector_store=vs)
-                return cfg
-
-        # Small helper documenting where to plug in vector DB code.
-        def faiss_index_path(self) -> Path:
-                """Convenience: path to FAISS index file."""
-                return Path(self.vector_store.faiss_index_path)
-
-
-# module-level default config instance
-default_config = RAGConfig()
-
-
-# Lightweight example helper showing how embedding + FAISS wiring might look.
-# Real implementations should live in modules that declare dependencies (faiss,
-# sentence-transformers, OpenAI SDK, etc.).
-def build_faiss_index_stub(embeddings: Iterable[List[float]], ids: Optional[Iterable[str]] = None):
-        """
-        Stub demonstrating the expected inputs to build a FAISS index.
-        - embeddings: iterable of embedding vectors (list/array-like)
-        - ids: optional iterable of ids aligned to embeddings
-
-        The body is intentionally left as a stub to avoid hard dependency on faiss.
-        Replace with real code such as:
-            import faiss
-            xb = np.asarray(list(embeddings)).astype('float32')
-            index = faiss.IndexFlatIP(d)  # or other index type
-            index.add(xb)
-            faiss.write_index(index, str(default_config.faiss_index_path()))
-        """
-        raise NotImplementedError("Implement FAISS index building in your indexer module.")
-
-
-def query_vector_store_stub(query_embedding: List[float], top_k: Optional[int] = None):
-        """
-        Stub demonstrating vector DB query signature.
-        - query_embedding: single embedding vector (list/array-like)
-        - top_k: number of nearest neighbors to return (defaults to config.top_k)
-
-        Expected return: list of (id, score) pairs or documents depending on
-        your retrieval layer.
-        """
-        raise NotImplementedError("Implement vector store querying in your retriever module.")
-
-
-# Expose commonly-used constants for backwards compatibility with older code
-CHUNK_SIZE = default_config.chunk_size
-CHUNK_OVERLAP = default_config.chunk_overlap
-TOP_K = default_config.top_k
-EMBEDDING_MODEL = default_config.embedding.model_name
-FAISS_INDEX_PATH = default_config.faiss_index_path()
-METADATA_PATH = default_config.metadata_path
+                kwargs = {k: data[k] for k in data.keys() if k not in {"embedding", "vector_store"}}
+                return cls(**kwargs, embedding=emb, vector_store=vs)

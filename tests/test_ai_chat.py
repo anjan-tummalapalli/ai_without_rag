@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import hashlib
 from typing import List, Tuple, Iterable, Dict
+import heapq
 
 # Chunking
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
@@ -30,7 +31,6 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
                 start = end - overlap
                 if start < 0:
                         start = 0
-                # avoid infinite loop: if end == n break
                 if end >= n:
                         break
         return chunks
@@ -40,12 +40,11 @@ def _text_to_embedding(text: str, dim: int = 64) -> List[float]:
         if not isinstance(text, str):
                 text = ""
         h = hashlib.sha256(text.encode("utf8")).digest()
-        # expand or repeat hash bytes to fill dim
         vec: List[float] = []
         i = 0
+        # iterate over hash bytes, repeat as needed
         while len(vec) < dim:
                 b = h[i % len(h)]
-                # convert byte [0,255] to float [-1,1]
                 vec.append((b / 255.0) * 2.0 - 1.0)
                 i += 1
         return vec[:dim]
@@ -53,46 +52,61 @@ def _text_to_embedding(text: str, dim: int = 64) -> List[float]:
 def embed_texts(texts: Iterable[str], dim: int = 64) -> List[List[float]]:
         return [_text_to_embedding(t or "", dim=dim) for t in texts]
 
-# Cosine similarity
-def _cosine(a: List[float], b: List[float]) -> float:
-        if not a or not b or len(a) != len(b):
-                return 0.0
-        dot = 0.0
-        na = 0.0
-        nb = 0.0
-        for x, y in zip(a, b):
-                dot += x * y
-                na += x * x
-                nb += y * y
-        if na == 0 or nb == 0:
-                return 0.0
-        return dot / (math.sqrt(na) * math.sqrt(nb))
+# Cosine similarity helpers
+def _dot(a: List[float], b: List[float]) -> float:
+        return sum(x * y for x, y in zip(a, b))
 
-# Simple in-memory vector DB
+def _norm(a: List[float]) -> float:
+        s = sum(x * x for x in a)
+        return math.sqrt(s) if s > 0.0 else 0.0
+
+# Simple in-memory vector DB with small optimizations
 class VectorStore:
         def __init__(self, dim: int = 64):
                 self.dim = dim
                 self._docs: Dict[str, str] = {}
                 self._embeddings: Dict[str, List[float]] = {}
+                self._norms: Dict[str, float] = {}
 
         def add(self, doc_id: str, text: str) -> None:
                 emb = _text_to_embedding(text, dim=self.dim)
                 self._docs[doc_id] = text
                 self._embeddings[doc_id] = emb
+                self._norms[doc_id] = _norm(emb)
 
         def add_many(self, items: Iterable[Tuple[str, str]]) -> None:
                 for doc_id, text in items:
                         self.add(doc_id, text)
 
         def query(self, query_text: str, top_k: int = 3, min_score: float = 0.0) -> List[Tuple[str, str, float]]:
+                """
+                Returns top_k (doc_id, text, score) ordered by score desc.
+                Uses a min-heap of size top_k for O(n log k) selection.
+                """
                 q_emb = _text_to_embedding(query_text, dim=self.dim)
-                results: List[Tuple[str, str, float]] = []
+                q_norm = _norm(q_emb)
+                if q_norm == 0.0:
+                        return []
+
+                heap: List[Tuple[float, str, str]] = []  # (score, doc_id, text)
                 for doc_id, emb in self._embeddings.items():
-                        score = _cosine(q_emb, emb)
-                        if score >= min_score:
-                                results.append((doc_id, self._docs[doc_id], score))
+                        doc_norm = self._norms.get(doc_id, 0.0)
+                        if doc_norm == 0.0:
+                                continue
+                        score = _dot(q_emb, emb) / (q_norm * doc_norm)
+                        if score < min_score:
+                                continue
+                        if len(heap) < top_k:
+                                heapq.heappush(heap, (score, doc_id, self._docs[doc_id]))
+                        else:
+                                # heap[0] is smallest score in heap, replace if current score is higher
+                                if score > heap[0][0]:
+                                        heapq.heapreplace(heap, (score, doc_id, self._docs[doc_id]))
+
+                # convert heap to sorted list (desc)
+                results = [(doc_id, text, score) for score, doc_id, text in heap]
                 results.sort(key=lambda t: t[2], reverse=True)
-                return results[:top_k]
+                return results
 
         def all_docs(self) -> Dict[str, str]:
                 return dict(self._docs)

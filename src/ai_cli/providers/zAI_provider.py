@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import requests
 from typing import Any, Optional
 
 from ai_cli.core.exceptions import ProviderRequestError
@@ -66,6 +65,13 @@ class ZAIProvider(AIProvider):
         }
 
         try:
+            import requests  # local import so static analyzers don't require the package at module import time
+        except Exception as exc:
+            raise ProviderRequestError(
+                "missing 'requests' library; install with `pip install requests`"
+            ) from exc
+
+        try:
             resp = requests.post(
                 self.base_url,
                 json=payload,
@@ -74,7 +80,6 @@ class ZAIProvider(AIProvider):
             )
         except requests.RequestException as exc:
             raise ProviderRequestError(f"network error: {exc}") from exc
-
         if resp.status_code >= 400:
             body = None
             try:

@@ -1,28 +1,42 @@
 from typing import List
 import re
 
+def chunk_text(text: str, chunk_size: int = 1000,
+               overlap: int = 200) -> List[str]:
+    """
+    Robust text chunker.
 
-def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+    - Normalizes whitespace.
+    - Produces chunks up to `chunk_size` characters with `overlap`.
+    - Validates parameters and avoids infinite loops.
     """
-    Simple, robust chunker:
-    - Normalizes whitespace
-    - Produces chunks of up to chunk_size characters with overlap
-    - Ensures chunk_size > overlap
-    """
+    if not isinstance(chunk_size, int) or chunk_size <= 0:
+        raise ValueError("chunk_size must be a positive int")
+    if not isinstance(overlap, int) or overlap < 0:
+        raise ValueError("overlap must be a non-negative int")
     if chunk_size <= overlap:
         raise ValueError("chunk_size must be greater than overlap")
+
     text = re.sub(r"\s+", " ", text).strip()
     n = len(text)
     if n == 0:
         return []
     if n <= chunk_size:
         return [text]
+
     chunks: List[str] = []
     start = 0
     while start < n:
         end = min(start + chunk_size, n)
-        chunks.append(text[start:end].strip())
-        start = max(end - overlap, end) - overlap + overlap  # safe advance
-        # simpler: move window with overlap
-        start = end - overlap
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        if end == n:
+            break
+        next_start = end - overlap
+        # Ensure we always make forward progress.
+        if next_start <= start:
+            next_start = end
+        start = next_start
+
     return chunks

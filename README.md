@@ -1,6 +1,6 @@
-# zAI CLI Gateway — v0.3.0
+# AI CLI Gateway — v0.3.0
 
-> Enterprise-grade multi-provider zAI CLI gateway with Security &
+> Enterprise-grade multi-provider AI CLI gateway with Security &
 > Identity Management, Tool Calling, ReAct Agents, and an enhanced
 > Developer Experience — now with production-ready Advanced RAG:
 > robust chunking, embedding orchestration, and vector DB querying.
@@ -28,7 +28,7 @@ with production-grade RAG features focused on:
 ## Project Structure (RAG-focused files)
 
 ```
-src/zai_cli/rag/
+src/ai_cli/rag/
 ├── __init__.py
 ├── pipeline.py           # RAGPipeline: retrieval, augmentation,
                            # grounding, caching
@@ -51,11 +51,11 @@ src/zai_cli/rag/
 ```
 
 Files changed/added for Advanced RAG:
-- src/zai_cli/rag/{pipeline.py, ingest.py, chunking.py, embeddings.py}
-- src/zai_cli/rag/indexers/{faiss_indexer.py, qdrant_indexer.py,
+- src/ai_cli/rag/{pipeline.py, ingest.py, chunking.py, embeddings.py}
+- src/ai_cli/rag/indexers/{faiss_indexer.py, qdrant_indexer.py,
   chroma_indexer.py, pgvector_indexer.py}
-- CLI: src/zai_cli/cli.py (new flags/subcommands for RAG)
-- Config profiles updated: src/zai_cli/config/profiles.py (rag options)
+- CLI: src/ai_cli/cli.py (new flags/subcommands for RAG)
+- Config profiles updated: src/ai_cli/config/profiles.py (rag options)
 - Docs: docs/rag/ (usage, deployment, qdrant-compose, contributor
   guide)
 

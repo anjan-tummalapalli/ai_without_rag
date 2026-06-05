@@ -11,6 +11,7 @@ together
 cohere
 fireworks
 gitpython
+zai  # z.ai SDK (verify PyPI package name if different, e.g. z-ai)
 
 # Utilities & RAG
 python-dotenv

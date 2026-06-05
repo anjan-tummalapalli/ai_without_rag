@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional
-
-from typing import TYPE_CHECKING
+from typing import Callable, Iterable, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import faiss  # type: ignore
@@ -20,54 +18,55 @@ else:
     except Exception:
         np = None  # type: ignore
 
-from ai_cli.config.rag_config import (
-    FAISS_INDEX_PATH,
-    METADATA_PATH,
-)
+from ai_cli.config.rag_config import FAISS_INDEX_PATH, METADATA_PATH
 from ai_cli.rag.models import Chunk
 
 
 class VectorStore:
     """
-    FAISS-backed vector store with:
-    - add / upsert / delete
-    - persisted index + metadata + embeddings (.npy beside FAISS file)
-    - filtered similarity search
+    FAISS-backed vector store.
+    Stores an in-memory list of Chunk objects, a matching numpy.ndarray of embeddings
+    (float32) and an optional persisted FAISS index on disk.
     """
     def __init__(self) -> None:
         self.index = None
+        self.chunks: List[Chunk] = []
+        self.embeddings: Optional["np.ndarray"] = None
+        self._embeddings_path = Path(str(FAISS_INDEX_PATH)).with_suffix(".npy")
+
+    def _require_numpy(self) -> None:
+        if np is None:
+            raise RuntimeError("numpy is required for VectorStore operations.")
+
+    def _require_faiss(self) -> None:
+        if faiss is None:
+            raise RuntimeError(
+                "faiss library is not available; please install faiss to use VectorStore."
+            )
+
+    def create_index(self, dimension: int) -> None:
+        self._require_faiss()
+        self.index = faiss.IndexFlatL2(int(dimension))
         self.chunks = []
         self.embeddings = None
         self._embeddings_path = Path(str(FAISS_INDEX_PATH)).with_suffix(".npy")
 
-    def create_index(self, dimension: int) -> None:
-        if faiss is None:
-            raise RuntimeError(
-                "faiss library is not available; please install faiss to use VectorStore (e.g. pip install faiss-cpu or faiss)."
-            )
-        self.index = faiss.IndexFlatL2(dimension)
-        self.chunks: List[Chunk] = []
-        # embeddings stored in same order as self.chunks, dtype=float32
-        self.embeddings: Optional[np.ndarray] = None
-
-        # derive embeddings path from index path (same directory, .npy)
-        self._embeddings_path = Path(str(FAISS_INDEX_PATH)).with_suffix(".npy")
-
     def _rebuild_index(self) -> None:
-        """Recreate FAISS index from current embeddings (used for upsert/delete)."""
-        if self.embeddings is None or len(self.embeddings) == 0:
+        """Recreate FAISS index from current embeddings (used after upsert/delete)."""
+        if self.embeddings is None or self.embeddings.size == 0:
             self.index = None
             return
         dim = int(self.embeddings.shape[1])
         self.create_index(dim)
+        # faiss IndexFlatL2.add expects float32 2D array
         self.index.add(self.embeddings)
 
-    def add_embeddings(self, embeddings: Iterable[np.ndarray], chunks: List[Chunk]) -> None:
+    def add_embeddings(self, embeddings: Iterable["np.ndarray"], chunks: List[Chunk]) -> None:
         """
         Append new vectors and chunks.
-        - embeddings: iterable of vectors shaped (dim,)
-        - chunks: list of Chunk objects with unique ids for each vector (not enforced)
+        embeddings: iterable of 1D vectors or an array-like of shape (n, dim).
         """
+        self._require_numpy()
         vectors = np.array(list(embeddings)).astype("float32")
         if vectors.ndim == 1:
             vectors = vectors.reshape(1, -1)
@@ -84,73 +83,75 @@ class VectorStore:
 
         self.chunks.extend(chunks)
 
-    def upsert(self, embeddings: Iterable[np.ndarray], chunks: List[Chunk]) -> None:
+    def upsert(self, embeddings: Iterable["np.ndarray"], chunks: List[Chunk]) -> None:
         """
-        Upsert behavior: if a chunk.id exists, replace its vector and chunk metadata;
-        otherwise append as new.
-        This will rebuild the index if any replacement occurs.
+        Upsert: replace vectors for existing chunk ids, append new otherwise.
+        Rebuilds the index if any replacement occurred.
         """
+        self._require_numpy()
         vectors = np.array(list(embeddings)).astype("float32")
         if vectors.ndim == 1:
             vectors = vectors.reshape(1, -1)
 
-        # build id -> position map
         id_to_pos = {c.id: i for i, c in enumerate(self.chunks)}
 
         replaced = False
-        new_chunks = []
         new_vectors = []
+        new_chunks = []
 
         for vec, chunk in zip(vectors, chunks):
             if chunk.id in id_to_pos:
                 pos = id_to_pos[chunk.id]
-                # replace in-place
                 if self.embeddings is not None:
                     self.embeddings[pos] = vec
                 self.chunks[pos] = chunk
                 replaced = True
             else:
-                new_chunks.append(chunk)
                 new_vectors.append(vec)
+                new_chunks.append(chunk)
 
         if new_vectors:
-            new_vectors_np = np.array(new_vectors).astype("float32")
+            new_np = np.array(new_vectors).astype("float32")
             if self.embeddings is None:
-                self.embeddings = new_vectors_np.copy()
+                self.embeddings = new_np.copy()
             else:
-                self.embeddings = np.vstack([self.embeddings, new_vectors_np])
+                self.embeddings = np.vstack([self.embeddings, new_np])
             self.chunks.extend(new_chunks)
 
-        # If any replacements happened, rebuild the index to ensure integrity.
         if replaced or self.index is None:
             self._rebuild_index()
         else:
             # only append new vectors to existing index
             if new_vectors:
-                self.index.add(new_vectors_np)
+                self.index.add(new_np)
 
     def delete(self, ids: Iterable[str]) -> None:
         """
-        Delete chunks and embeddings by chunk.id. Rebuilds index.
+        Delete chunks and embeddings by chunk.id and rebuild the FAISS index.
         """
+        self._require_numpy()
         ids_to_remove = set(ids)
         if not ids_to_remove:
             return
 
-        keep_pairs = [
-            (emb, ch)
-            for emb, ch in zip(self.embeddings or np.empty((0,)), self.chunks)
-            if ch.id not in ids_to_remove
-        ]
+        kept_embeddings = []
+        kept_chunks = []
+        if self.embeddings is not None:
+            for emb, ch in zip(self.embeddings, self.chunks):
+                if ch.id not in ids_to_remove:
+                    kept_embeddings.append(emb)
+                    kept_chunks.append(ch)
 
-        if keep_pairs:
-            kept_embeddings = np.vstack([p[0] for p in keep_pairs]).astype("float32")
-            kept_chunks = [p[1] for p in keep_pairs]
+        if kept_embeddings:
+            self.embeddings = np.vstack(kept_embeddings).astype("float32")
         else:
-            kept_embeddings = np.empty((0, self.embeddings.shape[1] if self.embeddings is not None else 0), dtype="float32")
-            kept_chunks = []
+            # preserve dimensionality if possible
+            if self.embeddings is not None:
+                d = int(self.embeddings.shape[1])
+                self.embeddings = np.empty((0, d), dtype="float32")
+            else:
+                self.embeddings = None
 
-        self.embeddings = kept_embeddings if kept_embeddings.size else None
         self.chunks = kept_chunks
         self._rebuild_index()
 
@@ -162,18 +163,22 @@ class VectorStore:
         return_scores: bool = True,
     ):
         """
-        Similarity search with optional filter function.
-        - filter_fn: callable receiving a Chunk, returning True to keep.
-        Returns list of dicts: {"chunk": Chunk, "score": float}
+        Similarity search with optional filtering. Returns list of {"chunk": Chunk, "score": float}.
+        Score is raw L2 distance from FAISS.
         """
-        if self.index is None or self.embeddings is None:
+        if self.index is None or self.embeddings is None or len(self.chunks) == 0:
             return []
 
-        query = np.array([query_embedding]).astype("float32")
-        distances, indices = self.index.search(query, top_k)
+        if top_k <= 0:
+            return []
+
+        top_k = min(int(top_k), len(self.chunks))
+        self._require_numpy()
+        q = np.array([query_embedding]).astype("float32")
+        distances, indices = self.index.search(q, top_k)
 
         results = []
-        for score, idx in zip(distances[0], indices[0]):
+        for dist, idx in zip(distances[0], indices[0]):
             if idx < 0 or idx >= len(self.chunks):
                 continue
             chunk = self.chunks[idx]
@@ -181,24 +186,22 @@ class VectorStore:
                 continue
             item = {"chunk": chunk}
             if return_scores:
-                # Faiss returns L2 distance; convert to similarity score (optional).
-                # Keep raw distance for now; caller can convert if needed.
-                item["score"] = float(score)
+                item["score"] = float(dist)
             results.append(item)
 
         return results
 
     def save(self) -> None:
         """
-        Persist FAISS index, metadata, and embeddings.
+        Persist FAISS index (if present and faiss installed), metadata and embeddings.
         """
-        if self.index is None:
-            # ensure directory exists and still save metadata/embeddings
-            pass
-        else:
+        # ensure metadata/embeddings dir exists
+        Path(METADATA_PATH).parent.mkdir(parents=True, exist_ok=True)
+        Path(str(self._embeddings_path)).parent.mkdir(parents=True, exist_ok=True)
+
+        if self.index is not None and faiss is not None:
             faiss.write_index(self.index, str(FAISS_INDEX_PATH))
 
-        # metadata
         metadata = [
             {
                 "id": chunk.id,
@@ -209,20 +212,18 @@ class VectorStore:
             }
             for chunk in self.chunks
         ]
-        Path(METADATA_PATH).parent.mkdir(parents=True, exist_ok=True)
         METADATA_PATH.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-        # embeddings (.npy) - keep aligned with chunks
         if self.embeddings is not None:
-            self._embeddings_path.parent.mkdir(parents=True, exist_ok=True)
+            self._require_numpy()
             np.save(str(self._embeddings_path), self.embeddings)
 
     def load(self) -> None:
         """
-        Load persisted index, metadata, and embeddings if present.
+        Load persisted index (if faiss available), metadata and embeddings from disk.
         """
         faiss_path = Path(FAISS_INDEX_PATH)
-        if faiss_path.exists():
+        if faiss_path.exists() and faiss is not None:
             self.index = faiss.read_index(str(faiss_path))
         else:
             self.index = None
@@ -243,16 +244,19 @@ class VectorStore:
             self.chunks = []
 
         if self._embeddings_path.exists():
+            self._require_numpy()
             self.embeddings = np.load(str(self._embeddings_path)).astype("float32")
         else:
-            # try to infer dimension from index if possible
-            if self.index is not None:
-                d = int(self.index.d)
-                self.embeddings = np.empty((0, d), dtype="float32")
+            if self.index is not None and faiss is not None:
+                # try to infer dimension from index
+                try:
+                    d = int(self.index.d)
+                except Exception:
+                    d = 0
+                self.embeddings = np.empty((0, d), dtype="float32") if d > 0 else None
             else:
                 self.embeddings = None
 
-# ------------------------------------------------------------------
+
 # Backward compatibility alias
-# ------------------------------------------------------------------
 InMemoryVectorStore = VectorStore

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import os
 from unittest.mock import patch, MagicMock
-import pytest
 
-from ai_cli.core.exceptions import ProviderRequestError
+# pytest is not imported directly because this test module relies on pytest's
+# fixture injection at runtime; remove the unused import to avoid editor/linter
+# errors when pytest isn't installed in the environment.
+
 from ai_cli.providers.base import EchoProvider
 from ai_cli.providers.openai_provider import OpenAIProvider
 from ai_cli.providers.gemini_provider import GeminiProvider
@@ -14,226 +15,149 @@ from ai_cli.providers.perplexity_provider import PerplexityProvider
 from ai_cli.providers.xAI_provider import XAIProvider
 
 
-# ---------------------------------------------------------
-# EchoProvider Tests
-# ---------------------------------------------------------
+# Helpers to reduce repetition
+def _setup_openai_mock(openai_mock, chat_text="response", embedding_vec=None):
+    client = MagicMock()
+    openai_mock.return_value = client
+
+    # chat response
+    choice = MagicMock()
+    choice.message.content = chat_text
+    resp = MagicMock()
+    resp.choices = [choice]
+    client.chat.completions.create.return_value = resp
+
+    # embeddings
+    emb_item = MagicMock()
+    emb_item.embedding = embedding_vec if embedding_vec is not None else [0.1, 0.2]
+    emb_resp = MagicMock()
+    emb_resp.data = [emb_item]
+    client.embeddings.create.return_value = emb_resp
+
+    return client
+
+
+def _setup_genai_mock(genai_mock, text="gemini response", embedding_vec=None):
+    model = MagicMock()
+    genai_mock.GenerativeModel.return_value = model
+    resp = MagicMock()
+    resp.text = text
+    model.generate_content.return_value = resp
+
+    emb_item = MagicMock()
+    emb_item.embedding = embedding_vec if embedding_vec is not None else [0.1, 0.2]
+    emb_resp = MagicMock()
+    emb_resp.data = [emb_item]
+    genai_mock.embeddings.create.return_value = emb_resp
+
+    return model
+
+
+# EchoProvider
 def test_echo_provider():
-    provider = EchoProvider()
-    assert provider.provider_name == "echo"
-    assert provider.send("hello") == "(echo) hello"
+    p = EchoProvider()
+    assert p.provider_name == "echo"
+    assert p.send("hello") == "(echo) hello"
 
 
-# ---------------------------------------------------------
-# OpenAIProvider Tests
-# ---------------------------------------------------------
+# OpenAIProvider tests (send + RAG)
 @patch("ai_cli.providers.openai_provider.OpenAI")
-def test_openai_provider_send(mock_openai_class):
-    mock_client = MagicMock()
-    mock_openai_class.return_value = mock_client
-    
-    # Mock chat completion response
-    mock_choice = MagicMock()
-    mock_choice.message.content = "openai response"
-    mock_resp = MagicMock()
-    mock_resp.choices = [mock_choice]
-    mock_client.chat.completions.create.return_value = mock_resp
+def test_openai_provider_send(openai_mock, monkeypatch):
+    _setup_openai_mock(openai_mock, chat_text="openai response")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-        provider = OpenAIProvider()
-        assert provider.send("hello") == "openai response"
-        mock_client.chat.completions.create.assert_called_once()
+    p = OpenAIProvider()
+    assert p.send("hello") == "openai response"
+    openai_mock.return_value.chat.completions.create.assert_called_once()
 
 
 @patch("ai_cli.providers.openai_provider.OpenAI")
-def test_openai_provider_rag(mock_openai_class):
-    mock_client = MagicMock()
-    mock_openai_class.return_value = mock_client
+def test_openai_provider_rag(openai_mock, monkeypatch):
+    _setup_openai_mock(openai_mock, chat_text="rag response", embedding_vec=[0.1, 0.2, 0.3])
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    # Mock embeddings response
-    mock_embedding = MagicMock()
-    mock_embedding.embedding = [0.1, 0.2, 0.3]
-    mock_emb_resp = MagicMock()
-    mock_emb_resp.data = [mock_embedding]
-    mock_client.embeddings.create.return_value = mock_emb_resp
+    p = OpenAIProvider()
+    chunks = p.chunk_text("hello world this is a test document", chunk_size=2, overlap=1)
+    assert chunks
 
-    # Mock chat response
-    mock_choice = MagicMock()
-    mock_choice.message.content = "rag response"
-    mock_chat_resp = MagicMock()
-    mock_chat_resp.choices = [mock_choice]
-    mock_client.chat.completions.create.return_value = mock_chat_resp
+    p.build_vector_store([{"id": "doc1", "text": "hello world"}])
+    assert p._vectors is not None
 
-    with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-        provider = OpenAIProvider()
-        # chunk text
-        chunks = provider.chunk_text("hello world this is a test document", chunk_size=2, overlap=1)
-        assert len(chunks) > 0
-
-        # build store
-        provider.build_vector_store([{"id": "doc1", "text": "hello world"}])
-        assert provider._vectors is not None
-
-        # query
-        res = provider.answer_with_rag("hello query")
-        assert res == "rag response"
+    assert p.answer_with_rag("hello query") == "rag response"
 
 
-# ---------------------------------------------------------
-# GeminiProvider Tests
-# ---------------------------------------------------------
+# GeminiProvider
 @patch("ai_cli.providers.gemini_provider.genai")
-def test_gemini_provider(mock_genai):
-    mock_model = MagicMock()
-    mock_genai.GenerativeModel.return_value = mock_model
-    
-    mock_resp = MagicMock()
-    mock_resp.text = "gemini response"
-    mock_model.generate_content.return_value = mock_resp
+def test_gemini_provider(genai_mock, monkeypatch):
+    _setup_genai_mock(genai_mock, text="gemini response")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
 
-    # Mock embeddings
-    mock_emb_item = MagicMock()
-    mock_emb_item.embedding = [0.1, 0.2]
-    mock_emb_resp = MagicMock()
-    mock_emb_resp.data = [mock_emb_item]
-    mock_genai.embeddings.create.return_value = mock_emb_resp
+    p = GeminiProvider(embedding_model="models/embedding-001")
+    assert p.send("hello") == "gemini response"
 
-    with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
-        provider = GeminiProvider(embedding_model="models/embedding-001")
-        assert provider.send("hello") == "gemini response"
-
-        # RAG index
-        provider.index_document("doc1", "gemini chunk text")
-        
-        # RAG query
-        res = provider.send_with_rag("hello query")
-        assert res == "gemini response"
+    p.index_document("doc1", "gemini chunk text")
+    assert p.send_with_rag("hello query") == "gemini response"
 
 
-# ---------------------------------------------------------
-# CohereProvider Tests
-# ---------------------------------------------------------
+# CohereProvider
 @patch("cohere.Client")
-def test_cohere_provider(mock_cohere_client_cls):
-    mock_client = MagicMock()
-    mock_cohere_client_cls.return_value = mock_client
-    
-    # Mock chat response
-    mock_chat_resp = MagicMock()
-    mock_chat_resp.text = "cohere response"
-    mock_client.chat.return_value = mock_chat_resp
+def test_cohere_provider(cohere_client_cls, monkeypatch):
+    client = MagicMock()
+    cohere_client_cls.return_value = client
 
-    # Mock embed response
-    mock_embed_resp = MagicMock()
-    mock_embed_resp.embeddings = [[0.1, 0.2]]
-    mock_client.embed.return_value = mock_embed_resp
+    chat_resp = MagicMock()
+    chat_resp.text = "cohere response"
+    client.chat.return_value = chat_resp
 
-    with patch.dict(os.environ, {"COHERE_API_KEY": "test-key"}):
-        provider = CohereProvider(rag_enabled=True)
-        assert provider.send("hello") == "cohere response"
+    embed_resp = MagicMock()
+    embed_resp.embeddings = [[0.1, 0.2]]
+    client.embed.return_value = embed_resp
 
-        # Upsert docs
-        provider.upsert_documents(["cohere document"])
-        
-        # Test query
-        results = provider.query_documents("query")
-        assert len(results) > 0
+    monkeypatch.setenv("COHERE_API_KEY", "test-key")
+
+    p = CohereProvider(rag_enabled=True)
+    assert p.send("hello") == "cohere response"
+
+    p.upsert_documents(["cohere document"])
+    results = p.query_documents("query")
+    assert results
 
 
-# ---------------------------------------------------------
-# DeepSeekProvider Tests
-# ---------------------------------------------------------
+# DeepSeekProvider
 @patch("ai_cli.providers.deepseek_provider.OpenAI")
-def test_deepseek_provider(mock_openai_class):
-    mock_client = MagicMock()
-    mock_openai_class.return_value = mock_client
-    
-    # Mock chat response
-    mock_choice = MagicMock()
-    mock_choice.message.content = "deepseek response"
-    mock_resp = MagicMock()
-    mock_resp.choices = [mock_choice]
-    mock_client.chat.completions.create.return_value = mock_resp
+def test_deepseek_provider(openai_mock, monkeypatch):
+    _setup_openai_mock(openai_mock, chat_text="deepseek response", embedding_vec=[0.1, 0.2])
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
 
-    # Mock embed response
-    mock_emb_item = MagicMock()
-    mock_emb_item.embedding = [0.1, 0.2]
-    mock_emb_resp = MagicMock()
-    mock_emb_resp.data = [mock_emb_item]
-    mock_client.embeddings.create.return_value = mock_emb_resp
+    p = DeepSeekProvider()
+    assert p.ask("hello") == "deepseek response"
 
-    with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}):
-        provider = DeepSeekProvider()
-        assert provider.ask("hello") == "deepseek response"
-        
-        # Embeddings
-        embs = provider.embeddings(["hello"])
-        assert len(embs) == 1
-        assert embs[0] == [0.1, 0.2]
+    embs = p.embeddings(["hello"])
+    assert len(embs) == 1 and embs[0] == [0.1, 0.2]
 
 
-# ---------------------------------------------------------
-# PerplexityProvider Tests
-# ---------------------------------------------------------
+# PerplexityProvider
 @patch("ai_cli.providers.perplexity_provider.OpenAI")
-def test_perplexity_provider(mock_openai_class):
-    mock_client = MagicMock()
-    mock_openai_class.return_value = mock_client
-    
-    # Mock chat response
-    mock_choice = MagicMock()
-    mock_choice.message.content = "perplexity response"
-    mock_resp = MagicMock()
-    mock_resp.choices = [mock_choice]
-    mock_client.chat.completions.create.return_value = mock_resp
+def test_perplexity_provider(openai_mock, monkeypatch):
+    _setup_openai_mock(openai_mock, chat_text="perplexity response", embedding_vec=[0.1, 0.2])
+    monkeypatch.setenv("PERPLEXITY_API_KEY", "test-key")
 
-    # Mock embeddings
-    mock_emb_item = MagicMock()
-    mock_emb_item.embedding = [0.1, 0.2]
-    mock_emb_resp = MagicMock()
-    mock_emb_resp.data = [mock_emb_item]
-    mock_client.embeddings.create.return_value = mock_emb_resp
+    p = PerplexityProvider()
+    assert p.send("hello") == "perplexity response"
 
-    with patch.dict(os.environ, {"PERPLEXITY_API_KEY": "test-key"}):
-        provider = PerplexityProvider()
-        assert provider.send("hello") == "perplexity response"
-
-        # RAG index
-        provider.build_rag_index(["perplexity document"])
-        
-        # RAG query
-        ans, hits = provider.query_with_rag("query")
-        assert ans == "perplexity response"
+    p.build_rag_index(["perplexity document"])
+    ans, hits = p.query_with_rag("query")
+    assert ans == "perplexity response"
 
 
-# ---------------------------------------------------------
-# XAIProvider Tests
-# ---------------------------------------------------------
+# XAIProvider
 @patch("ai_cli.providers.xAI_provider.OpenAI")
-def test_xai_provider(mock_openai_class):
-    mock_client = MagicMock()
-    mock_openai_class.return_value = mock_client
-    
-    # Mock chat response
-    mock_choice = MagicMock()
-    mock_choice.message.content = "xai response"
-    mock_resp = MagicMock()
-    mock_resp.choices = [mock_choice]
-    mock_client.chat.completions.create.return_value = mock_resp
+def test_xai_provider(openai_mock, monkeypatch):
+    _setup_openai_mock(openai_mock, chat_text="xai response", embedding_vec=[0.1, 0.2])
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
 
-    # Mock embeddings
-    mock_emb_item = MagicMock()
-    mock_emb_item.embedding = [0.1, 0.2]
-    mock_emb_resp = MagicMock()
-    mock_emb_resp.data = [mock_emb_item]
-    mock_client.embeddings.create.return_value = mock_emb_resp
+    p = XAIProvider()
+    assert p.send("hello") == "xai response"
 
-    with patch.dict(os.environ, {"XAI_API_KEY": "test-key"}):
-        provider = XAIProvider()
-        assert provider.send("hello") == "xai response"
-
-        # RAG index
-        provider.add_documents(["xai document"])
-        
-        # RAG send
-        ans = provider.send_rag("query")
-        assert ans == "xai response"
+    p.add_documents(["xai document"])
+    assert p.send_rag("query") == "xai response"
