@@ -25,6 +25,9 @@ from ai_cli.providers.base import AIProvider
 
 
 class OpenAIProvider(AIProvider):
+    BASE_URL = "https://api.openai.com/v1"
+    DEFAULT_CHAT_MODEL = "gpt-5.5"
+    DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
     def __init__(
         self,
         model: Optional[str] = None,
@@ -32,21 +35,19 @@ class OpenAIProvider(AIProvider):
         *args,
         **kwargs,
     ) -> None:
-        super().__init__(provider_name="openai", model=model or "gpt-5.5")
+        super().__init__(
+            provider_name="openai",
+            model=model or self.DEFAULT_CHAT_MODEL,
+        )
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ProviderRequestError("OPENAI_API_KEY environment variable is not set")
 
         if OpenAI is None:
             raise ProviderRequestError(
                 "The 'openai' package is not installed; install it with 'pip install openai'."
             )
 
-        self.client = OpenAI(api_key=self.api_key, base_url=self.BASE_URL)
+        self.client = OpenAI(api_key=self.api_key)
 
-        # In-memory vector store (numpy array of shape (N, D)) and metadata list
-        self._vectors = None  # type: Optional[Any]
-        self._metadatas: List[Dict[str, Any]] = []
         # In-memory vector store (numpy array of shape (N, D)) and metadata list
         self._vectors = None  # type: Optional[Any]
         self._metadatas: List[Dict[str, Any]] = []

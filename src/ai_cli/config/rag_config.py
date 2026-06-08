@@ -9,12 +9,18 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
-# Backward compatibility exports
+# Legacy compatibility constants
 # ------------------------------------------------------------------
 
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 TOP_K = 5
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+FAISS_INDEX_PATH = "index.faiss"
+METADATA_PATH = "metadata.json"
+VECTOR_STORE_TYPE = "faiss"
+SIMILARITY_METRIC = "cosine"
+RECREATE_INDEX = False
 
 
 @dataclass

@@ -38,65 +38,72 @@ class EmbeddingGenerator:
         normalize: bool = True,
         device: Optional[str] = None,
     ) -> None:
-        # Allow passing an instantiated model or a model name
+        """
+        Initialize embedding generator.
+
+        Args:
+            model: SentenceTransformer model name or instantiated model.
+            batch_size: Encoding batch size.
+            normalize: Whether to L2-normalize embeddings.
+            device: Optional device ("cpu", "cuda", "mps", etc.).
+        """
         self.batch_size = batch_size
         self.normalize = normalize
         self.device = device
 
-        # Import sentence-transformers lazily if needed
-        SentenceTransformerCls = None
-        if isinstance(model, str):
-            try:
-                st_mod = importlib.import_module("sentence_transformers")
-                SentenceTransformerCls = getattr(st_mod, "SentenceTransformer")
-            except Exception:
-                raise ImportError(
-                    "The 'sentence-transformers' package is required but not installed. "
-                    "Install it with: pip install sentence-transformers"
-                )
-
-        # Import numpy lazily and store reference on instance
+        # Import sentence-transformers lazily
         try:
-            import numpy as numpy  # type: ignore
-        except Exception:
+            from sentence_transformers import SentenceTransformer
+        except Exception as exc:
             raise ImportError(
-                "The 'numpy' package is required but not installed. "
-                "Install it with: pip install numpy"
-            )
-        self.np = numpy
+                "The 'sentence-transformers' package is required. "
+                "Install it with: pip install sentence-transformers"
+            ) from exc
 
-        # instantiate or use provided model
+        # Create or use supplied model
         if isinstance(model, str):
-            self.model: Any = SentenceTransformerCls(model)
+            self.model: Any = SentenceTransformer(model)
         else:
             self.model = model
 
-        # try to move model to requested device if supported
+        # Move model to requested device if supported
         if self.device is not None:
-            # SentenceTransformer has .to(), custom models may also
             try:
                 to_fn = getattr(self.model, "to", None)
                 if callable(to_fn):
                     to_fn(self.device)
             except Exception:
-                # best-effort: ignore if model doesn't support moving
                 pass
 
+        # Import numpy lazily
+        try:
+            import numpy as np
+        except Exception as exc:
+            raise ImportError(
+                "The 'numpy' package is required but not installed. "
+                "Install it with: pip install numpy"
+            ) from exc
+        self.np = np
+
     def _postprocess(self, emb: Any) -> Any:
+        """
+        Normalize embeddings if requested.
+        """
         if not self.normalize:
             return emb
+        np = getattr(self, "np", None)
 
-        np = self.np
         if np is None:
-            raise ImportError("numpy is required for normalization")
-
+             import numpy as np
         arr = np.asarray(emb)
+        # Single vector
         if arr.ndim == 1:
             norm = np.linalg.norm(arr)
             if norm == 0:
                 norm = 1.0
             return arr / norm
 
+        # Batch of vectors
         norms = np.linalg.norm(arr, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         return arr / norms
@@ -133,8 +140,9 @@ class EmbeddingGenerator:
         # prefer convert_to_numpy when available
         encode_kwargs["convert_to_numpy"] = True
         # some versions accept device
-        if self.device is not None:
-            encode_kwargs["device"] = self.device
+        device = getattr(self, "device", None)
+        if device is not None:
+            encode_kwargs["device"] = device
 
         # attempt to pass supported kwargs only
         try:
