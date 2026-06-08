@@ -44,6 +44,8 @@ class DeepSeekProvider:
                              or os.getenv("DEEPSEEK_EMBEDDING_MODEL")
                              or self.DEFAULT_EMBED_MODEL
                             )
+         # ✅ REQUIRED: OpenAI-compatible client
+         self.client = OpenAI(api_key=self.api_key)
 
      @property
      def provider_name(self) -> str:
