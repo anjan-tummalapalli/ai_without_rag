@@ -106,8 +106,8 @@ Files changed/added for Advanced RAG:
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/yourusername/zai-cli.git
-cd zai-cli
+git clone https://github.com/yourusername/ai-cli.git
+cd ai-cli
 
 poetry install
 
@@ -141,44 +141,44 @@ EMBED_MODEL=text-embedding-3-small
 
 ```bash
 # Single prompt
-zai-cli -q "Explain Kubernetes operators"
+ai-cli -q "Explain Kubernetes operators"
 
 # Index a docs folder to Qdrant using sentence-transformers
-zai-cli rag index docs/ --db qdrant --namespace docs-2026 \
+ai-cli rag index docs/ --db qdrant --namespace docs-2026 \
   --embed-model all-MiniLM-L6-v2 --chunk-size 1000 \
   --chunk-overlap 200
 
 # Query RAG pipeline (auto retrieval + augmentation)
-zai-cli --rag --rag-db qdrant --rag-namespace docs-2026 \
+ai-cli --rag --rag-db qdrant --rag-namespace docs-2026 \
   -q "Summarize our security model" --rag-k 5
 
 # Re-embed an index with a new model
-zai-cli rag reembed --db qdrant --namespace docs-2026 \
+ai-cli rag reembed --db qdrant --namespace docs-2026 \
   --from-model all-MiniLM-L6-v2 --to-model multi-qa-MiniLM
 ```
 
 Usage instructions (common workflows):
 - Index a folder to a vector DB:
-  zai-cli rag index <path> --db <db> --namespace <name> --embed-model <m>
+  ai-cli rag index <path> --db <db> --namespace <name> --embed-model <m>
 - Query a namespace:
-  zai-cli rag query --db <db> --namespace <name> --k <N> --filter '<JSON>' \
+  ai-cli rag query --db <db> --namespace <name> --k <N> --filter '<JSON>' \
     --hybrid-weight 0.5 "QUERY"
 - Re-embed an existing namespace:
-  zai-cli rag reembed --db <db> --namespace <name> --from-model X --to-model Y
+  ai-cli rag reembed --db <db> --namespace <name> --from-model X --to-model Y
 - Check index status:
-  zai-cli rag status --db <db> --namespace <name>
+  ai-cli rag status --db <db> --namespace <name>
 
 ---
 
 ## CLI RAG Commands & Flags (Highlights)
 
-- zai-cli rag index <path> [--db DB] [--namespace NAME]
+- ai-cli rag index <path> [--db DB] [--namespace NAME]
   [--embed-model MODEL] [--chunk-size N] [--chunk-overlap M]
   [--embed-batch-size B]
-- zai-cli rag query --db DB --namespace NAME --k N
+- ai-cli rag query --db DB --namespace NAME --k N
   --filter '{"key":"value"}' [--hybrid-weight 0.5] "QUERY"
-- zai-cli rag status --db DB --namespace NAME
-- zai-cli rag reembed --db DB --namespace NAME --from-model X
+- ai-cli rag status --db DB --namespace NAME
+- ai-cli rag reembed --db DB --namespace NAME --from-model X
   --to-model Y
 
 Common flags:
@@ -195,11 +195,11 @@ Common flags:
 ## Python API (Examples)
 
 ```python
-from zai_cli.rag.ingest import ingest_documents, chunk_documents, \
+from ai_cli.rag.ingest import ingest_documents, chunk_documents, \
   embed_documents
-from zai_cli.rag.pipeline import RAGPipeline
-from zai_cli.rag.indexers.registry import IndexerRegistry
-from zai_cli.rag.embeddings import EmbedderRegistry
+from ai_cli.rag.pipeline import RAGPipeline
+from ai_cli.rag.indexers.registry import IndexerRegistry
+from ai_cli.rag.embeddings import EmbedderRegistry
 
 # Ingest (parse -> chunk -> embed -> index)
 ingest_documents(path="docs/", db="qdrant", namespace="project-arch",
@@ -254,12 +254,12 @@ pytest tests/test_indexers.py -k qdrant -v
 ## Observability & Monitoring
 
 New metrics:
-- zai_rag_documents_indexed_total
-- zai_rag_index_latency_seconds
-- zai_rag_retrieval_requests_total
-- zai_rag_retrieval_latency_seconds
-- zai_rag_embedding_requests_total
-- zai_rag_hybrid_query_hits_total
+- ai_rag_documents_indexed_total
+- ai_rag_index_latency_seconds
+- ai_rag_retrieval_requests_total
+- ai_rag_retrieval_latency_seconds
+- ai_rag_embedding_requests_total
+- ai_rag_hybrid_query_hits_total
 
 Add Prometheus scrape configs for indexer services when deployed.
 
