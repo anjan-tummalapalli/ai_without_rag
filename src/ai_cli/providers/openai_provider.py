@@ -264,3 +264,15 @@ class OpenAIProvider(AIProvider):
             self._metadatas = metadatas
         except Exception as exc:
             raise ProviderRequestError(f"Failed to load vector store: {exc}") from exc
+
+class OpenAIEmbeddingProvider:
+    def __init__(self, model="text-embedding-3-small", api_key=None):
+        self.model = model
+        self.client = OpenAI(api_key=api_key)
+
+    def embed(self, texts):
+        resp = self.client.embeddings.create(
+            model=self.model,
+            input=texts,
+        )
+        return [d.embedding for d in resp.data]

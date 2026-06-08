@@ -33,22 +33,26 @@ def register_provider(name: str, provider_cls: Type[AIProvider], metadata: Provi
     PROVIDER_METADATA[key] = metadata
 
 
-def build_provider(*, provider_name: str, **kwargs) -> AIProvider:
-    """
-    Create a provider instance by name.
-    """
-    key = provider_name.lower()
-    if key not in PROVIDERS:
-        available = ", ".join(sorted(PROVIDERS.keys()))
-        raise ValueError(f"Unknown provider '{provider_name}'. Available providers: {available}")
-    provider_cls = PROVIDERS[key]
-    if not callable(provider_cls):
-        raise TypeError(f"Registered provider for '{provider_name}' is not callable")
-    return provider_cls(**kwargs)
-
-
 def load_plugins() -> None:
     """
     Placeholder for plugin loading to preserve compatibility with imports.
     """
     return None
+
+def build_provider(*, provider_name: str, **kwargs):
+    key = provider_name.lower()
+    if key not in PROVIDERS:
+        available = ", ".join(sorted(PROVIDERS.keys()))
+        raise ValueError(f"Unknown provider '{provider_name}'. Available: {available}")
+    provider_cls = PROVIDERS[key]
+    return provider_cls(**kwargs)
+
+def get_chat_provider(provider_name: str, **kwargs):
+    key = provider_name.lower()
+    if key not in PROVIDERS:
+        available = ", ".join(sorted(PROVIDERS.keys()))
+        raise ValueError(
+            f"Unknown provider '{provider_name}'. Available providers: {available}"
+        )
+    provider_cls = PROVIDERS[key]
+    return provider_cls(**kwargs)

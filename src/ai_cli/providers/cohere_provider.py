@@ -35,7 +35,7 @@ class CohereProvider(AIProvider):
     model: Cohere model name, default "command-r".
     api_key: Cohere API key or use COHERE_API_KEY env var.
     rag_enabled: enable Retrieval Augmented Generation.
-    embed_model: embedding model, default "embed-english-v2.0".
+    embedding_model: embedding model, default "embed-english-v2.0".
     chunk_size: char chunk size, default 500.
     chunk_overlap: char overlap between chunks, default 50.
     vector_store_backend: backend for vector DB, default "memory".
@@ -46,7 +46,7 @@ class CohereProvider(AIProvider):
         model: Optional[str] = None,
         api_key: Optional[str] = None,
         rag_enabled: bool = False,
-        embed_model: Optional[str] = None,
+        embedding_model: Optional[str] = None,
         chunk_size: int = 500,
         chunk_overlap: int = 50,
         vector_store_backend: str = "memory",
@@ -75,7 +75,7 @@ class CohereProvider(AIProvider):
 
         # RAG configuration
         self.rag_enabled = rag_enabled
-        self.embed_model = embed_model or "embed-english-v2.0"
+        self.embedding_model = embedding_model or "embed-english-v2.0"
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.vector_store_backend = vector_store_backend
@@ -124,7 +124,7 @@ class CohereProvider(AIProvider):
             return []
 
         try:
-            resp = self.client.embed(model=self.embed_model, texts=texts)
+            resp = self.client.embed(model=self.embedding_model, texts=texts)
             if not hasattr(resp, "embeddings"):
                 raise ProviderRequestError(
                     "Cohere embed response missing embeddings field"

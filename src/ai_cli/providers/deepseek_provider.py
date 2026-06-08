@@ -34,12 +34,7 @@ class DeepSeekProvider:
      DEFAULT_EMBED_MODEL = "text-embedding-3-small"
      BASE_URL = "https://api.deepseek.com"
 
-     def __init__(
-          self,
-          api_key: str | None = None,
-          model: str | None = None,
-          embed_model: str | None = None,
-     ) -> None:
+     def __init__(self, *, model=None, api_key=None, **kwargs):
           self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
           if not self.api_key:
                 raise ValueError("DEEPSEEK_API_KEY not set")
