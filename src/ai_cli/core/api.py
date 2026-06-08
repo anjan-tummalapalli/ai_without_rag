@@ -50,7 +50,13 @@ logger = logging.getLogger("ai_gateway")
 load_plugins()
 
 
-def ask(prompt, provider, model=None, api_key=None, embedding_model=None):
+def ask(
+    prompt: str,
+    provider: str = "auto",
+    model: str | None = None,
+    api_key: str | None = None,
+    embedding_model: str | None = None,
+    timeout: float | None = None):
     """
     High-level convenience function to ask a provider a prompt.
 

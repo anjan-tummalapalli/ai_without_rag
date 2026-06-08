@@ -39,20 +39,13 @@ def load_plugins() -> None:
     """
     return None
 
-def build_provider(*, provider_name: str, **kwargs):
-    key = provider_name.lower()
-    if key not in PROVIDERS:
-        available = ", ".join(sorted(PROVIDERS.keys()))
-        raise ValueError(f"Unknown provider '{provider_name}'. Available: {available}")
-    provider_cls = PROVIDERS[key]
-    return provider_cls(**kwargs)
+def build_provider(provider_name: str, **kwargs):
+    cls = PROVIDER_MAP.get(provider_name)
+    if not cls:
+        raise ValueError(f"Unknown provider: {provider_name}")
+    return cls(**kwargs)
 
-def get_chat_provider(provider_name: str, **kwargs):
-    key = provider_name.lower()
-    if key not in PROVIDERS:
-        available = ", ".join(sorted(PROVIDERS.keys()))
-        raise ValueError(
-            f"Unknown provider '{provider_name}'. Available providers: {available}"
-        )
-    provider_cls = PROVIDERS[key]
-    return provider_cls(**kwargs)
+def get_chat_provider(provider_name: str = "auto", **kwargs):
+    if provider_name == "auto":
+        return AutoProvider()
+    return build_provider(provider_name, **kwargs)

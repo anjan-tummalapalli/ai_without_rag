@@ -1,32 +1,36 @@
 from abc import ABC, abstractmethod
-from typing import List, Any
-
+from typing import Any, Optional
 
 class ChatProvider(ABC):
-    def __init__(self, *, model: str, api_key: str | None = None):
-        self.model = model
-        self.api_key = api_key
 
     @abstractmethod
-    def send(self, prompt: str, **kwargs) -> str:
-        pass
+    def chat(
+        self,
+        prompt: str,
+        *,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        timeout: Optional[float] = None,
+        **kwargs: Any,
+    ) -> str:
 
 
 class EmbeddingProvider(ABC):
-    def __init__(self, *, model: str, api_key: str | None = None):
-        self.model = model
-        self.api_key = api_key
-
     @abstractmethod
-    def embed(self, texts: List[str]) -> List[List[float]]:
-        pass
+    def embed(
+        self,
+        texts: list[str],
+        *,
+        model: Optional[str] = None,
+        **kwargs: Any,
+    ) -> list[list[float]]:
 
+    
 
-class RAGProvider(ABC):
-    def __init__(self, chat: ChatProvider, embeddings: EmbeddingProvider):
-        self.chat = chat
-        self.embeddings = embeddings
-
-    @abstractmethod
-    def ask(self, query: str, docs: List[str]) -> str:
-        pass
+class RAGProvider(ChatProvider, EmbeddingProvider):
+    """
+    Optional extension interface.
+    """
+    def add_documents(self, docs: list[str]) -> None:
