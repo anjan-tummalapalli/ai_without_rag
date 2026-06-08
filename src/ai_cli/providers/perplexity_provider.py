@@ -45,15 +45,10 @@ class PerplexityProvider(AIProvider):
         super().__init__(provider_name="perplexity", model=model or "sonar-pro", api_key=api_key, *args, **kwargs)
 
         if OpenAI is None:
-            # lazy import to provide a helpful error if package missing
-            global OpenAI
-            try:
-                from openai import OpenAI as _OpenAI  # type: ignore
-                OpenAI = _OpenAI
-            except Exception:
-                raise ProviderRequestError(
-                    "The 'openai' package is required to use PerplexityProvider; install it with `pip install openai`"
-                )
+            raise ProviderRequestError(
+            "The 'openai' package is required to use PerplexityProvider; "
+            "install it with `pip install openai`"
+            )
 
         # single client initialization
         self.client = OpenAI(api_key=self.api_key, base_url=self.BASE_URL)
