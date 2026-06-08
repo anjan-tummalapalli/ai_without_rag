@@ -33,23 +33,17 @@ class DeepSeekProvider:
      DEFAULT_MODEL = "deepseek-v4-flash"
      DEFAULT_EMBED_MODEL = "text-embedding-3-small"
      BASE_URL = "https://api.deepseek.com"
-
-     def __init__(self, *, model=None, api_key=None, **kwargs):
-          self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
-          if not self.api_key:
-                raise ValueError("DEEPSEEK_API_KEY not set")
-
-          self.model = model or os.getenv("DEEPSEEK_MODEL") or self.DEFAULT_MODEL
-          self.embed_model = (
-                embed_model
-                or os.getenv("DEEPSEEK_EMBEDDING_MODEL")
-                or self.DEFAULT_EMBED_MODEL
-          )
-
-          self.client = OpenAI(
-                api_key=self.api_key,
-                base_url=self.BASE_URL,
-          )
+     
+     def __init__(self, model=None, api_key=None, embed_model=None, **kwargs):
+         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+         if not self.api_key:
+             raise ValueError("DEEPSEEK_API_KEY not set")
+         self.model = model or os.getenv("DEEPSEEK_MODEL") or self.DEFAULT_MODEL
+         self.embed_model = (
+                             embed_model
+                             or os.getenv("DEEPSEEK_EMBEDDING_MODEL")
+                             or self.DEFAULT_EMBED_MODEL
+                            )
 
      @property
      def provider_name(self) -> str:
