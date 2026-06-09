@@ -54,10 +54,10 @@ def ask(
         api_key = os.getenv(f"{provider.upper()}_API_KEY")
 
     ai_provider = build_provider(
-        provider_name=provider,
-        model=model,
-        api_key=api_key,
-    )
+                                 name=provider,
+                                 model=model,
+                                 api_key=api_key,
+                                )
 
 
 # --- Advanced RAG helpers: chunking, embeddings, in-memory vector DB querying ---
