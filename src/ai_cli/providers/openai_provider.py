@@ -24,11 +24,8 @@ from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider
 from ai_cli.providers.registry import register_provider
 
-register_provider("openai", OpenAIProvider)
-
 class OpenAIProvider(AIProvider):
     PROVIDER_NAME = "openai"
-    PROVIDER_CLASS = OpenAIProvider
     BASE_URL = "https://api.openai.com/v1"
     DEFAULT_CHAT_MODEL = "gpt-5.5"
     DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
@@ -280,3 +277,13 @@ class OpenAIEmbeddingProvider:
             input=texts,
         )
         return [d.embedding for d in resp.data]
+
+from ai_cli.providers.registry import (
+    register_provider,
+    register_chat_provider,
+    register_embedding_provider,
+)
+
+register_provider("openai", OpenAIProvider)
+register_chat_provider("openai", OpenAIProvider)
+register_embedding_provider("openai_embedding", OpenAIEmbeddingProvider)

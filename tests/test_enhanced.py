@@ -58,3 +58,9 @@ def test_provider_contract():
 
 def test_no_import_crash():
     import ai_cli.core.service.ask_service
+
+def test_registry_is_deterministic():
+    from ai_cli.providers.registry import PROVIDER_MAP, list_providers
+    providers = list_providers()
+    assert isinstance(PROVIDER_MAP, dict)
+    assert providers == sorted(providers)
