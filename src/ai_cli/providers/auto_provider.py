@@ -36,3 +36,7 @@ class AutoProvider:
         raise ProviderRequestError(
             f"Auto fallback exhausted. Errors: {errors_str}"
         )
+    
+    provider = provider_cls(**kwargs)
+    if not hasattr(provider, "chat"):
+        raise TypeError("Invalid provider contract")

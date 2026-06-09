@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import logging
 from typing import List, Sequence, Dict, Any, Optional, Tuple
 
@@ -14,12 +15,7 @@ from ai_cli.providers.perplexity_provider import PerplexityProvider
 from ai_cli.providers.xAI_provider import XAIProvider
 from ai_cli.providers.zAI_provider import ZAIProvider
 from ai_cli.providers.registry import get_chat_provider
-from ai_cli.providers.openai_provider import OpenAIEmbeddingProvider
 
-emb_provider = OpenAIEmbeddingProvider(
-                                       model="text-embedding-3-small",
-                                       api_key=api_key
-                                      )
 
 CHAT_PROVIDERS = {
     "openai": OpenAIProvider,
@@ -30,12 +26,6 @@ CHAT_PROVIDERS = {
     "xai": XAIProvider,
     "zai": ZAIProvider,
 }
-
-ai_provider = build_provider(
-                             provider_name=provider,
-                             model=model,
-                             api_key=api_key,
-                            )
 
 def get_chat_provider(name: str, **kwargs):
     key = name.lower().strip()
@@ -56,74 +46,18 @@ def ask(
     model: str | None = None,
     api_key: str | None = None,
     embedding_model: str | None = None,
-    timeout: float | None = None):
-    """
-    High-level convenience function to ask a provider a prompt.
+    timeout: float | None = None,
+):
+    import os
 
-    Unchanged behavior: validates inputs, builds provider, overrides timeout,
-    calls provider.send(prompt) and returns a stripped string or an "[ERROR]" string.
-    """
-    if not isinstance(provider, str):
-        return "[ERROR] provider must be string"
-    provider = provider.strip().lower()
-    if not provider:
-        return "[ERROR] provider is empty"
+    if api_key is None:
+        api_key = os.getenv(f"{provider.upper()}_API_KEY")
 
-    if provider not in ("auto", "echo") and provider not in PROVIDERS:
-        available = ", ".join(sorted(list(PROVIDERS.keys()) + ["auto", "echo"]))
-        return (
-            f"[ERROR] Invalid provider '{provider}'. "
-            f"Available providers: {available}"
-        )
-
-    if not isinstance(prompt, str):
-        return "[ERROR] prompt must be string"
-    prompt = prompt.strip()
-    if not prompt:
-        return "[ERROR] Invalid prompt"
-
-    if model is not None and provider != "auto":
-        if not isinstance(model, str):
-            return "[ERROR] model must be string"
-        model = model.strip()
-        if not model:
-            return "[ERROR] model is empty"
-
-    try:
-        ai_provider = get_chat_provider(
-                                        provider,
-                                        model=model,
-                                        api_key=api_key,
-                                       )
-
-        # We override timeout via the base class if provided
-        if timeout:
-            ai_provider.timeout = int(timeout)
-
-        response = ai_provider.send(prompt)
-
-        if not isinstance(response, str):
-            logger.error(
-                "invalid_response_type provider=%s type=%s",
-                provider,
-                type(response).__name__,
-            )
-            return "[ERROR] Invalid response type"
-        response = response.strip()
-        if not response:
-            return "[ERROR] Empty response"
-        return response
-    except AIProviderError as exc:
-        logger.error("ai_provider_error provider=%s error=%s", provider, exc)
-        return f"[ERROR] {exc}"
-    except Exception as exc:
-        logger.exception(
-            "unexpected_ask_failure provider=%s model=%s error=%s",
-            provider,
-            model,
-            exc,
-        )
-        return "[ERROR] Unexpected internal error. Check logs."
+    ai_provider = build_provider(
+        provider_name=provider,
+        model=model,
+        api_key=api_key,
+    )
 
 
 # --- Advanced RAG helpers: chunking, embeddings, in-memory vector DB querying ---

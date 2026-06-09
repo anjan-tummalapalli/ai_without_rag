@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from __future__ import annotations
-
 import time, uuid, logging, json
 import dataclasses as _dc
 from dataclasses import dataclass
@@ -12,6 +10,7 @@ from ai_cli.core.exceptions import ProviderRequestError, PromptValidationError
 from ai_cli.core.resilience import RetryEngine
 from ai_cli.utils.validation import ResponseValidator, HallucinationDetector
 from ai_cli.telemetry.monitoring import ModelQualityMetrics
+from ai_cli.providers.registry import register_chat_provider
 
 logger = logging.getLogger("ai_gateway")
 
@@ -32,6 +31,16 @@ class ProviderMetadata:
     avg_latency_ms: int
     supports_rag: bool = False
 
+
+@dataclass
+class ProviderConfig:
+    """
+    Configuration shared by provider implementations.
+    """
+    model: str | None = None
+    api_key: str | None = None
+    embedding_model: str | None = None
+    timeout: float | None = None
 
 class AIProvider(ABC):
     """
@@ -258,8 +267,20 @@ class AIProvider(ABC):
                 pass
             logger.debug("Provider request failed provider=%s model=%s trace=%s error=%s", getattr(self, "provider_name", "unknown"), getattr(self, "model", "unknown"), self.trace_id, exc)
             raise ProviderRequestError(str(exc)) from exc
+    
+    def ask(self, prompt: str, **kwargs) -> str:
+        """
+        Backward-compatible chat interface.
+        """
+        return self.send(prompt)
 
+    def chat(self, prompt: str) -> str:
+        """
+        Compatibility wrapper for legacy provider contract.
+        """
+        return self.send(prompt)
 
+@register_chat_provider("echo")
 class EchoProvider(AIProvider):
     """Local echo provider used for testing and defaults."""
 

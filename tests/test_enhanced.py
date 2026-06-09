@@ -49,3 +49,12 @@ def test_embedding_generator_smoke():
     result = emb.embed_text("hello")
     assert isinstance(result, np.ndarray)
     assert result.shape == (10,)
+
+def test_provider_contract():
+    from ai_cli.providers.registry import build_provider
+    p = build_provider("echo", config={})
+    assert hasattr(p, "chat")
+    assert isinstance(p.chat("hello"), str)
+
+def test_no_import_crash():
+    import ai_cli.core.service.ask_service

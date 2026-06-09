@@ -1,51 +1,53 @@
-from typing import Type, Dict
-from ai_cli.providers.base import EchoProvider, AIProvider, ProviderMetadata
-from ai_cli.providers.openai_provider import OpenAIProvider
-from ai_cli.providers.gemini_provider import GeminiProvider
-from ai_cli.providers.cohere_provider import CohereProvider
-from ai_cli.providers.deepseek_provider import DeepSeekProvider
-from ai_cli.providers.perplexity_provider import PerplexityProvider
-from ai_cli.providers.xAI_provider import XAIProvider
-from ai_cli.providers.zAI_provider import ZAIProvider
+from typing import Type
+from ai_cli.providers.contracts import (
+    ChatProvider,
+    EmbeddingProvider,
+    RAGProvider,
+)
 
-# Map provider name -> provider class
-PROVIDERS: Dict[str, Type[AIProvider]] = {
-    "echo": EchoProvider,
-    "openai": OpenAIProvider,
-    "gemini": GeminiProvider,
-    "cohere": CohereProvider,
-    "deepseek": DeepSeekProvider,
-    "perplexity": PerplexityProvider,
-    "xai": XAIProvider,
-    "zai": ZAIProvider,
-}
+CHAT_PROVIDERS: dict[str, Type] = {}
+EMBEDDING_PROVIDERS: dict[str, Type] = {}
+RAG_PROVIDERS: dict[str, Type] = {}
+# Legacy compatibility
+PROVIDER_MAP: dict[str, Type] = {}
+PROVIDERS = PROVIDER_MAP
 
-# Separate metadata map to avoid storing metadata in the provider-class map
-PROVIDER_METADATA: Dict[str, ProviderMetadata] = {}
+def register_chat_provider(name: str):
+    def decorator(cls):
+        CHAT_PROVIDERS[name] = cls
+        PROVIDER_MAP[name] = cls
+        return cls
+    return decorator
 
-# Backward compatibility alias
-PROVIDER_MAP = PROVIDERS
+def register_embedding_provider(name: str):
+    def decorator(cls):
+        EMBEDDING_PROVIDERS[name] = cls
+        return cls
+    return decorator
 
-def register_provider(name: str, provider_cls: Type[AIProvider], metadata: ProviderMetadata) -> None:
-    """Register a provider class and its metadata under a normalized name."""
-    key = name.lower()
-    PROVIDERS[key] = provider_cls
-    PROVIDER_METADATA[key] = metadata
+def register_rag_provider(name: str):
+    def decorator(cls):
+        RAG_PROVIDERS[name] = cls
+        PROVIDER_MAP[name] = cls
+        return cls
+    return decorator
 
+def build_provider(name: str, **kwargs):
+    cls = PROVIDER_MAP.get(name)
+    if cls is None:
+        raise ValueError(f"Unknown provider: {name}")
+    return cls(**kwargs)
+
+def get_chat_provider(name: str, **kwargs):
+    cls = CHAT_PROVIDERS.get(name)
+    if cls is None:
+        raise ValueError(f"Unknown chat provider: {name}")
+    return cls(**kwargs)
 
 def load_plugins() -> None:
     """
-    Placeholder for plugin loading to preserve compatibility with imports.
+    Backward compatibility shim.
+    Providers are registered during module import,
+    so no plugin loading is required.
     """
     return None
-
-def build_provider(provider_name: str, **kwargs):
-    cls = PROVIDER_MAP.get(provider_name)
-    if not cls:
-        raise ValueError(f"Unknown provider: {provider_name}")
-    return cls(**kwargs)
-
-def get_chat_provider(provider_name: str = "auto", **kwargs):
-    if provider_name == "auto":
-        return AutoProvider()
-    return build_provider(provider_name, **kwargs)

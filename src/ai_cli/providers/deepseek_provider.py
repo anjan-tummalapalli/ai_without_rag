@@ -39,8 +39,7 @@ class DeepSeekProvider:
                   model: str | None = None,
                   api_key: str | None = None,
                   embed_model: str | None = None,
-                  **kwargs,
-                 ):
+                  ):
           self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
           if not self.api_key:
                raise ValueError("DEEPSEEK_API_KEY not set")
@@ -49,9 +48,12 @@ class DeepSeekProvider:
                               embed_model
                               or os.getenv("DEEPSEEK_EMBEDDING_MODEL")
                               or self.DEFAULT_EMBED_MODEL
-                              )
+                             )
           # ✅ REQUIRED: OpenAI-compatible client
-          self.client = OpenAI(api_key=self.api_key)
+          self.client = OpenAI(
+                               api_key=self.api_key,
+                               base_url=self.BASE_URL,
+                              )
 
      @property
      def provider_name(self) -> str:
