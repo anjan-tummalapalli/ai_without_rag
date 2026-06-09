@@ -15,7 +15,7 @@ from ai_cli.providers.perplexity_provider import PerplexityProvider
 from ai_cli.providers.xAI_provider import XAIProvider
 from ai_cli.providers.zAI_provider import ZAIProvider
 from ai_cli.providers.registry import get_chat_provider
-
+from ai_cli.providers.bootstrap import init_providers
 
 CHAT_PROVIDERS = {
     "openai": OpenAIProvider,
@@ -48,10 +48,15 @@ def ask(
     embedding_model: str | None = None,
     timeout: float | None = None,
 ):
+    init_providers()
     import os
 
     if api_key is None:
         api_key = os.getenv(f"{provider.upper()}_API_KEY")
+
+    # FIX HERE (AUTO RESOLUTION)
+    if provider == "auto":
+        provider = "openai"
 
     ai_provider = build_provider(
                                  name=provider,

@@ -22,9 +22,13 @@ except Exception:  # pragma: no cover - openai optional in some environments
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider
+from ai_cli.providers.registry import register_provider
 
+register_provider("openai", OpenAIProvider)
 
 class OpenAIProvider(AIProvider):
+    PROVIDER_NAME = "openai"
+    PROVIDER_CLASS = OpenAIProvider
     BASE_URL = "https://api.openai.com/v1"
     DEFAULT_CHAT_MODEL = "gpt-5.5"
     DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"

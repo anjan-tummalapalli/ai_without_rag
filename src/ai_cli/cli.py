@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse, asyncio, hashlib, inspect, json, logging, math, os, sys, time, uuid
 from typing import Any, AsyncIterable, Dict, Iterable, List, Optional, Sequence
 
+from ai_cli.providers.bootstrap import init_providers
 from ai_cli.core.api import ask
 
 VERSION = "0.3.0"
@@ -587,6 +588,7 @@ def run_interactive(
 
 def main(argv: Sequence[str] | None = None) -> int:
         """Main CLI entrypoint."""
+        init_providers()
         parser = build_parser()
         args = parser.parse_args(argv)
 
