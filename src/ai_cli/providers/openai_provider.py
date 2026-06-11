@@ -48,6 +48,15 @@ class OpenAIProvider(AIProvider):
             )
 
         self.client = OpenAI(api_key=self.api_key)
+        from openai import OpenAI
+        import os
+
+        api_key = self.api_key or kwargs.get("api_key") or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("Missing OpenAI API key")
+
+        self.api_key = api_key
+        self.client = OpenAI(api_key=api_key)
 
         # In-memory vector store (numpy array of shape (N, D)) and metadata list
         self._vectors = None  # type: Optional[Any]

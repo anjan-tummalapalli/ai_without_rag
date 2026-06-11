@@ -1,6 +1,12 @@
 from __future__ import annotations
+
+import os
 from typing import Any, Type
 from importlib import import_module
+
+from ai_cli.providers.factory import build_provider as _build_provider
+
+from ai_cli.providers.spec import ProviderRequest
 
 _PROVIDER_SPECS = {
     "openai": (
@@ -43,19 +49,18 @@ def _ensure_initialized():
     init_providers()
     _INITIALIZED = True
 
+DEFAULT_PROVIDER = "openai"
+
 def build_provider(name: str, **kwargs):
-    cls = PROVIDER_MAP.get(name)
+    request = ProviderRequest(
+                              provider=name,
+                              model=kwargs.get("model"),
+                              api_key=kwargs.get("api_key"),
+                              kwargs=kwargs,
+                             )
+    return _build_provider(request)
 
-    if cls is None:
-        from ai_cli.providers.bootstrap import init_providers
-        init_providers()
 
-        cls = PROVIDER_MAP.get(name)
-
-    if cls is None:
-        raise ValueError(f"Unknown provider: {name}")
-
-    return cls(**kwargs)
 
 PROVIDER_MAP: dict[str, Type] = {}
 CHAT_PROVIDERS: dict[str, Type] = {}
