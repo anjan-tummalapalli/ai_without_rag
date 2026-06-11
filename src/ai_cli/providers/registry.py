@@ -3,9 +3,6 @@ from __future__ import annotations
 import os
 from typing import Any, Type
 from importlib import import_module
-
-from ai_cli.providers.factory import build_provider as _build_provider
-
 from ai_cli.providers.spec import ProviderRequest
 
 _PROVIDER_SPECS = {
@@ -51,14 +48,15 @@ def _ensure_initialized():
 
 DEFAULT_PROVIDER = "openai"
 
+PROVIDER_MAP = {}
+CHAT_PROVIDERS = {}
+
 def build_provider(name: str, **kwargs):
-    request = ProviderRequest(
-                              provider=name,
-                              model=kwargs.get("model"),
-                              api_key=kwargs.get("api_key"),
-                              kwargs=kwargs,
-                             )
-    return _build_provider(request)
+    key = name.lower()
+    if key not in PROVIDER_MAP:
+        raise ValueError(f"Unknown provider: {name}")
+    cls = PROVIDER_MAP[key]
+    return cls(**kwargs)
 
 
 
@@ -69,10 +67,8 @@ EMBEDDING_PROVIDERS: dict[str, Type] = {}
 def register_provider(name: str, cls: Type) -> None:
     PROVIDER_MAP[name] = cls
 
-def register_chat_provider(name: str, cls: Type) -> None:
-
+def register_chat_provider(name: str, cls):
     CHAT_PROVIDERS[name] = cls
-    PROVIDER_MAP[name] = cls
 
 def register_embedding_provider(name: str, cls: Type) -> None:
     EMBEDDING_PROVIDERS[name] = cls

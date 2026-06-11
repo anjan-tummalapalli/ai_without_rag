@@ -4,6 +4,8 @@ import argparse, asyncio, hashlib, inspect, json, logging, math, os, sys, time, 
 from typing import Any, AsyncIterable, Dict, Iterable, List, Optional, Sequence
 
 from ai_cli.providers.bootstrap import init_providers
+init_providers()
+
 from ai_cli.core.api import ask
 
 VERSION = "0.3.0"

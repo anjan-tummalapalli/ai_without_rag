@@ -22,7 +22,6 @@ except Exception:  # pragma: no cover - openai optional in some environments
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider
-from ai_cli.providers.registry import register_provider
 
 class OpenAIProvider(AIProvider):
     PROVIDER_NAME = "openai"
@@ -56,7 +55,13 @@ class OpenAIProvider(AIProvider):
             raise ValueError("Missing OpenAI API key")
 
         self.api_key = api_key
-        self.client = OpenAI(api_key=api_key)
+
+        api_key = self.api_key or os.getenv("OPENAI_API_KEY")
+
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY is required for OpenAIProvider")
+
+        self.client = OpenAI(api_key=self.api_key)
 
         # In-memory vector store (numpy array of shape (N, D)) and metadata list
         self._vectors = None  # type: Optional[Any]

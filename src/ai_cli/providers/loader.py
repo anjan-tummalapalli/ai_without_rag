@@ -1,9 +1,5 @@
 """
-Provider bootstrap loader.
-Deterministic.
-No filesystem scanning.
-No pkgutil.
-No import-order dependency.
+Provider bootstrap loader (deterministic, no side effects).
 """
 
 from ai_cli.providers.base import EchoProvider
@@ -13,6 +9,7 @@ from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.perplexity_provider import PerplexityProvider
 from ai_cli.providers.xAI_provider import XAIProvider
 from ai_cli.providers.zAI_provider import ZAIProvider
+
 
 def load_all_providers():
     return {
