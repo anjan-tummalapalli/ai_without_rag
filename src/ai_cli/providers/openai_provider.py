@@ -39,28 +39,14 @@ class OpenAIProvider(AIProvider):
             provider_name="openai",
             model=model or self.DEFAULT_CHAT_MODEL,
         )
+        # Resolve API key
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY is required for OpenAIProvider")
         if OpenAI is None:
             raise ProviderRequestError(
                 "The 'openai' package is not installed; install it with 'pip install openai'."
             )
-
-        self.client = OpenAI(api_key=self.api_key)
-        from openai import OpenAI
-        import os
-
-        api_key = self.api_key or kwargs.get("api_key") or os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("Missing OpenAI API key")
-
-        self.api_key = api_key
-
-        api_key = self.api_key or os.getenv("OPENAI_API_KEY")
-
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY is required for OpenAIProvider")
-
         self.client = OpenAI(api_key=self.api_key)
 
         # In-memory vector store (numpy array of shape (N, D)) and metadata list
@@ -94,9 +80,7 @@ class OpenAIProvider(AIProvider):
         except Exception:
             return False
 
-    @property
-    def provider_name(self) -> str:
-        return "openai"
+    
 
     # ----------------------------
     # RAG utility methods
@@ -283,6 +267,10 @@ class OpenAIProvider(AIProvider):
 class OpenAIEmbeddingProvider:
     def __init__(self, model="text-embedding-3-small", api_key=None):
         self.model = model
+        if OpenAI is None:
+            raise ProviderRequestError(
+                "The 'openai' package is not installed; install it with 'pip install openai'."
+            )
         self.client = OpenAI(api_key=api_key)
 
     def embed(self, texts):

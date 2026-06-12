@@ -1,7 +1,13 @@
+"""Token-aware sentence chunker with overlap and character spans.
+
+For a simpler sliding-window chunker, see ``ai_cli.rag.chunker``.
+"""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 import re
-from typing import List, Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 
 @dataclass

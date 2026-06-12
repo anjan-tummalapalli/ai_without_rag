@@ -76,12 +76,12 @@ class HallucinationDetector:
             reasons.append("response too short")
 
         for pattern in self.SUSPICIOUS_PATTERNS:
-            if re.search(pattern, response, re.IGNORECASE):
+            if pattern.lower() in response.lower():
                 score += 0.2
                 reasons.append(f"suspicious phrase: {pattern}")
 
         if "TODO" in response:
-            score += 0.3
+            score += 0.6
             reasons.append("placeholder content detected")
 
         score = min(score, 1.0)

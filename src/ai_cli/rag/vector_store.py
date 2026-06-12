@@ -28,7 +28,8 @@ class VectorStore:
     Stores an in-memory list of Chunk objects, a matching numpy.ndarray of embeddings
     (float32) and an optional persisted FAISS index on disk.
     """
-    def __init__(self) -> None:
+    def __init__(self, dim: int = 768) -> None:
+        self.dim = dim
         self.index = None
         self.chunks: List[Chunk] = []
         self.embeddings: Optional["np.ndarray"] = None
@@ -259,4 +260,64 @@ class VectorStore:
 
 
 # Backward compatibility alias
-InMemoryVectorStore = VectorStore
+class InMemoryVectorStore(VectorStore):
+    """
+    Simple in-memory vector store.
+
+    Compatibility wrapper around VectorStore for tests and lightweight usage.
+
+    Supports:
+        store = InMemoryVectorStore(dim=3)
+        store.add("text", [0.1, 0.2, 0.3])
+        store.search([0.1, 0.2, 0.3])
+    """
+
+    def __init__(self, dim: int = 768) -> None:
+        super().__init__(dim=dim)
+        self.embeddings = []
+
+    def add(self, text, embedding, metadata=None):
+        """
+        Add a single text/vector pair.
+
+        Args:
+            text: text content
+            embedding: vector embedding
+            metadata: optional metadata
+        """
+        self.chunks.append(
+            Chunk(
+                id=str(len(self.chunks)),
+                text=text,
+                source="memory",
+                chunk_index=len(self.chunks),
+                metadata=metadata or {},
+            )
+        )
+        self.embeddings.append(list(embedding))
+
+    def search(self, query_embedding, top_k=5, **kwargs):
+        """
+        Simple nearest search using squared distance.
+        """
+        if not self.chunks:
+            return []
+
+        results = []
+
+        for i, (chunk, vector) in enumerate(zip(self.chunks, self.embeddings)):
+            distance = sum(
+                (a - b) ** 2
+                for a, b in zip(query_embedding, vector)
+            )
+
+            results.append(
+                {
+                    "chunk": chunk,
+                    "score": distance,
+                }
+            )
+
+        results.sort(key=lambda x: x["score"])
+
+        return results[:top_k]

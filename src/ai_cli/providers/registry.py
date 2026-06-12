@@ -1,103 +1,119 @@
-from __future__ import annotations
+# Provider registry for ai_cli.
+"""
+This module maintains mappings of provider names to their implementing classes.
+It avoids eager imports to prevent circular import issues. Provider modules
+register themselves via ``register_provider`` (and related functions) when they
+are imported. ``ai_cli.providers.bootstrap.init_providers`` loads all provider
+modules lazily.
+"""
 
-import os
-from typing import Any, Type
-from importlib import import_module
-from ai_cli.providers.spec import ProviderRequest
+from typing import Dict, Type
 
-_PROVIDER_SPECS = {
-    "openai": (
-        "ai_cli.providers.openai_provider",
-        "OpenAIProvider",
-    ),
-    "gemini": (
-        "ai_cli.providers.gemini_provider",
-        "GeminiProvider",
-    ),
-    "cohere": (
-        "ai_cli.providers.cohere_provider",
-        "CohereProvider",
-    ),
-    "deepseek": (
-        "ai_cli.providers.deepseek_provider",
-        "DeepSeekProvider",
-    ),
-    "perplexity": (
-        "ai_cli.providers.perplexity_provider",
-        "PerplexityProvider",
-    ),
-    "xai": (
-        "ai_cli.providers.xAI_provider",
-        "XAIProvider",
-    ),
-    "zai": (
-        "ai_cli.providers.zAI_provider",
-        "ZAIProvider",
-    ),
-}
+# Core mappings populated by provider modules at import time
+PROVIDER_MAP: Dict[str, Type] = {}
 
-_INITIALIZED = False
+# Legacy name used by plugins/tests
+PROVIDERS = PROVIDER_MAP
+CHAT_PROVIDERS: Dict[str, Type] = {}
+EMBEDDING_PROVIDERS: Dict[str, Type] = {}
 
-def _ensure_initialized():
-    global _INITIALIZED
-    if _INITIALIZED:
-        return
-    from ai_cli.providers.bootstrap import init_providers
-    init_providers()
-    _INITIALIZED = True
-
+# Backward compatibility alias
+PROVIDERS = PROVIDER_MAP
 DEFAULT_PROVIDER = "openai"
 
-PROVIDER_MAP = {}
-CHAT_PROVIDERS = {}
-
-def build_provider(name: str, **kwargs):
-    key = name.lower()
-    if key not in PROVIDER_MAP:
-        raise ValueError(f"Unknown provider: {name}")
-    cls = PROVIDER_MAP[key]
-    return cls(**kwargs)
+class ProviderRegistry(dict):
+    def __getitem__(self, key):
+        return PROVIDER_MAP.get(key)
 
 
+PROVIDERS = ProviderRegistry()
 
-PROVIDER_MAP: dict[str, Type] = {}
-CHAT_PROVIDERS: dict[str, Type] = {}
-EMBEDDING_PROVIDERS: dict[str, Type] = {}
+def register_provider(name: str, cls: Type, metadata=None) -> None:
+    """
+    Register a provider.
 
-def register_provider(name: str, cls: Type) -> None:
+    Args:
+        name: Provider name.
+        cls: Provider class.
+        metadata: Optional provider metadata.
+    """
     PROVIDER_MAP[name] = cls
 
-def register_chat_provider(name: str, cls):
+    def decorator(provider_cls):
+        PROVIDER_MAP[name] = provider_cls
+        return provider_cls
+
+    if cls is None:
+        return decorator
+
+    PROVIDER_MAP[name] = cls
+    return cls
+
+
+def register_chat_provider(name: str, cls: Type) -> None:
+    """Register a chat‑capable provider.
+
+    This also registers the class as a generic provider so that ``build_provider``
+    can retrieve it.
+    """
     CHAT_PROVIDERS[name] = cls
+    PROVIDER_MAP[name] = cls
+
 
 def register_embedding_provider(name: str, cls: Type) -> None:
+    """Register an embedding provider.
+
+    Embedding providers are also usable as generic providers.
+    """
     EMBEDDING_PROVIDERS[name] = cls
     PROVIDER_MAP[name] = cls
 
+
 def get_chat_provider(name: str, **kwargs):
-    if not CHAT_PROVIDERS:
-        from ai_cli.providers.bootstrap import init_providers
-        init_providers()
-    cls = CHAT_PROVIDERS.get(name)
-    if cls is None:
+    """Retrieve an instantiated chat provider.
+
+    The provider class must have been registered via ``register_chat_provider``.
+    """
+    ensure_initialized()
+    if name not in CHAT_PROVIDERS:
         raise ValueError(f"Unknown chat provider: {name}")
-    return cls(**kwargs)
+    return CHAT_PROVIDERS[name](**kwargs)
+
 
 def get_embedding_provider(name: str, **kwargs):
-    if not EMBEDDING_PROVIDERS:
-        from ai_cli.providers.bootstrap import init_providers
-        init_providers()
-    cls = EMBEDDING_PROVIDERS.get(name)
-    if cls is None:
+    """Retrieve an instantiated embedding provider.
+    """
+    ensure_initialized()
+    if name not in EMBEDDING_PROVIDERS:
         raise ValueError(f"Unknown embedding provider: {name}")
-    return cls(**kwargs)
+    return EMBEDDING_PROVIDERS[name](**kwargs)
+
 
 def list_providers():
+    """Return a sorted list of all registered provider names."""
+    ensure_initialized()
     return sorted(PROVIDER_MAP.keys())
 
-def load_plugins():
+
+def ensure_initialized():
+    """Ensure all providers are loaded.
+
+    Calls init_providers unconditionally to guarantee that the registry contains
+    every provider, including "echo" which may have been missing in earlier
+    initializations. Re‑registering is safe because the mappings are overwritten
+    with the same class objects.
     """
-    Compatibility shim.
-    Safe no-op.
+    from ai_cli.providers.bootstrap import init_providers
+    init_providers()
+
+
+def build_provider(name: str, **kwargs):
+    """Factory for a generic provider.
+
+    ``ensure_initialized`` should be called beforehand (via ``ensure_initialized``
+    or ``ensure_initialized`` in callers) to populate the registry.
     """
-    return None
+    ensure_initialized()
+    if name not in PROVIDER_MAP:
+        raise ValueError(f"Unknown provider: {name}")
+    return PROVIDER_MAP[name](**kwargs)

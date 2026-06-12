@@ -1,181 +1,149 @@
 # Development Guidelines for AI CLI
 
 ## Introduction
-This document outlines guidelines for contributing to the AI CLI project with a focus on Advanced RAG (Retrieval-Augmented Generation): document chunking, embedding, and vector-database querying. It covers environment setup, new dependencies, recommended defaults for chunking & embeddings, vector DB options, CLI workflows, testing and maintenance.
+
+Guidelines for contributing to the AI CLI project, including environment
+setup, coding standards, and RAG module development.
 
 ## Setting Up Your Development Environment
 
-1. **Clone the Repository**
-   ```
+1. **Clone the repository**
+
+   ```bash
    git clone https://github.com/yourusername/ai_cli.git
    cd ai_cli
    ```
 
-2. **Create a Virtual Environment**
-   ```
+2. **Create a virtual environment**
+
+   ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   source venv/bin/activate
    ```
 
-3. **Install Dependencies**
-   Add RAG-specific packages and run:
+3. **Install dependencies**
+
+   ```bash
+   poetry install
+   poetry install --with rag   # FAISS, numpy, langchain, etc.
+   poetry install --with dev   # pytest, ruff, mypy
    ```
-   pip install -r requirements.txt
-   pip install sentence-transformers faiss-cpu python-dotenv
-   # Optionally for cloud/vector services:
-   pip install pinecone-client pymilvus openai
+
+4. **Environment variables**
+
+   Create a `.env` file (never commit it):
+
    ```
-   Update `requirements.txt` accordingly.
+   OPENAI_API_KEY=...
+   EMBEDDING_MODEL=all-MiniLM-L6-v2
+   RAG_CHUNK_SIZE=500
+   RAG_CHUNK_OVERLAP=50
+   RAG_TOP_K=5
+   ```
 
-4. **Set Up Environment Variables**
-   Create a `.env` file in the root directory (based on `.env.example`) and set these variables as needed:
-   - OPENAI_API_KEY=...
-   - EMBEDDING_MODEL=all-MiniLM-L6-v2 (or your preferred model)
-   - VECTOR_DB=faiss|pinecone|milvus
-   - PINECONE_API_KEY=...
-   - PINECONE_ENV=...
-   - MILVUS_HOST=...
-   - MILVUS_PORT=...
-   - CHUNK_SIZE=1000
-   - CHUNK_OVERLAP=200
+## Project Layout
 
-   Ensure `.env` is not committed.
+```
+src/ai_cli/
+├── cli.py              # CLI entrypoint
+├── core/               # Public API, resilience, services
+├── providers/          # LLM provider implementations + registry
+├── rag/                # Chunking, embeddings, vector store, retrieval
+├── config/             # RAG configuration
+├── plugins/            # Plugin hooks
+├── telemetry/          # Metrics and monitoring
+└── utils/              # Validation, secrets
+tests/                  # pytest test suite
+docs/                   # User and API documentation
+```
 
-## Advanced RAG: Chunking
+## Adding a Provider
 
-- Purpose: split long documents into semantically-coherent, overlapping chunks that fit embedding/token limits.
-- Defaults:
-  - chunk_size: 1000 characters (or ~512 tokens)
-  - overlap: 200 characters
-- Strategy:
-  - Prefer sentence/paragraph boundaries when possible.
-  - Keep overlap to allow context carry-over (100–300 chars).
-- Example chunker (high-level):
-  ```
-  def chunk_text(text, chunk_size=1000, overlap=200):
-      # split by paragraphs/sentences, accumulate until chunk_size reached,
-      # then backtrack by overlap for next chunk.
-      return list_of_chunks
-  ```
-- Tips:
-  - For code/docs, use logical delimiters (headers, code fences).
-  - For very large corpora, process files in streaming/batch mode to avoid memory spikes.
+1. Create `src/ai_cli/providers/my_provider.py` implementing `chat()` or `send()`
+2. Register in `src/ai_cli/providers/loader.py`
+3. Add tests in `tests/test_providers.py`
+4. Document the required env variable in README and docs/USAGE.md
 
-## Advanced RAG: Embeddings
+Provider registration is lazy — `bootstrap.init_providers()` loads all
+providers once per process.
 
-- Models:
-  - Local: sentence-transformers (e.g., all-MiniLM-L6-v2) — fast, cheap.
-  - Cloud: OpenAI or other API-based embedding providers — higher quality for some tasks.
-- Embedding pipeline:
-  1. Load chunk.
-  2. Normalize text (strip, normalize whitespace).
-  3. Compute embedding vector.
-  4. Store vector + metadata (source, chunk_id, text, tokens).
-- Example (conceptual):
-  ```
-  from sentence_transformers import SentenceTransformer
-  model = SentenceTransformer("all-MiniLM-L6-v2")
-  vectors = model.encode(chunks, show_progress_bar=True)
-  ```
-- Env var `EMBEDDING_MODEL` controls model selection in the CLI.
+## RAG Development
 
-## Advanced RAG: Vector DB Querying
+### Chunking
 
-- Supported backends:
-  - faiss (local, file-backed index) — good for local dev and CI.
-  - pinecone (managed) — production ready, scalable.
-  - milvus (self-hosted) — scalable open-source alternative.
-- Indexing:
-  - Store: vector, id, metadata (source/path, chunk_index, text, created_at)
-  - Persist indexes to disk (faiss) or to remote service credentials via env.
-- Retrieval:
-  - Use cosine similarity or inner-product depending on vector normalization.
-  - Return top-k results with similarity scores.
-- Example pseudo-workflow:
-  ```
-  # build index
-  vectors = embed(chunks)
-  index.upsert(vectors, metadata)
+- **Simple:** `rag/chunker.py` — sliding-window `SemanticChunker`
+- **Advanced:** `rag/pipeline.py` — token-aware sentence chunker with spans
+- **Models:** `rag/models.py` — `Document`, `Chunk`, `RetrievalResult`
 
-  # query
-  q_vec = embed([query])[0]
-  hits = index.search(q_vec, top_k=5)
-  ```
-- Connection config:
-  - For FAISS: file path for persisted index (e.g., data/faiss_index.pkl)
-  - For Pinecone: set PINECONE_API_KEY and PINECONE_ENV
-  - For Milvus: MILVUS_HOST / PORT and collection name
+Defaults are in `config/rag_config.py`. Override via `RAGConfig.from_env()`.
 
-## CLI Commands (new / updated)
+### Embeddings
 
-- Build or refresh vector index:
-  ```
-  ai_cli build-index --source docs/ --db faiss \
-    --chunk-size 1000 --overlap 200 --embed-model all-MiniLM-L6-v2
-  ```
-- Query the index:
-  ```
-  ai_cli query --db faiss --k 5 "How do I set up environment variables?"
-  ```
-- Delete or reindex:
-  ```
-  ai_cli index-delete --db faiss
-  ai_cli rebuild-index --source docs/
-  ```
-- All commands honor `.env` and CLI overrides. Add `--dry-run` to inspect chunking/embedding without writing.
+`EmbeddingGenerator` wraps sentence-transformers with batching and
+normalization. For tests, mock `SentenceTransformer` (see
+`tests/test_enhanced.py`).
+
+### Vector Store
+
+`VectorStore` uses FAISS IndexFlatL2. Requires `faiss-cpu` and `numpy`.
+Use in-memory fixtures in CI to avoid disk I/O.
+
+### CLI RAG vs Production RAG
+
+| Layer | Module | Use case |
+|-------|--------|----------|
+| CLI in-memory | `rag/in_memory.py` | Quick prototyping, no extra deps |
+| Production | `embeddings.py` + `vector_store.py` + `retriever.py` | Semantic search with FAISS |
 
 ## Testing
 
-- Add tests covering:
-  - chunking behavior (edge cases, overlap)
-  - embedding pipeline integration (mock models if needed)
-  - vector DB adapters (use faiss in-memory for CI)
-  - end-to-end RAG query flow (mock external APIs)
-- Example test command:
-  ```
-  poetry run pytest tests/test_rag.py -v
-  ```
-- Continuous Integration:
-  - Use small faiss-backed fixtures for CI to avoid external dependencies.
-  - Mock network calls for Pinecone/OpenAI in unit tests.
+```bash
+pytest tests/ -v
+pytest tests/test_enhanced.py -v        # RAG smoke tests
+pytest tests/test_provider_contract.py  # Provider interface
+pytest tests/test_imports.py            # Module import checks
+```
 
-## Documentation Updates
+Guidelines:
 
-- Update README and docs/ with:
-  - New env vars and configuration examples.
-  - Vector DB setup guides (faiss local, Pinecone quickstart, Milvus notes).
-  - Examples of chunking parameters and their trade-offs.
-  - CLI usage examples for build-index and query flows.
-- Add `docs/architecture/rag.md` describing:
-  - data flow (ingest -> chunk -> embed -> index -> query -> re-rank -> generate)
-  - metadata schema stored with vectors
-  - performance characteristics and scaling tips
+- Mock external API calls and heavy models in unit tests
+- Use the `echo` provider for integration tests without API keys
+- Mark slow/integration tests with `@pytest.mark.integration`
 
-## Coding Standards (RAG-specific)
+## Coding Standards
 
-- Ensure adapters for each vector DB share a common interface (upsert, search, delete, persist).
-- Keep embedding logic abstracted so swapping models/providers is a config change.
-- Add type hints and docstrings to new modules; provide small integration examples in docs.
+- Python 3.10+ with type hints
+- Line length: 80 (black/ruff)
+- Match existing naming and module structure
+- Keep changes focused — avoid unrelated refactors in the same PR
+- Add docstrings for public APIs; comments only for non-obvious logic
+
+## CLI Development
+
+The CLI lives in `src/ai_cli/cli.py`. Key helpers:
+
+- `_build_ask_kwargs()` — adapts to `ask()` signature via introspection
+- `_invoke_with_retries()` — retry transient errors with exponential backoff
+- `run_interactive()` — REPL with `/index`, `/search`, provider switching
+
+Entry point: `ai-cli = ai_cli.cli:main` (see `pyproject.toml`).
+
+## Documentation
+
+When adding features, update:
+
+- `README.md` — overview and quickstart
+- `docs/USAGE.md` — CLI examples
+- `docs/API.md` — Python API reference
+- `docs/DEVELOPMENT.md` — this file, if workflow changes
 
 ## Contributing
 
-1. Branching:
-   ```
-   git checkout -b feature/advanced-rag
-   ```
-2. Commit messages:
-   - Use clear messages, e.g., "feat(rag): add faiss adapter and chunker"
-3. Tests & CI:
-   - Include tests for new behavior and ensure they run in CI.
-4. PR Description:
-   - Describe reindexing/migration steps (if any), env changes, and CLI examples.
+1. Branch: `git checkout -b feature/my-feature`
+2. Write tests for new behavior
+3. Run `pytest` and fix lint issues (`ruff check`, `black`)
+4. Open a PR with a clear description and test plan
 
-## Best Practices
+## License
 
-- Reindex when changing chunking or embedding model.
-- Version vector schema (metadata keys + embedding dim) in index metadata for migrations.
-- Keep chunks and raw sources linked in metadata to allow provenance and reassembly.
-- Small focused commits and code reviewers should validate both accuracy and cost implications of embedding/model choices.
-
-## Conclusion
-This update adds clear, testable workflows and tooling to support Advanced RAG features: chunking, embeddings, and vector DB querying. Follow the instructions above to set up dev environments, run the new CLI commands, and add tests for any new functionality.
+MIT — see [LICENSE](../LICENSE).

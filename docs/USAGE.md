@@ -2,251 +2,171 @@
 
 ## Overview
 
-The AI CLI is a command-line tool that supports both simple prompts and an advanced Retrieval-Augmented Generation (RAG) pipeline: chunking, embedding, building/querying vector databases, and RAG-style query & interactive sessions. Use it to index local documents, build vector indexes, and answer queries with retrieved context.
+The AI CLI supports single-shot prompts, interactive chat, and optional
+in-memory RAG (Retrieval-Augmented Generation). For production semantic
+search, use the Python RAG modules with FAISS and sentence-transformers.
 
 ## Installation
-
-Clone the repository and install required dependencies. For RAG workflows you will likely need additional packages (embedding models, vector DB clients):
 
 ```bash
 git clone <repository-url>
 cd ai_cli
-pip install -r requirements.txt
+pip install -e .
 
-# Optional vector/embedding backends (examples)
-pip install sentence-transformers faiss-cpu chromadb
+# RAG extras (FAISS, numpy, sentence-transformers)
+pip install faiss-cpu numpy sentence-transformers
 ```
-
-Also check `.env.example` for required environment variables (see below).
 
 ## Environment Variables
 
-Set keys for providers and DB locations:
-
-- OPENAI_API_KEY — OpenAI API key (embeddings & LLM)
-- COHERE_API_KEY — Cohere key (optional)
-- GOOGLE_API_KEY / GOOGLE_APPLICATION_CREDENTIALS — for Google-based providers
-- CHROMA_DB_DIR — local Chroma DB directory (if using Chroma)
-- FAISS_INDEX_DIR — path to store FAISS indexes
-
-Export in shell or use a .env file.
-
-## Concepts
-
-- Chunking: split large documents into smaller passages. Configurable chunk size and overlap.
-- Embeddings: convert chunks to vector embeddings; choose provider and model.
-- Vector DB / Index: store vectors for fast nearest-neighbor search (FAISS, Chroma, Milvus, etc.).
-- Retrieval: nearest-neighbor search returns top-k chunks to provide context.
-- RAG: combine retrieved context with an LLM prompt to generate informed answers.
+| Variable | Purpose |
+|----------|---------|
+| `OPENAI_API_KEY` | OpenAI chat and embeddings |
+| `GEMINI_API_KEY` | Google Gemini |
+| `COHERE_API_KEY` | Cohere |
+| `PERPLEXITY_API_KEY` | Perplexity |
+| `XAI_API_KEY` | xAI Grok |
+| `ZAI_API_KEY` | Z.AI |
+| `RAG_CHUNK_SIZE` | Override default chunk size (500) |
+| `RAG_CHUNK_OVERLAP` | Override default overlap (50) |
+| `RAG_TOP_K` | Override default top-k (5) |
 
 ## CLI Usage
 
 Base invocation:
 
 ```bash
-python -m ai_cli <command> [options]
 python -m ai_cli --help
+ai-cli --help
 ```
 
-### Single-shot Prompt
+### Single-shot prompt
 
 ```bash
-python -m ai_cli --provider openai --prompt "What is the capital of France?"
+ai-cli --provider openai --prompt "What is the capital of France?"
 ```
 
-Example output:
-
-```
-The capital of France is Paris.
-```
-
-### Interactive Chat
+Pipe a prompt via stdin:
 
 ```bash
-python -m ai_cli --interactive --provider openai
+echo "Summarize this" | ai-cli --provider echo
 ```
 
-### Advanced RAG Commands
-
-1. Chunk documents
-
-Split a file (or directory) into chunks.
+### Interactive chat
 
 ```bash
-python -m ai_cli chunk \
-   --input docs/article.md \
-   --output chunks.jsonl \
-   --chunk-size 800 \
-   --overlap 200 \
-   --method sentence
+ai-cli --interactive --provider openai
 ```
 
-Options:
-- --chunk-size: target tokens/characters per chunk
-- --overlap: overlap between chunks
-- --method: sentence | paragraph | fixed
+Interactive commands:
 
-You can also pipe content:
+| Command | Action |
+|---------|--------|
+| `/switch <provider>` | Change provider |
+| `/model <model>` | Set model override |
+| `/profile <name>` | Set profile |
+| `/stream` | Toggle streaming |
+| `/index <file\|text>` | Index into RAG store |
+| `/search <query>` | Show retrieved context |
+| `/exit`, `/quit` | Exit session |
+
+### In-memory RAG
+
+Index documents and query with retrieved context:
 
 ```bash
-cat big_doc.txt | python -m ai_cli chunk --output - --chunk-size 1000 --overlap 200 > chunks.jsonl
+# Index files and ask with RAG context
+ai-cli --rag \
+  --rag-docs docs/manual.md docs/faq.md \
+  --rag-chunk-size 800 \
+  --rag-chunk-overlap 100 \
+  --rag-top-k 5 \
+  -q "How do I configure authentication?"
 ```
 
-2. Create embeddings
+Flags:
 
-Create embeddings for chunks using a chosen provider/model.
+- `--rag` — inject retrieved context into the prompt
+- `--rag-docs` — file paths or raw text strings to index before querying
+- `--rag-chunk-size` — characters per chunk (default: 500)
+- `--rag-chunk-overlap` — overlap between chunks (default: 50)
+- `--rag-top-k` — number of chunks to retrieve (default: 5)
 
-```bash
-python -m ai_cli embed \
-   --chunks chunks.jsonl \
-   --emb-provider openai \
-   --emb-model text-embedding-3-small \
-   --output embeddings.parquet
+> **Note:** CLI RAG uses deterministic hash-based embeddings for
+> lightweight prototyping. For semantic search, use the Python API with
+> `EmbeddingGenerator` and `VectorStore` (see below).
+
+## Python RAG Pipeline
+
+### Chunking
+
+```python
+from ai_cli.rag import chunk_text, SemanticChunker
+
+chunks = chunk_text("Long text...", source="doc.md", chunk_size=800, overlap=200)
 ```
 
-Options:
-- --emb-provider: openai | sentence-transformers | cohere | ...
-- --emb-model: model name supported by the provider
+### Embeddings
 
-3. Build / index vectors
+```python
+from ai_cli.rag import EmbeddingGenerator
 
-Create a vector index (FAISS/Chroma/etc.) from embeddings or chunks.
-
-```bash
-python -m ai_cli index \
-   --emb-file embeddings.parquet \
-   --vector-db faiss \
-   --index-path ./indexes/articles.faiss \
-   --metadata-file chunks.jsonl
+embedder = EmbeddingGenerator(model="all-MiniLM-L6-v2", batch_size=32)
+vectors = embedder.embed_batch(["text one", "text two"])
 ```
 
-Or build directly from chunks (embeddings generated as part of indexing):
+### FAISS vector store
 
-```bash
-python -m ai_cli index \
-   --chunks chunks.jsonl \
-   --vector-db chroma \
-   --emb-provider openai \
-   --emb-model text-embedding-3-small \
-   --chroma-dir ./chroma_db
+```python
+from ai_cli.rag import VectorStore
+
+store = VectorStore()
+store.create_index(dimension=384)
+store.add_embeddings(vectors, chunks)
+store.save()
+
+# Later
+store.load()
+results = store.search(query_embedding, top_k=5)
 ```
 
-Supported DBs:
-- faiss, chroma, milvus (pluggable backends)
+### Retriever
 
-4. Query an index (RAG)
+```python
+from ai_cli.rag import Retriever
 
-Retrieve relevant chunks then call an LLM with context:
-
-```bash
-python -m ai_cli query \
-   --index ./indexes/articles.faiss \
-   --query "Explain the main result of the paper" \
-   --k 5 \
-   --provider openai \
-   --model gpt-4o \
-   --retrieval-mode hybrid \
-   --rerank
+retriever = Retriever(store=store, embedder=embedder, top_k=5)
+context = retriever.build_context("Your question here")
 ```
 
-Options:
-- --k: number of nearest neighbors
-- --retrieval-mode: similarity | hybrid (similarity + sparse)
-- --rerank: use an LLM to re-rank retrieved passages
-- --score-threshold: minimum similarity to accept
+## Configuration
 
-Example expected output (truncated):
+RAG defaults live in `src/ai_cli/config/rag_config.py`. Load from
+environment:
 
+```python
+from ai_cli.config.rag_config import RAGConfig
+
+cfg = RAGConfig.from_env()
+cfg.ensure_dirs()
 ```
-Context (top 3):
-1) [chunk-id:...] ...summary of paragraph...
-2) [chunk-id:...] ...another relevant paragraph...
-Answer:
-The main result is that ...
-```
-
-5. Interactive RAG session
-
-Start a chat session that uses the index for retrieval on every turn.
-
-```bash
-python -m ai_cli --rag --index ./indexes/articles.faiss \
-   --emb-provider openai --emb-model text-embedding-3-small \
-   --provider openai --model gpt-4o --interactive
-```
-
-6. Utilities
-
-- List models
-
-```bash
-python -m ai_cli --provider openai --list-models
-```
-
-- Export / Inspect index
-
-```bash
-python -m ai_cli index --inspect --index ./indexes/articles.faiss
-```
-
-- Delete / rebuild index
-
-```bash
-python -m ai_cli index --index-path ./indexes/articles.faiss --rebuild --chunks chunks.jsonl --emb-provider openai
-```
-
-## Typical Workflows
-
-1. One-off QA over a document
-- chunk -> embed -> index -> query
-
-2. Periodic indexing pipeline
-- Watch a directory for new files -> chunk -> embed -> upsert to vector DB
-
-3. Streaming or interactive RAG
-- Use streaming LLM responses while retrieving updated context for follow-ups
 
 ## Best Practices
 
-- Tune chunk size and overlap to match your retrieval granularity.
-- Normalize text before chunking (strip boilerplate, remove images).
-- Cache embeddings to avoid repeated provider calls.
-- Secure API keys and limit access to stored indexes if they contain sensitive data.
-- Add metadata (source, filename, position) to chunks for traceability.
+- Tune chunk size to match your embedding model (500–1000 chars is a good start)
+- Use overlap (50–200 chars) to preserve context across chunk boundaries
+- Persist FAISS indexes with `VectorStore.save()` / `load()`
+- Store source metadata on chunks for citation and filtering
+- Use the `echo` provider for local testing without API keys
 
-## Help and Debugging
-
-For detailed per-command options and examples:
+## Debugging
 
 ```bash
-python -m ai_cli <command> --help
+ai-cli --debug -q "test prompt"
 ```
 
-Enable verbose logging:
+## Security
 
-```bash
-python -m ai_cli <command> --verbose
-```
-
-## Security & Privacy
-
-- Be mindful of PII in documents you index. Redact or avoid uploading sensitive content to third-party providers.
-- Use on-prem or closed-source embedding models if required by your data policies.
-
-## Example Full Pipeline
-
-```bash
-# 1. Chunk
-python -m ai_cli chunk --input docs/ --output chunks.jsonl --chunk-size 800 --overlap 200
-
-# 2. Embed
-python -m ai_cli embed --chunks chunks.jsonl --emb-provider openai --emb-model text-embedding-3-small --output embeddings.parquet
-
-# 3. Index
-python -m ai_cli index --emb-file embeddings.parquet --vector-db faiss --index-path ./indexes/articles.faiss --metadata-file chunks.jsonl
-
-# 4. Query
-python -m ai_cli query --index ./indexes/articles.faiss --query "Summarize the policy recommendations" --k 5 --provider openai --model gpt-4o
-```
-
-For further details consult the command help. Feedback and contributions welcome.
+- Do not commit `.env` files with API keys
+- Be mindful of PII in documents indexed for RAG
+- Use local embedding models when data cannot leave your network

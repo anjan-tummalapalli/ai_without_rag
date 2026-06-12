@@ -1,4 +1,5 @@
 import importlib
+import pytest
 
 try:
     pytest = importlib.import_module("pytest")
@@ -64,3 +65,16 @@ def test_registry_is_deterministic():
     providers = list_providers()
     assert isinstance(PROVIDER_MAP, dict)
     assert providers == sorted(providers)
+
+@pytest.fixture(autouse=True)
+def mock_sentence_transformer(monkeypatch):
+    class FakeModel:
+        def encode(self, texts):
+            return [
+                [0.1, 0.2, 0.3]
+                for _ in texts
+            ]
+    monkeypatch.setattr(
+        "sentence_transformers.SentenceTransformer",
+        lambda *args, **kwargs: FakeModel()
+    )

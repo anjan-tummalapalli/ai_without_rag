@@ -13,7 +13,8 @@ class SemanticChunker:
         tokenizer: Optional[Callable[[str], List[str]]] = None,
         detokenizer: Optional[Callable[[List[str]], str]] = None,
     ) -> None:
-        self.chunk_size = int(chunk_size); self.overlap = int(overlap)
+        self.chunk_size = int(chunk_size)
+        self.overlap = int(overlap)
         self.tokenizer = tokenizer
         self.detokenizer = detokenizer or (lambda tokens: " ".join(tokens))
 

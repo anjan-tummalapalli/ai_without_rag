@@ -68,12 +68,20 @@ class PerplexityProvider(AIProvider):
             return np.asarray(data, dtype=dtype)
         return np.asarray(data)
 
-    def _create_chat_completion(self, prompt: str, temperature: Optional[float] = None):
-        """
-        Wrapper for chat completion calls to centralize error handling.
+    def _create_chat_completion(self, prompt: str, temperature: Optional[float] = None) -> str:
+        """Wrapper for chat completion calls with centralized error handling.
+
+        Parameters
+        ----------
+        prompt: str
+            The user prompt to send to Perplexity.
+        temperature: Optional[float]
+            Sampling temperature (0.0‑2.0). If ``None`` the API default is used.
         """
         try:
-            kwargs = {"model": self.model, "messages": [{"role": "user", "content": prompt}]}
+            # Build request parameters with explicit Any typing to avoid TypedDict union issues
+            from typing import Any  # local import to avoid top‑level pollution
+            kwargs: dict[str, Any] = {"model": self.model, "messages": [{"role": "user", "content": prompt}]}
             if temperature is not None:
                 kwargs["temperature"] = temperature
             response = self.client.chat.completions.create(**kwargs)
@@ -105,7 +113,7 @@ class PerplexityProvider(AIProvider):
 
     def _ensure_rag_components(self, embed_model: Optional[str] = None) -> None:
         if self.embeddings_provider is None:
-            self.embeddings_provider = EmbeddingsProvider(model_name=embed_model) if embed_model else EmbeddingsProvider()
+            self.embeddings_provider = EmbeddingsProvider(model=embed_model) if embed_model else EmbeddingsProvider()
         if self.vector_store is None:
             self.vector_store = InMemoryVectorStore()
 
@@ -137,7 +145,7 @@ class PerplexityProvider(AIProvider):
 
         embeddings = self.embeddings_provider.embed_batch(all_chunks)
         # ensure embeddings are a numpy array of correct dtype
-        emb_array = self._to_np_array(embeddings, dtype=np.float32)
+        emb_array = self._to_np_array(embeddings, dtype="float32")
 
         chunks_for_store = []
         for text, meta in zip(all_chunks, metadatas):
@@ -148,7 +156,7 @@ class PerplexityProvider(AIProvider):
                 Chunk(
                     id=chunk_id,
                     text=text,
-                    source=meta.get("source"),
+                    source=meta["source"] if meta.get("source") is not None else "",
                     chunk_index=meta["chunk_index"],
                     metadata=meta,
                 )
@@ -173,7 +181,7 @@ class PerplexityProvider(AIProvider):
             raise ProviderRequestError("RAG components not initialized")
 
         q_emb = self.embeddings_provider.embed_batch([query])[0]
-        q_arr = self._to_np_array(q_emb, dtype=np.float32)
+        q_arr = self._to_np_array(q_emb, dtype="float32")
 
         hits = self.vector_store.search(q_arr, top_k=k)
 

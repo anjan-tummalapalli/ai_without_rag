@@ -94,7 +94,7 @@ class EmbeddingGenerator:
         np = getattr(self, "np", None)
 
         if np is None:
-             import numpy as np
+            import numpy as np
         arr = np.asarray(emb)
         # Single vector
         if arr.ndim == 1:

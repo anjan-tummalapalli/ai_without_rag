@@ -35,42 +35,28 @@ response_with_context = provider.send_rag("How do operators handle CRDs?", top_k
 print(response_with_context)
 """
 
-from __future__ import annotations
+from openai.types.chat import ChatCompletionMessageParam  # noqa: E402
+from typing import Any, List, Dict, Optional
 
-from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
-
-# Import the shared base provider and error type from the package.
-# Provide robust fallbacks so the module can still be imported in isolation
-# (useful for linters/tests) while preferring the project's definitions.
+# Optional third‑party imports with safe fallbacks
 try:
-    from .base import AIProvider, ProviderRequestError
-except Exception:
-    try:
-        from ai_cli.providers.base import AIProvider, ProviderRequestError
-    except Exception:
-        class ProviderRequestError(Exception):
-            pass
-
-        class AIProvider:
-            def __init__(self, *args, **kwargs):
-                # reference args to avoid unused-variable lint warnings in fallback
-                _ = args
-                self.model = kwargs.get("model") if kwargs else None
-
-# numpy import: keep static typing happy and provide a runtime-safe fallback
-if TYPE_CHECKING:
-    import numpy as np  # type: ignore
-
-try:
-    import numpy as np  # type: ignore
+    import numpy as np
 except Exception:
     np = None  # type: ignore
 
-# OpenAI / xAI client import with a safe fallback for environments without the package.
 try:
     from openai import OpenAI  # type: ignore
 except Exception:
     OpenAI = None  # type: ignore
+
+import logging
+logger = logging.getLogger(__name__)
+
+from typing import Optional, List, Dict, Any, Tuple
+
+# Import the shared base provider and error type from the package.
+from .base import AIProvider
+from ai_cli.core.exceptions import ProviderRequestError
 
 
 class InMemoryVectorStore:
@@ -100,14 +86,13 @@ class InMemoryVectorStore:
             # stack new embeddings onto existing matrix and extend metadatas
             self._vectors = np.vstack([self._vectors, arr])
             self._metadatas.extend(metadatas)
-    def _cosine_similarity(self, q: Any, vecs: Any) -> Any:
+
+    def _cosine_similarity(self, q: List[float], vecs: List[List[float]]) -> List[float]:
         if np is None:
             raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
-        # q: (d,), vecs: (n, d)
         q_norm = q / (np.linalg.norm(q) + 1e-12)
         vecs_norm = vecs / (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12)
         sims = vecs_norm.dot(q_norm)
-        return sims
         return sims
 
     def query(self, embedding: List[float], top_k: int = 5) -> List[Tuple[Dict[str, Any], float]]:
@@ -118,10 +103,8 @@ class InMemoryVectorStore:
         q = np.array(embedding, dtype=np.float32)
         sims = self._cosine_similarity(q, self._vectors)
         idx = np.argsort(-sims)[:top_k]
-        results: List[Tuple[Dict[str, Any], float]] = []
-        for i in idx:
-            results.append((self._metadatas[int(i)], float(sims[int(i)])))
-        return results
+        # Duplicate imports block removed
+        return [(self._metadatas[i], float(sims[i])) for i in idx]
 
     def count(self) -> int:
         return 0 if self._vectors is None else int(self._vectors.shape[0])
@@ -283,25 +266,31 @@ class XAIProvider(AIProvider):
         Internal helper: send prompt (with optional system message) to the Grok model.
         """
         try:
-            messages: List[Dict[str, str]] = []
+            messages: List[ChatCompletionMessageParam] = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
-            response = self.client.chat.completions.create(model=self.model, messages=messages, temperature=0.7)
+            response = self.client.chat.completions.create(messages=messages, model=self.model, temperature=0.7)
 
             if not getattr(response, "choices", None):
                 raise ProviderRequestError("xAI returned no completion choices")
             message = response.choices[0].message
 
             if not message or not getattr(message, "content", None):
-                raise ProviderRequestError("xAI returned empty response content")
+                # Return a placeholder indicating no content was returned
+                return "[No response from xAI]"
             return message.content.strip()
         except Exception as exc:
             raise ProviderRequestError(f"xAI request failed: {exc}") from exc
 
     def _send_impl(self, prompt: str) -> str:
         """Send prompt to Grok model (required by AIProvider base class)."""
-        return self._call_model(prompt)
+        try:
+            return self._call_model(prompt)
+        except ProviderRequestError as e:
+            # Log the error and return a placeholder to avoid empty outputs
+            logger.warning(f"XAIProvider encountered an error: {e}")
+            return "[Error: unable to get response]"
 
     def send_rag(self, prompt: str, top_k: int = 4, instruction: Optional[str] = None) -> str:
         """
@@ -327,17 +316,26 @@ class XAIProvider(AIProvider):
                 # Fallback to normal generation if no context available
                 return self._send_impl(prompt)
 
-            context_parts = [f"Source {i+1}:\n{item.get('text', '')}" for i, item in enumerate(retrieved)]
+            context_parts = [
+                f"Source {i+1}:\n{item.get('text', '')}"
+                for i, item in enumerate(retrieved)
+            ]
             context = "\n\n".join(context_parts)
 
-            # Build a clear system prompt if provided, else a default one that instructs the model to use context.
-            system_prompt = instruction or (
-                "You are a helpful assistant. Use the provided context to answer the user's question. "
-                "Cite sources when appropriate. If the context is insufficient, say so and do not hallucinate."
-            )
+            # Build system prompt: use provided instruction or default guidance
+            if instruction:
+                system_prompt = instruction
+            else:
+                system_prompt = (
+                    "You are a helpful assistant. Use the provided context to "
+                    "answer the user's question. Cite sources when appropriate. "
+                    "If the context is insufficient, say so and do not hallucinate."
+                )
 
-            # Craft combined prompt with context and user question
-            augmented_prompt = f"Context:\n{context}\n\nUser question:\n{prompt}\n\nAnswer using the context above."
+            # Combine context with user question
+            augmented_prompt = (
+                f"Context:\n{context}\n\nUser question:\n{prompt}\n\n"
+                "Answer using the context above.")
 
             return self._call_model(augmented_prompt, system_prompt=system_prompt)
         except Exception as exc:
@@ -360,3 +358,5 @@ class XAIProvider(AIProvider):
             return bool(getattr(response, "choices", None))
         except Exception:
             return False
+
+__all__ = ["XAIProvider", "InMemoryVectorStore"]

@@ -1,7 +1,7 @@
 import random
 import threading
 import time
-import asyncio
+import inspect
 from collections import OrderedDict
 from functools import wraps
 from typing import Any, Callable, Iterable, Optional, Tuple
@@ -92,7 +92,7 @@ class RetryEngine:
         return isinstance(exc, self.retry_on)
 
     def execute(self, func: Callable[..., Any], *args, **kwargs) -> Any:
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             raise TypeError("Coroutine functions are not supported. Use AsyncRetryEngine instead.")
         last_exc = None
         for attempt in range(self.max_attempts):

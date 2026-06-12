@@ -79,22 +79,24 @@ class RAGConfig:
 
     @classmethod
     def from_env(cls, prefix: str = "RAG_") -> "RAGConfig":
-        return cls(
+        """Create a RAGConfig instance using environment variables with sensible defaults.
+
+        The method constructs a base configuration with default paths and then overrides
+        numeric parameters from the environment if they are set.
+        """
+        # Default configuration with placeholder paths; callers can adjust directories later.
+        cfg = cls(
             base_dir=Path("."),
             index_dir=Path("./index"),
             docs_dir=Path("./docs"),
             metadata_dir=Path("./metadata"),
             metadata_path=Path("./metadata/metadata.json"),
-            chunk_size=int(
-                os.getenv(prefix + "CHUNK_SIZE", CHUNK_SIZE)
-            ),
-            chunk_overlap=int(
-                os.getenv(prefix + "CHUNK_OVERLAP", CHUNK_OVERLAP)
-            ),
-            top_k=int(
-                os.getenv(prefix + "TOP_K", TOP_K)
-            ),
         )
+        # Override numeric and other simple fields from env variables.
+        cfg.chunk_size = int(os.getenv(prefix + "CHUNK_SIZE", CHUNK_SIZE))
+        cfg.chunk_overlap = int(os.getenv(prefix + "CHUNK_OVERLAP", CHUNK_OVERLAP))
+        cfg.top_k = int(os.getenv(prefix + "TOP_K", TOP_K))
+        return cfg
 
     def to_dict(self) -> Dict:
         data = asdict(self)
