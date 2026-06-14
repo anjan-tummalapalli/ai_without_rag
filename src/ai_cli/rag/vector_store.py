@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import faiss  # type: ignore
@@ -31,8 +32,8 @@ class VectorStore:
     def __init__(self, dim: int = 768) -> None:
         self.dim = dim
         self.index = None
-        self.chunks: List[Chunk] = []
-        self.embeddings: Optional["np.ndarray"] = None
+        self.chunks: list[Chunk] = []
+        self.embeddings: np.ndarray | None = None
         self._embeddings_path = Path(str(FAISS_INDEX_PATH)).with_suffix(".npy")
 
     def _require_numpy(self) -> None:
@@ -62,7 +63,7 @@ class VectorStore:
         # faiss IndexFlatL2.add expects float32 2D array
         self.index.add(self.embeddings)
 
-    def add_embeddings(self, embeddings: Iterable["np.ndarray"], chunks: List[Chunk]) -> None:
+    def add_embeddings(self, embeddings: Iterable[np.ndarray], chunks: list[Chunk]) -> None:
         """
         Append new vectors and chunks.
         embeddings: iterable of 1D vectors or an array-like of shape (n, dim).
@@ -84,7 +85,7 @@ class VectorStore:
 
         self.chunks.extend(chunks)
 
-    def upsert(self, embeddings: Iterable["np.ndarray"], chunks: List[Chunk]) -> None:
+    def upsert(self, embeddings: Iterable[np.ndarray], chunks: list[Chunk]) -> None:
         """
         Upsert: replace vectors for existing chunk ids, append new otherwise.
         Rebuilds the index if any replacement occurred.
@@ -100,7 +101,7 @@ class VectorStore:
         new_vectors = []
         new_chunks = []
 
-        for vec, chunk in zip(vectors, chunks):
+        for vec, chunk in zip(vectors, chunks, strict=False):
             if chunk.id in id_to_pos:
                 pos = id_to_pos[chunk.id]
                 if self.embeddings is not None:
@@ -138,7 +139,7 @@ class VectorStore:
         kept_embeddings = []
         kept_chunks = []
         if self.embeddings is not None:
-            for emb, ch in zip(self.embeddings, self.chunks):
+            for emb, ch in zip(self.embeddings, self.chunks, strict=False):
                 if ch.id not in ids_to_remove:
                     kept_embeddings.append(emb)
                     kept_chunks.append(ch)
@@ -160,7 +161,7 @@ class VectorStore:
         self,
         query_embedding,
         top_k: int = 5,
-        filter_fn: Optional[Callable[[Chunk], bool]] = None,
+        filter_fn: Callable[[Chunk], bool] | None = None,
         return_scores: bool = True,
     ):
         """
@@ -179,7 +180,7 @@ class VectorStore:
         distances, indices = self.index.search(q, top_k)
 
         results = []
-        for dist, idx in zip(distances[0], indices[0]):
+        for dist, idx in zip(distances[0], indices[0], strict=False):
             if idx < 0 or idx >= len(self.chunks):
                 continue
             chunk = self.chunks[idx]
@@ -305,10 +306,10 @@ class InMemoryVectorStore(VectorStore):
 
         results = []
 
-        for i, (chunk, vector) in enumerate(zip(self.chunks, self.embeddings)):
+        for i, (chunk, vector) in enumerate(zip(self.chunks, self.embeddings, strict=False)):
             distance = sum(
                 (a - b) ** 2
-                for a, b in zip(query_embedding, vector)
+                for a, b in zip(query_embedding, vector, strict=False)
             )
 
             results.append(

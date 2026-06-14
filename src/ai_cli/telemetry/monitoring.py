@@ -42,11 +42,12 @@ Design goals
 """
 
 from __future__ import annotations
+
 import contextlib
-import os
 import logging
+import os
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +68,14 @@ if PROMETHEUS_ENABLED:
         try:
                 from prometheus_client import (  # type: ignore
                         Counter as PromCounter,
+                )
+                from prometheus_client import (
                         Gauge as PromGauge,
-                        start_http_server,
                 )
                 from prometheus_client import core as prom_core  # type: ignore
+                from prometheus_client import (
+                        start_http_server,
+                )
         except Exception:
                 PromCounter = None  # type: ignore
                 PromGauge = None  # type: ignore
@@ -94,7 +99,7 @@ class _NoopMetric:
                 return
 
 
-def _find_existing_metric(metric_name: str) -> Optional[Any]:
+def _find_existing_metric(metric_name: str) -> Any | None:
         """Attempt to find an already-registered collector by metric name."""
         if prom_core is None:
                 return None
@@ -163,8 +168,8 @@ if OTEL_ENABLED:
                         TracerProvider as SDKTracerProvider,
                 )
                 from opentelemetry.sdk.trace.export import (  # type: ignore
-                        SimpleSpanProcessor,
                         ConsoleSpanExporter,
+                        SimpleSpanProcessor,
                 )
         except Exception:
                 trace = None  # type: ignore
@@ -317,7 +322,7 @@ class Metrics:
                         logger.exception("Failed to start monitoring server")
 
         # Basic metrics helpers
-        def record_request(self, provider: Optional[str]) -> None:
+        def record_request(self, provider: str | None) -> None:
                 """Increment request counter."""
                 if not provider:
                         provider = "unknown"
@@ -326,7 +331,7 @@ class Metrics:
                 except Exception:
                         logger.debug("Failed to record request metric", exc_info=True)
 
-        def record_failure(self, provider: Optional[str]) -> None:
+        def record_failure(self, provider: str | None) -> None:
                 """Increment failure counter."""
                 if not provider:
                         provider = "unknown"
@@ -335,7 +340,7 @@ class Metrics:
                 except Exception:
                         logger.debug("Failed to record failure metric", exc_info=True)
 
-        def record_latency(self, provider: Optional[str], seconds: float) -> None:
+        def record_latency(self, provider: str | None, seconds: float) -> None:
                 """Set latency gauge."""
                 if seconds is None:
                         return
@@ -348,7 +353,7 @@ class Metrics:
 
         # Advanced RAG helpers
         def record_chunks(
-                self, provider: Optional[str], model: Optional[str], count: int = 1
+                self, provider: str | None, model: str | None, count: int = 1
         ) -> None:
                 """Record number of chunks produced during chunking/splitting."""
                 if not provider:
@@ -363,7 +368,7 @@ class Metrics:
                         logger.debug("Failed to record chunks metric", exc_info=True)
 
         def record_embedding(
-                self, provider: Optional[str], model: Optional[str], seconds: float
+                self, provider: str | None, model: str | None, seconds: float
         ) -> None:
                 """Record an embedding request and its latency."""
                 if not provider:
@@ -383,10 +388,10 @@ class Metrics:
 
         def record_vector_query(
                 self,
-                provider: Optional[str],
-                model: Optional[str],
+                provider: str | None,
+                model: str | None,
                 hits: int = 0,
-                seconds: Optional[float] = None,
+                seconds: float | None = None,
         ) -> None:
                 """Record a vector DB / similarity search query."""
                 if not provider:

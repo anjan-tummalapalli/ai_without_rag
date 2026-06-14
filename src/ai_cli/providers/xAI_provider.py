@@ -107,6 +107,13 @@ class InMemoryVectorStore:
 
     def count(self) -> int:
         return 0 if self._vectors is None else int(self._vectors.shape[0])
+    
+    def send(self, prompt: str, **kwargs) -> str:
+        response = self.client.chat.completions.create(
+                                                       model=self.model,
+                                                       messages=[{"role": "user", "content": prompt}],
+                                                      )
+        return response.choices[0].message.content
 
 
 class XAIProvider(AIProvider):
@@ -357,5 +364,12 @@ class XAIProvider(AIProvider):
             return bool(getattr(response, "choices", None))
         except Exception:
             return False
+    
+    def send(self, prompt: str, **kwargs) -> str:
+        response = self.client.chat.completions.create(
+                                                       model=self.model,
+                                                       messages=[{"role": "user", "content": prompt}],
+                                                      )
+        return response.choices[0].message.content
 
 __all__ = ["XAIProvider", "InMemoryVectorStore"]

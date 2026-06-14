@@ -1,17 +1,20 @@
+import asyncio
+import inspect
 import random
 import threading
 import time
-import inspect
 from collections import OrderedDict
+from collections.abc import Callable, Iterable
 from functools import wraps
-from typing import Any, Callable, Iterable, Optional, Tuple
+from typing import Any
+
 
 # Cache: TTL + thread-safety (memory)
 class Cache:
     def __init__(self, max_entries: int = 1000, redis_url: str = "redis://localhost:6379/0", prefix: str = "ai_gateway:"):
         self.max_entries = max_entries
         self.prefix = prefix
-        self._memory: OrderedDict[str, Tuple[Any, Optional[float]]] = OrderedDict()  # key -> (value, expires_at)
+        self._memory: OrderedDict[str, tuple[Any, float | None]] = OrderedDict()  # key -> (value, expires_at)
         self._lock = threading.RLock()
         self._redis = None
         try:
@@ -52,7 +55,7 @@ class Cache:
             self._memory[key] = (value, expires_at)
             return value
 
-    def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+    def set(self, key: str, value: Any, ttl: float | None = None) -> None:
         if self._redis is not None:
             self._redis.set(self._key(key), value, ex=ttl)
             return
@@ -79,7 +82,7 @@ class Cache:
 
 # RetryEngine with jitter, max_delay, retry_on filtering, and decorator helper
 class RetryEngine:
-    def __init__(self, max_attempts: int = 3, base_delay: float = 0.1, max_delay: float = 10.0, jitter: bool = True, retry_on: Optional[Iterable[type]] = None):
+    def __init__(self, max_attempts: int = 3, base_delay: float = 0.1, max_delay: float = 10.0, jitter: bool = True, retry_on: Iterable[type] | None = None):
         self.max_attempts = max_attempts
         self.base_delay = base_delay
         self.max_delay = max_delay
@@ -119,7 +122,7 @@ class RetryEngine:
 
 # AsyncRetryEngine with the same options
 class AsyncRetryEngine:
-    def __init__(self, max_attempts: int = 3, base_delay: float = 0.1, max_delay: float = 10.0, jitter: bool = True, retry_on: Optional[Iterable[type]] = None):
+    def __init__(self, max_attempts: int = 3, base_delay: float = 0.1, max_delay: float = 10.0, jitter: bool = True, retry_on: Iterable[type] | None = None):
         self.max_attempts = max_attempts
         self.base_delay = base_delay
         self.max_delay = max_delay
@@ -170,7 +173,7 @@ class CircuitBreaker:
 
         self._state = self.CLOSED
         self._failures = 0
-        self._opened_at: Optional[float] = None
+        self._opened_at: float | None = None
         self._half_open_successes = 0
         self._half_open_calls = 0
         self._lock = threading.RLock()
@@ -268,7 +271,7 @@ class RateLimiter:
                 return True
             return False
 
-    async def acquire(self, amount: float = 1.0, timeout: Optional[float] = None) -> bool:
+    async def acquire(self, amount: float = 1.0, timeout: float | None = None) -> bool:
         deadline = None if timeout is None else time.monotonic() + timeout
         while True:
             with self._lock:

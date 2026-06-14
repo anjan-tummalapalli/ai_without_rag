@@ -1,7 +1,8 @@
 from __future__ import annotations
-import os
+
 import logging
-from typing import List, Tuple, Optional, Any, Dict, TYPE_CHECKING
+import os
+from typing import TYPE_CHECKING, Any
 
 # Optional imports for embeddings/vector math
 # Use TYPE_CHECKING to allow static type checkers to see numpy typings while avoiding
@@ -14,13 +15,13 @@ else:
     except Exception:  # pragma: no cover - optional dependency
         np = None  # type: ignore
 
-from ai_cli.providers.base import AIProvider
-from ai_cli.providers.registry import PROVIDERS, register_provider
 from ai_cli.core.exceptions import (
     ProviderConfigurationError,
     ProviderRequestError,
     ResponseValidationError,
 )
+from ai_cli.providers.base import AIProvider
+from ai_cli.providers.registry import PROVIDERS, register_provider
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ class OpenAIProvider(AIProvider):
             raise ResponseValidationError("Empty response")
         return content.strip()
 
-    def get_embeddings(self, texts: List[str], model: Optional[str] = None) -> List[List[float]]:
+    def get_embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         """
         Return embeddings for a list of texts using OpenAI embeddings API.
         """
@@ -169,7 +170,7 @@ class OpenAICompatibleProvider(AIProvider):
             raise ResponseValidationError("Empty response")
         return content.strip()
 
-    def get_embeddings(self, texts: List[str], model: Optional[str] = None) -> List[List[float]]:
+    def get_embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         """
         Return embeddings for a list of texts using an OpenAI-compatible embeddings endpoint.
         """
@@ -305,7 +306,7 @@ class CohereProvider(AIProvider):
 
 
 # ---- RAG helpers ----
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     """
     Split text into overlapping chunks of approx chunk_size characters.
     Overlap ensures context continuity.
@@ -317,7 +318,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
     if overlap >= chunk_size:
         raise ValueError("overlap must be smaller than chunk_size")
 
-    chunks: List[str] = []
+    chunks: list[str] = []
     start = 0
     text_len = len(text)
     while start < text_len:
@@ -343,10 +344,10 @@ class SimpleVectorStore:
         if np is None:
             raise ProviderConfigurationError("numpy is required for SimpleVectorStore")
         self._vectors = np.zeros((0, 0), dtype=float)  # shape (n, dim)
-        self._metadatas: List[Dict[str, Any]] = []
-        self._dim: Optional[int] = None
+        self._metadatas: list[dict[str, Any]] = []
+        self._dim: int | None = None
 
-    def add(self, vectors: List[List[float]], metadatas: Optional[List[Dict[str, Any]]] = None) -> None:
+    def add(self, vectors: list[list[float]], metadatas: list[dict[str, Any]] | None = None) -> None:
         if not vectors:
             return
         arr = np.array(vectors, dtype=float)
@@ -375,7 +376,7 @@ class SimpleVectorStore:
         sim = (a @ b.T) / (a_norm * b_norm.T)
         return sim
 
-    def query(self, query_vector: List[float], top_k: int = 5) -> List[Tuple[Dict[str, Any], float]]:
+    def query(self, query_vector: list[float], top_k: int = 5) -> list[tuple[dict[str, Any], float]]:
         if self._dim is None or self._vectors.shape[0] == 0:
             return []
         q = np.array([query_vector], dtype=float)
@@ -386,7 +387,7 @@ class SimpleVectorStore:
         top_k = max(1, min(top_k, len(sims)))
         idx = np.argpartition(-sims, top_k - 1)[:top_k]
         idx_sorted = idx[np.argsort(-sims[idx])]
-        results: List[Tuple[Dict[str, Any], float]] = []
+        results: list[tuple[dict[str, Any], float]] = []
         for i in idx_sorted:
             results.append((self._metadatas[i], float(sims[i])))
         return results
@@ -411,17 +412,17 @@ class RAGManager:
 
     def build_store_from_texts(
         self,
-        texts: List[str],
+        texts: list[str],
         chunk_size: int = 500,
         overlap: int = 50,
-        metadata_fn: Optional[Any] = None,
+        metadata_fn: Any | None = None,
     ) -> None:
         """
         Chunk each text and embed the chunks; metadata_fn, if provided, should accept (text_index, chunk_index, chunk_str)
         and return a metadata dict.
         """
-        all_chunks: List[str] = []
-        metadatas: List[Dict[str, Any]] = []
+        all_chunks: list[str] = []
+        metadatas: list[dict[str, Any]] = []
         for ti, text in enumerate(texts):
             chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
             for ci, chunk in enumerate(chunks):
@@ -433,7 +434,7 @@ class RAGManager:
         embeddings = self.provider.get_embeddings(all_chunks)
         self.store.add(embeddings, metadatas)
 
-    def query(self, query_text: str, top_k: int = 5) -> List[Tuple[Dict[str, Any], float, str]]:
+    def query(self, query_text: str, top_k: int = 5) -> list[tuple[dict[str, Any], float, str]]:
         """
         Return list of (metadata, score, chunk_text) for top_k nearest chunks.
         """
@@ -443,7 +444,7 @@ class RAGManager:
         q_vec = embeddings[0]
         results = self.store.query(q_vec, top_k=top_k)
         # enrich results with chunk text if available
-        enriched: List[Tuple[Dict[str, Any], float, str]] = []
+        enriched: list[tuple[dict[str, Any], float, str]] = []
         # We don't store raw chunks in SimpleVectorStore; reconstruct via metadatas if they included chunk text
         for meta, score in results:
             chunk_text_val = meta.get("chunk_text") or meta.get("text") or ""

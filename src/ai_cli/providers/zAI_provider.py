@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import requests
+
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider, ProviderMetadata
 
@@ -20,15 +22,7 @@ class ZAIProvider(AIProvider):
 
     DEFAULT_META = ProviderMetadata(
         name="z.ai",
-        default_model="zai-small",
-        supported_models=["zai-small", "zai-medium", "zai-large"],
-        supports_streaming=False,
-        supports_tools=False,
-        supports_vision=False,
-        max_context=65_000,
-        cost_per_1k_tokens=0.0,
-        avg_latency_ms=200,
-        supports_rag=False,
+        supports_rag=False,    
     )
 
     def __init__(
@@ -41,13 +35,14 @@ class ZAIProvider(AIProvider):
         meta = provider_meta or self.DEFAULT_META
         super().__init__(
             provider_name=provider_name,
-            model=model or meta.default_model,
+            model=model or getattr(meta, "default_model", None),
             provider_meta=meta,
             **kwargs,
         )
         # base URL and api key can be overridden with env vars
-        self.base_url = os.getenv("ZAI_API_BASE", ZAI_DEFAULT_BASE)
-        self.api_key = os.getenv("ZAI_API_KEY", "")
+        self.api_key = api_key or os.getenv("ZAI_API_KEY", "")
+        self.base_url = base_url or os.getenv("ZAI_BASE_URL", "https://api.z.ai/v1")
+        self.model = model or os.getenv("ZAI_MODEL", "zai-small")
 
     def _send_impl(self, prompt: str) -> str:
         if not self.api_key:
@@ -126,3 +121,29 @@ class ZAIProvider(AIProvider):
             return json.dumps(data, ensure_ascii=False)
         except Exception as exc:
             raise ProviderRequestError("unable to coerce z.AI response to string") from exc
+    
+    def send(self, prompt: str, **kwargs) -> str:
+        if not self.api_key:
+            raise ProviderRequestError("z.AI API key not configured")
+        try:
+            resp = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+                timeout=30,
+            )
+            if resp.status_code >= 400:
+                raise ProviderRequestError(f"z.AI error {resp.status_code}")
+            data = resp.json()
+
+            if "text" in data:
+                return data["text"]
+            if "choices" in data and data["choices"]:
+                return data["choices"][0]["message"]["content"]
+            return ""
+
+        except requests.RequestException as e:
+            raise ProviderRequestError("network error") from e

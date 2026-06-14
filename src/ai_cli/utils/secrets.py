@@ -1,8 +1,8 @@
-from typing import List
 import re
 
+
 def chunk_text(text: str, chunk_size: int = 1000,
-               overlap: int = 200) -> List[str]:
+               overlap: int = 200) -> list[str]:
     """
     Robust text chunker.
 
@@ -24,7 +24,7 @@ def chunk_text(text: str, chunk_size: int = 1000,
     if n <= chunk_size:
         return [text]
 
-    chunks: List[str] = []
+    chunks: list[str] = []
     start = 0
     while start < n:
         end = min(start + chunk_size, n)

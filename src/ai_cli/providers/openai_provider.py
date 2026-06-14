@@ -21,7 +21,7 @@ except Exception:  # pragma: no cover - openai optional in some environments
     OpenAI = None  # type: ignore
 
 from ai_cli.core.exceptions import ProviderRequestError
-from ai_cli.providers.base import AIProvider
+from ai_cli.providers.base import BaseProvider
 from ai_cli.providers.registry import (
     register_chat_provider,
     register_embedding_provider,
@@ -29,7 +29,7 @@ from ai_cli.providers.registry import (
 )
 
 
-class OpenAIProvider(AIProvider):
+class OpenAIProvider(BaseProvider):
     PROVIDER_NAME = "openai"
     BASE_URL = "https://api.openai.com/v1"
     DEFAULT_CHAT_MODEL = "gpt-5.5"
@@ -86,6 +86,8 @@ class OpenAIProvider(AIProvider):
         except Exception:
             return False
 
+    def send(self, prompt: str, **kwargs) -> str:
+        return self._send_impl(prompt)
     
 
     # ----------------------------
@@ -269,6 +271,9 @@ class OpenAIProvider(AIProvider):
             self._metadatas = metadatas
         except Exception as exc:
             raise ProviderRequestError(f"Failed to load vector store: {exc}") from exc
+
+    def ask(self, prompt: str, **kwargs) -> str:
+        return self.send(prompt, **kwargs)
 
 class OpenAIEmbeddingProvider:
     def __init__(self, model="text-embedding-3-small", api_key=None):

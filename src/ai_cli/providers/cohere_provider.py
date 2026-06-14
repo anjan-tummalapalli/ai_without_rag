@@ -1,326 +1,220 @@
-"""
-Cohere provider for ai_cli with Advanced RAG support.
-
-Integrates Cohere LLMs via the Cohere SDK and adds basic RAG:
-- chunking (configurable size/overlap)
-- embeddings via Cohere Embeddings API
-- simple in-memory vector DB
-- cosine similarity retrieval
-- automatic context augmentation for chat requests
-
-Environment:
-    COHERE_API_KEY must be set.
-"""
 from __future__ import annotations
 
-import importlib
 import math
 import os
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    import cohere  # type: ignore
+import cohere
 
-from ai_cli.core.exceptions import (  # pylint: disable=C0413
-    ProviderRequestError,
-)
-from ai_cli.providers.base import AIProvider  # pylint: disable=C0413
+# IMPORTANT:
+# Use relative import to avoid CI/package import resolution issues
+from .base import BaseProvider
 
 
-# pylint: disable=too-many-instance-attributes
-class CohereProvider(AIProvider):
-    """Cohere AI provider with optional RAG.
+class CohereProvider(BaseProvider):
+    """
+    Cohere provider with optional RAG support.
 
-    Parameters
-    ----------
-    model:
-        Cohere model name, default ``"command-r"``.
-    api_key:
-        Cohere API key; falls back to the ``COHERE_API_KEY`` env var.
-    rag_enabled:
-        Enable Retrieval-Augmented Generation.
-    embedding_model:
-        Embedding model to use, default ``"embed-english-v2.0"``.
-    chunk_size:
-        Character chunk size for document splitting, default ``500``.
-    chunk_overlap:
-        Character overlap between consecutive chunks, default ``50``.
-    vector_store_backend:
-        Backend for the vector store, default ``"memory"``.
+    Design contract aligned with OpenAI/Gemini providers:
+    - append-only in-memory vector store
+    - chunk → embed → store lifecycle
+    - cosine similarity retrieval
     """
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def __init__(
-        self,
-        model: str | None = None,
-        api_key: str | None = None,
-        rag_enabled: bool = False,
-        embedding_model: str | None = None,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
-        vector_store_backend: str = "memory",
-        **kwargs,
-    ) -> None:
-        self.api_key = api_key or os.getenv("COHERE_API_KEY")
-        if not self.api_key:
-            raise ProviderRequestError(
-                "COHERE_API_KEY environment variable is not set"
+    def __init__(self, *, rag_enabled: bool = False, **kwargs):
+        super().__init__(**kwargs)
+
+        self.rag_enabled = rag_enabled
+
+        api_key = (
+                   kwargs.get("api_key")
+                   or getattr(self, "api_key", None)
+                   or os.getenv("COHERE_API_KEY")
+                  )
+
+        if not api_key:
+            raise ValueError("COHERE_API_KEY is required")
+
+        self.client = cohere.Client(api_key)
+
+        # ----------------------------
+        # In-memory vector store
+        # ----------------------------
+        self._documents: list[str] = []
+        self._vectors: list[list[float]] = []
+        self._metadata: list[dict[str, Any]] = []
+
+    # =========================================================
+    # Chat
+    # =========================================================
+
+    def send(self, prompt: str, **kwargs) -> str:
+        """
+        Chat with optional RAG context injection.
+        """
+
+        if not self.rag_enabled:
+            return self._chat(prompt)
+
+        context = self.retrieve(prompt, top_k=5)
+
+        if context:
+            context_text = "\n\n".join(
+                f"[{i}] {item['text']}"
+                for i, item in enumerate(context)
             )
 
-        # Import Cohere SDK at runtime to keep the dependency optional.
-        try:
-            cohere_module = importlib.import_module("cohere")
-        except ImportError as exc:
-            raise ProviderRequestError(
-                "Cohere SDK is not installed; install with "
-                "'pip install cohere'"
-            ) from exc
+            prompt = (
+                "Use the following context to answer the question.\n\n"
+                f"{context_text}\n\n"
+                f"Question: {prompt}"
+            )
 
-        self.client: cohere.Client = cohere_module.Client(self.api_key)
+        return self._chat(prompt)
 
-        # Initialize base class (sets self.model, retry, metrics, etc.)
-        # *args removed: positional varargs after keyword-only params cause
-        # W1113 and make super().__init__ call order ambiguous.
-        super().__init__(provider_name="cohere", model=model, **kwargs)
-
-        # RAG configuration
-        self.rag_enabled: bool = rag_enabled
-        self.embedding_model: str = embedding_model or "embed-english-v2.0"
-        self.chunk_size: int = chunk_size
-        self.chunk_overlap: int = chunk_overlap
-        self.vector_store_backend: str = vector_store_backend
-
-        # Simple in-memory vector store
-        self._vectors: list[list[float]] = []
-        self._docs: list[dict[str, Any]] = []
-
-    # -------------------------
-    # Chunking utilities
-    # -------------------------
-    def _chunk_text(self, text: str) -> list[str]:
-        """Chunk *text* into overlapping character windows.
-
-        Args:
-            text: Source text to split.
-
-        Returns:
-            List of text chunks; empty list when *text* is empty.
+    def _chat(self, prompt: str) -> str:
         """
-        if not text:
-            return []
+        Low-level Cohere chat call.
+        """
 
-        if self.chunk_size <= 0:
-            return [text]
+        resp = self.client.chat(
+            message=prompt,
+        )
+        return resp.text
 
-        chunks: list[str] = []
-        start = 0
-        text_length = len(text)
-        while start < text_length:
-            end = start + self.chunk_size
-            chunks.append(text[start:end])
-            if end >= text_length:
-                break
-            start = max(0, end - self.chunk_overlap)
-        return chunks
+    # =========================================================
+    # Embeddings
+    # =========================================================
 
-    # -------------------------
-    # Embedding utilities
-    # -------------------------
-    def _create_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """Embed *texts* via the Cohere Embeddings API.
-
-        Args:
-            texts: List of strings to embed.
-
-        Returns:
-            List of float vectors, one per input string.
-
-        Raises:
-            ProviderRequestError: On API failure or unexpected response shape.
+    def _embed(self, texts: list[str]) -> list[list[float]]:
+        """
+        Cohere embedding wrapper.
         """
         if not texts:
             return []
 
-        try:
-            resp = self.client.embed(model=self.embedding_model, texts=texts)
-            if not hasattr(resp, "embeddings"):
-                raise ProviderRequestError(
-                    "Cohere embed response missing embeddings field"
-                )
-            embeddings: list[list[float]] = (  # type: ignore[attr-defined]
-                resp.embeddings
-            )
-            if not isinstance(embeddings, list) or len(embeddings) != len(
-                texts
-            ):
-                raise ProviderRequestError("Invalid embeddings returned")
-            return embeddings
-        except ProviderRequestError:
-            raise
-        except Exception as exc:
-            raise ProviderRequestError(
-                f"Cohere embedding request failed: {exc}"
-            ) from exc
+        resp = self.client.embed(
+            texts=texts,
+            input_type="search_document",
+        )
+        return resp.embeddings
 
-    # -------------------------
-    # Vector store (in-memory)
-    # -------------------------
+    # =========================================================
+    # RAG ingestion
+    # =========================================================
+
     def upsert_documents(
         self,
         texts: list[str],
-        metadatas: list[dict[str, Any | None]] = None,
+        metadatas: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Chunk, embed, and store *texts* in the in-memory vector store.
-
-        Args:
-            texts: Source documents to index.
-            metadatas: Optional per-document metadata dicts.
         """
+        Chunk → embed → store pipeline.
+
+        Contract:
+        - chunk-level storage
+        - strict alignment between vectors/documents/metadata
+        """
+
         if not texts:
             return
 
         chunk_texts: list[str] = []
         chunk_meta: list[dict[str, Any]] = []
+
+        # ----------------------------
+        # Chunk documents
+        # ----------------------------
         for doc_idx, doc_text in enumerate(texts):
-            doc_meta = (
+            doc_metadata = (
                 metadatas[doc_idx]
                 if metadatas and doc_idx < len(metadatas)
-                else None
+                else {}
             )
+
             for chunk_idx, chunk in enumerate(self._chunk_text(doc_text)):
-                meta: dict[str, Any] = {
+                chunk_texts.append(chunk)
+
+                chunk_meta.append({
                     "doc_index": doc_idx,
                     "chunk_index": chunk_idx,
-                }
-                if doc_meta:
-                    meta["metadata"] = doc_meta
-                chunk_texts.append(chunk)
-                chunk_meta.append(meta)
+                    "metadata": doc_metadata,
+                })
 
         if not chunk_texts:
             return
 
-        for vec, txt, meta in zip(
-                                  self._vectors,
-                                  self._documents,
-                                  self._metadata,
-                                  strict=True,
-                                 ):
-            self._vectors.append(vec)
-            self._docs.append({"text": txt, "meta": meta})
+        # ----------------------------
+        # Embed chunks
+        # ----------------------------
+        embeddings = self._embed(chunk_texts)
 
-    @staticmethod
-    def _cosine_similarity(a: list[float], b: list[float]) -> float:
-        """Return the cosine similarity between vectors *a* and *b*.
-
-        Args:
-            a: First float vector.
-            b: Second float vector.
-
-        Returns:
-            Cosine similarity in ``[-1, 1]``, or ``0.0`` for zero vectors.
-        """
-        if not a or not b:
-            return 0.0
-        dot = sum(ai * bi for ai, bi in zip(a, b, strict=True))
-        norm_a = math.sqrt(sum(ai * ai for ai in a))
-        norm_b = math.sqrt(sum(bi * bi for bi in b))
-        if norm_a == 0.0 or norm_b == 0.0:
-            return 0.0
-        return dot / (norm_a * norm_b)
-
-    def query_documents(
-        self, query: str, top_k: int = 5
-    ) -> list[tuple[dict[str, Any], float]]:
-        """Retrieve the *top_k* most relevant chunks for *query*.
-
-        Args:
-            query: Search query string.
-            top_k: Maximum number of results to return.
-
-        Returns:
-            List of ``(doc_record, score)`` tuples sorted by descending score.
-        """
-        if not query or not self._vectors or not self._docs:
-            return []
-
-        query_vecs = self._create_embeddings([query])
-        if not query_vecs:
-            return []
-        qvec = query_vecs[0]
-
-        scored: list[tuple[int, float]] = sorted(
-            (
-                (idx, self._cosine_similarity(qvec, vec))
-                for idx, vec in enumerate(self._vectors)
-            ),
-            key=lambda x: x[1],
-            reverse=True,
-        )
-        return [
-            (self._docs[idx], float(score)) for idx, score in scored[:top_k]
-        ]
-
-    # -------------------------
-    # Override send behavior for RAG
-    # -------------------------
-    def _send_impl(self, prompt: str) -> str:
-        """Send *prompt* to Cohere, optionally prepending RAG context.
-
-        Args:
-            prompt: Validated prompt string.
-
-        Returns:
-            Response text from Cohere.
-
-        Raises:
-            ProviderRequestError: On Cohere API failure or empty response.
-        """
-        try:
-            final_prompt = prompt
-            if self.rag_enabled and self._vectors:
-                retrieved = self.query_documents(prompt, top_k=3)
-                if retrieved:
-                    context = "\n\n---\n\n".join(
-                        f"[score={score:.4f}] {doc.get('text', '')}"
-                        for doc, score in retrieved
-                    )
-                    final_prompt = f"Context:\n{context}\n\nUser: {prompt}"
-
-            response = self.client.chat(
-                model=self.model, message=final_prompt
+        if len(embeddings) != len(chunk_texts):
+            raise RuntimeError(
+                f"Embedding mismatch: {len(embeddings)} != {len(chunk_texts)}"
             )
-            if not response:
-                raise ProviderRequestError("Cohere returned empty response")
-            text: str | None = getattr(response, "text", None)
-            if text is None:
-                text = str(response)
-            if not text:
-                raise ProviderRequestError("Cohere returned empty text")
-            return text.strip()
 
-        except ProviderRequestError:
-            raise
-        except Exception as exc:
-            raise ProviderRequestError(
-                f"Cohere request failed: {exc}"
-            ) from exc
+        # ----------------------------
+        # Store (append-only contract)
+        # ----------------------------
+        for vec, txt, meta in zip(embeddings, chunk_texts, chunk_meta, strict=False):
+            self._vectors.append(vec)
+            self._documents.append(txt)
+            self._metadata.append(meta)
 
-    def health_check(self) -> bool:
-        """Perform a lightweight Cohere connectivity test.
+    # =========================================================
+    # Retrieval
+    # =========================================================
 
-        If RAG is enabled, the embedding endpoint is also verified.
-
-        Returns:
-            ``True`` if all tested endpoints respond correctly.
+    def retrieve(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """
-        try:
-            resp = self.client.chat(model=self.model, message="ping")
-            if not (resp and getattr(resp, "text", None)):
-                return False
-            if self.rag_enabled:
-                emb = self._create_embeddings(["ping"])
-                return bool(emb and isinstance(emb[0], list))
-            return True
-        except Exception:  # pylint: disable=broad-exception-caught
-            return False
+        Cosine similarity search over in-memory embeddings.
+        """
+
+        if not self._vectors:
+            return []
+
+        q_vec = self._embed([query])[0]
+
+        scored: list[dict[str, Any]] = []
+
+        for i, vec in enumerate(self._vectors):
+            score = self._cosine_similarity(q_vec, vec)
+
+            scored.append({
+                "text": self._documents[i],
+                "metadata": self._metadata[i],
+                "score": score,
+            })
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:top_k]
+
+    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
+        """
+        Stable cosine similarity implementation.
+        """
+
+        dot = sum(x * y for x, y in zip(a, b, strict=False))
+        norm_a = math.sqrt(sum(x * x for x in a))
+        norm_b = math.sqrt(sum(x * x for x in b))
+
+        return dot / (norm_a * norm_b + 1e-8)
+
+    # =========================================================
+    # Utility
+    # =========================================================
+
+    def clear_index(self) -> None:
+        """
+        Reset in-memory vector store.
+        """
+        self._documents.clear()
+        self._vectors.clear()
+        self._metadata.clear()
+
+    def query_documents(self, query: str, top_k: int = 5):
+        if not self.vector_store:
+            raise ValueError("RAG is not enabled for this provider")
+
+        return self.vector_store.search(query, top_k=top_k)

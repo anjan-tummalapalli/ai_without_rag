@@ -1,10 +1,8 @@
-import os
 import json
 import logging
-
-from dataclasses import dataclass, field, asdict
+import os
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +96,7 @@ class RAGConfig:
         cfg.top_k = int(os.getenv(prefix + "TOP_K", TOP_K))
         return cfg
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         data = asdict(self)
 
         def convert(obj):
@@ -114,7 +112,7 @@ class RAGConfig:
 
     @classmethod
     def from_json(cls, path: Path) -> "RAGConfig":
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         for key in (

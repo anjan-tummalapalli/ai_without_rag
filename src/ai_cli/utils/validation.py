@@ -1,8 +1,9 @@
 from __future__ import annotations
-import re
-from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Tuple, Dict, Any
+
 import logging
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Any
 
 # Optional deps - fallbacks handled below to avoid hard dependency
 try:
@@ -42,7 +43,7 @@ class HallucinationResult:
 
     score: float
     passed: bool
-    reasons: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
 
 
 class HallucinationDetector:
@@ -69,7 +70,7 @@ class HallucinationDetector:
     def evaluate(self, response: str) -> HallucinationResult:
         """Evaluate response for hallucination risk."""
         score = 0.0
-        reasons: List[str] = []
+        reasons: list[str] = []
 
         if not response or len(response.strip()) < MIN_RESPONSE_LENGTH:
             score += 0.4
@@ -107,7 +108,7 @@ class ResponseValidator:
 # Advanced RAG utilities
 # ---------------------------
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     """
     Chunk a long text into overlapping windows.
 
@@ -128,7 +129,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
     if not text:
         return []
 
-    chunks: List[str] = []
+    chunks: list[str] = []
     start = 0
     n = len(text)
     while start < n:
@@ -176,7 +177,7 @@ class Embedder:
     def dim(self) -> int:
         return self._dim
 
-    def embed_texts(self, texts: Sequence[str]) -> List:
+    def embed_texts(self, texts: Sequence[str]) -> list:
         """
         Embed a list of texts.
 
@@ -212,19 +213,19 @@ class VectorStore:
     def __init__(self, dim: int = _DEFAULT_EMBED_DIM, use_faiss: bool = True):
         self.dim = dim
         self._use_faiss = use_faiss and _HAS_FAISS
-        self._ids: List[int] = []
-        self._texts: List[str] = []
-        self._metadatas: List[Optional[Dict[str, Any]]] = []
+        self._ids: list[int] = []
+        self._texts: list[str] = []
+        self._metadatas: list[dict[str, Any] | None] = []
         self._next_id = 0
 
         if self._use_faiss:
             self._index = faiss.IndexFlatIP(dim)  # inner product; embeddings should be normalized
-            self._id_to_pos: Dict[int, int] = {}
+            self._id_to_pos: dict[int, int] = {}
         else:
             self._index = None
             self._embeddings = []  # store numpy arrays or lists
 
-    def add(self, texts: Sequence[str], embeddings: Sequence, metadatas: Optional[Sequence[Optional[Dict[str, Any]]]] = None):
+    def add(self, texts: Sequence[str], embeddings: Sequence, metadatas: Sequence[dict[str, Any] | None] | None = None):
         """
         Add documents and corresponding embeddings to the store.
 
@@ -236,7 +237,7 @@ class VectorStore:
         if metadatas is None:
             metadatas = [None] * len(texts)
 
-        for text, emb, md in zip(texts, embeddings, metadatas):
+        for text, emb, md in zip(texts, embeddings, metadatas, strict=False):
             id_ = self._next_id
             self._next_id += 1
             self._ids.append(id_)
@@ -261,7 +262,7 @@ class VectorStore:
         if qnorm > 0:
             q = q / qnorm
         sims = []
-        for idx, emb in enumerate(self._embeddings):
+        for _ in items:
             emb_arr = np.asarray(emb, dtype="float32")
             embnorm = np.linalg.norm(emb_arr)
             if embnorm > 0:
@@ -271,7 +272,7 @@ class VectorStore:
         ranked_idx = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
         return [(self._ids[i], sims[i], self._texts[i], self._metadatas[i]) for i in ranked_idx]
 
-    def search(self, query_embedding, top_k: int = 5) -> List[Tuple[int, float, str, Optional[Dict[str, Any]]]]:
+    def search(self, query_embedding, top_k: int = 5) -> list[tuple[int, float, str, dict[str, Any] | None]]:
         """
         Search the store for nearest neighbors.
 
@@ -287,7 +288,7 @@ class VectorStore:
                 q = q / qnorm
             D, I = self._index.search(np.expand_dims(q, axis=0), top_k)
             results = []
-            for score, pos in zip(D[0], I[0]):
+            for score, pos in zip(D[0], I[0], strict=False):
                 if pos < 0:
                     continue
                 doc_id = self._ids[pos]
@@ -316,11 +317,11 @@ class RAGHelper:
         add batching, persistence, and robust error handling.
     """
 
-    def __init__(self, embedder: Optional[Embedder] = None, vector_store: Optional[VectorStore] = None):
+    def __init__(self, embedder: Embedder | None = None, vector_store: VectorStore | None = None):
         self.embedder = embedder or Embedder()
         self.store = vector_store or VectorStore(dim=self.embedder.dim)
 
-    def index_document(self, doc_text: str, chunk_size: int = 500, overlap: int = 50, metadata: Optional[Dict[str, Any]] = None):
+    def index_document(self, doc_text: str, chunk_size: int = 500, overlap: int = 50, metadata: dict[str, Any] | None = None):
         chunks = chunk_text(doc_text, chunk_size=chunk_size, overlap=overlap)
         embeddings = self.embedder.embed_texts(chunks)
         metadatas = [{"chunk_index": i, **(metadata or {})} for i in range(len(chunks))]

@@ -1,10 +1,11 @@
 # /Users/anjan/Documents/New project/ai_chat/ai_cli/src/ai_cli/rag/models.py
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Iterable, List, Optional, Iterator
-import uuid
 import re
+import uuid
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -28,7 +29,7 @@ class Document:
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         preserve_whole_words: bool = True,
-    ) -> List["Chunk"]:
+    ) -> list[Chunk]:
         """
         Split the document.content into Chunk objects.
 
@@ -110,7 +111,7 @@ class RetrievalResult:
     score: float
 
 
-def make_chunk_id(prefix: Optional[str] = None) -> str:
+def make_chunk_id(prefix: str | None = None) -> str:
     """
     Generate a reasonably readable chunk id. If prefix is provided, sanitize it
     (keep alphanumerics and replace others with '-') and prefix the uuid with it.
@@ -167,7 +168,7 @@ def _chunk_text(
         start += step
 
 
-def chunks_from_iterable(texts: Iterable[str], source: str, id_prefix: Optional[str] = None) -> List[Chunk]:
+def chunks_from_iterable(texts: Iterable[str], source: str, id_prefix: str | None = None) -> list[Chunk]:
     """
     Convenience: make chunks from an iterable of strings with generated ids.
     Optional id_prefix allows source-based ids.

@@ -1,6 +1,7 @@
 from __future__ import annotations
+
 import re
-from typing import Callable, List, Optional
+from collections.abc import Callable
 from dataclasses import dataclass
 
 
@@ -28,9 +29,9 @@ class TextChunker:
         self,
         tokens_per_chunk: int = 200,
         overlap: int = 50,
-        tokenizer: Optional[Callable[[str], List[str]]] = None,
-        sentence_splitter: Optional[Callable[[str], List[str]]] = None,
-        max_chunks: Optional[int] = None,
+        tokenizer: Callable[[str], list[str]] | None = None,
+        sentence_splitter: Callable[[str], list[str]] | None = None,
+        max_chunks: int | None = None,
     ) -> None:
         self.tokens_per_chunk = max(1, tokens_per_chunk)
         self.overlap = max(0, overlap)
@@ -38,20 +39,20 @@ class TextChunker:
         self.sentence_splitter = sentence_splitter or (lambda t: [s.strip() for s in self.SENTENCE_SPLIT_RE.split(t) if s.strip()])
         self.max_chunks = max_chunks
 
-    def _words(self, text: str) -> List[str]:
+    def _words(self, text: str) -> list[str]:
         return text.split()
 
     def _count_tokens(self, text: str) -> int:
         return len(self.tokenizer(text))
 
-    def chunk_by_tokens(self, text: str) -> List[str]:
+    def chunk_by_tokens(self, text: str) -> list[str]:
         return [c.text for c in self.chunk_by_tokens_with_meta(text)]
 
-    def chunk_by_tokens_with_meta(self, text: str) -> List[Chunk]:
+    def chunk_by_tokens_with_meta(self, text: str) -> list[Chunk]:
         tokens = self.tokenizer(text)
         if not tokens:
             return []
-        chunks: List[Chunk] = []
+        chunks: list[Chunk] = []
         i = 0
         step = max(1, self.tokens_per_chunk - self.overlap)
         idx = 0
@@ -65,10 +66,10 @@ class TextChunker:
             i += step
         return chunks
 
-    def chunk_by_sentences(self, text: str, max_tokens: Optional[int] = None) -> List[str]:
+    def chunk_by_sentences(self, text: str, max_tokens: int | None = None) -> list[str]:
         return [c.text for c in self.chunk_by_sentences_with_meta(text, max_tokens=max_tokens)]
 
-    def chunk_by_sentences_with_meta(self, text: str, max_tokens: Optional[int] = None) -> List[Chunk]:
+    def chunk_by_sentences_with_meta(self, text: str, max_tokens: int | None = None) -> list[Chunk]:
         max_tokens = max_tokens or self.tokens_per_chunk
         sentences = self.sentence_splitter(text)
         if not sentences:
@@ -76,13 +77,13 @@ class TextChunker:
 
         # Pre-tokenize sentences and keep token lists for each sentence
         sent_tokens = [self.tokenizer(s) for s in sentences]
-        chunks: List[Chunk] = []
-        current_tokens: List[str] = []
+        chunks: list[Chunk] = []
+        current_tokens: list[str] = []
         current_start_idx = 0  # word index of first token in current chunk
         total_word_index = 0   # running word index across sentences
         chunk_index = 0
 
-        for i, tokens in enumerate(sent_tokens):
+        for _ in range(n):
             sent_len = len(tokens)
             # If current is empty, mark start index at current total_word_index
             if not current_tokens:
@@ -129,7 +130,7 @@ class PromptCorrector:
     def __init__(self, tokens_per_chunk: int = 200, overlap: int = 50, **kwargs) -> None:
         self.chunker = TextChunker(tokens_per_chunk=tokens_per_chunk, overlap=overlap, **kwargs)
 
-    def correct(self, prompt: str, by_sentences: bool = True, max_tokens: Optional[int] = None) -> str:
+    def correct(self, prompt: str, by_sentences: bool = True, max_tokens: int | None = None) -> str:
         if not prompt:
             return prompt
         if by_sentences:
@@ -138,7 +139,7 @@ class PromptCorrector:
             chunks = self.chunker.chunk_by_tokens(prompt)
         return "\n\n".join(chunks)
 
-    def correct_with_meta(self, prompt: str, by_sentences: bool = True, max_tokens: Optional[int] = None) -> List[Chunk]:
+    def correct_with_meta(self, prompt: str, by_sentences: bool = True, max_tokens: int | None = None) -> list[Chunk]:
         if not prompt:
             return []
         if by_sentences:
@@ -146,6 +147,6 @@ class PromptCorrector:
         return self.chunker.chunk_by_tokens_with_meta(prompt)
 
 
-def prompt_corrector(prompt: str, *, tokens_per_chunk: int = 200, overlap: int = 50, by_sentences: bool = True, max_tokens: Optional[int] = None) -> str:
+def prompt_corrector(prompt: str, *, tokens_per_chunk: int = 200, overlap: int = 50, by_sentences: bool = True, max_tokens: int | None = None) -> str:
     pc = PromptCorrector(tokens_per_chunk=tokens_per_chunk, overlap=overlap)
     return pc.correct(prompt, by_sentences=by_sentences, max_tokens=max_tokens)

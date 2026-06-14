@@ -7,7 +7,8 @@ import heapq
 import math
 import struct
 import uuid
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 
 class InMemoryRAGPipeline:
@@ -20,15 +21,15 @@ class InMemoryRAGPipeline:
 
     def __init__(self, embed_dim: int = 128) -> None:
         self.embed_dim = embed_dim
-        self._store: List[Dict[str, Any]] = []
+        self._store: list[dict[str, Any]] = []
 
     def chunk_text(
         self, text: str, chunk_size: int = 500, overlap: int = 50
-    ) -> List[str]:
+    ) -> list[str]:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be positive")
         overlap = max(0, overlap)
-        chunks: List[str] = []
+        chunks: list[str] = []
         start = 0
         length = len(text)
         while start < length:
@@ -41,22 +42,22 @@ class InMemoryRAGPipeline:
             start = max(0, end - overlap)
         return chunks
 
-    def _embed_one(self, text: str) -> List[float]:
+    def _embed_one(self, text: str) -> list[float]:
         """Deterministic pseudo-embedding from SHA-256 (not semantic)."""
         base = hashlib.sha256(text.encode("utf-8")).digest()
-        vec: List[float] = []
+        vec: list[float] = []
         for i in range(self.embed_dim):
             digest = hashlib.sha256(base + i.to_bytes(2, "little")).digest()
             val = struct.unpack(">I", digest[:4])[0]
             vec.append((val / 0xFFFFFFFF) * 2.0 - 1.0)
         return vec
 
-    def embed_texts(self, texts: Sequence[str]) -> List[List[float]]:
+    def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
         return [self._embed_one(t) for t in texts]
 
     @staticmethod
     def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
-        num = sum(x * y for x, y in zip(a, b))
+        num = sum(x * y for x, y in zip(a, b, strict=False))
         norma = math.fsum(x * x for x in a)
         normb = math.fsum(y * y for y in b)
         if norma <= 0 or normb <= 0:
@@ -66,15 +67,15 @@ class InMemoryRAGPipeline:
     def upsert_documents(
         self,
         doc_texts: Sequence[str],
-        doc_ids: Optional[Sequence[str]] = None,
+        doc_ids: Sequence[str] | None = None,
         chunk_size: int = 500,
         overlap: int = 50,
     ) -> None:
         if doc_ids is None:
             doc_ids = [str(uuid.uuid4()) for _ in doc_texts]
-        for doc_id, text in zip(doc_ids, doc_texts):
+        for doc_id, text in zip(doc_ids, doc_texts, strict=False):
             chunks = self.chunk_text(text, chunk_size=chunk_size, overlap=overlap)
-            for chunk, emb in zip(chunks, self.embed_texts(chunks)):
+            for chunk, emb in zip(chunks, self.embed_texts(chunks), strict=False):
                 self._store.append(
                     {
                         "id": str(uuid.uuid4()),

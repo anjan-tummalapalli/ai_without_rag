@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import Iterable, List, TYPE_CHECKING, Any, Optional, Union
-from ai_cli.config.rag_config import EMBEDDING_MODEL
-import os
-import importlib
+
 import inspect
+import os
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any
+
+from ai_cli.config.rag_config import EMBEDDING_MODEL
 
 try:
     import numpy as _np  # local alias to avoid name clash until set on self
@@ -11,7 +13,7 @@ except Exception:
     _np = None  # type: ignore
 
 if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
+    pass
 
 TESTING = os.getenv("PYTEST_RUNNING") == "1"
 
@@ -33,10 +35,10 @@ class EmbeddingGenerator:
 
     def __init__(
         self,
-        model: Union[str, Any] = EMBEDDING_MODEL,
+        model: str | Any = EMBEDDING_MODEL,
         batch_size: int = 32,
         normalize: bool = True,
-        device: Optional[str] = None,
+        device: str | None = None,
     ) -> None:
         """
         Initialize embedding generator.
@@ -128,7 +130,7 @@ class EmbeddingGenerator:
         # model.encode sometimes returns a list or nested lists
         return np.asarray(emb)
 
-    def _encode_with_fallback(self, batch: List[str]) -> Any:
+    def _encode_with_fallback(self, batch: list[str]) -> Any:
         """
         Call model.encode with a best-effort set of kwargs. If the model doesn't accept
         certain kwargs, fall back to calling without them and convert the result.
@@ -164,7 +166,7 @@ class EmbeddingGenerator:
             return result
         return result_np
 
-    def embed_batch(self, texts: Iterable[str]) -> List[Any]:
+    def embed_batch(self, texts: Iterable[str]) -> list[Any]:
         """
         Generate embeddings for an iterable of texts. Returns list of numpy arrays.
         Uses batching to avoid OOM on large lists.
@@ -173,7 +175,7 @@ class EmbeddingGenerator:
         texts_list = [
             t.text if hasattr(t, "text") else str(t) for t in texts
         ]
-        embeddings: List[Any] = []
+        embeddings: list[Any] = []
         for i in range(0, len(texts_list), self.batch_size):
             batch = texts_list[i : i + self.batch_size]
             emb_batch = self._encode_with_fallback(batch)
@@ -196,7 +198,7 @@ class EmbeddingGenerator:
         return emb_list[0]
 
     @classmethod
-    def from_model(cls, model_instance: Any, batch_size: int = 32, normalize: bool = True, device: Optional[str] = None):
+    def from_model(cls, model_instance: Any, batch_size: int = 32, normalize: bool = True, device: str | None = None):
         """
         Alternate constructor when you already have an instantiated model object.
         """

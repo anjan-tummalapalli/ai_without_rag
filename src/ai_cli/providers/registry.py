@@ -6,7 +6,7 @@ register themselves via ``register_provider`` (and related functions) when they
 are imported. ``ai_cli.providers.bootstrap.init_providers`` loads all provider
 modules lazily.
 """
-
+from ai_cli.rag.in_memory import InMemoryVectorStore
 
 # Core mappings populated by provider modules at import time
 PROVIDER_MAP: dict[str, type] = {}
@@ -116,3 +116,10 @@ def build_provider(name: str, **kwargs):
     if name not in PROVIDER_MAP:
         raise ValueError(f"Unknown provider: {name}")
     return PROVIDER_MAP[name](**kwargs)
+
+provider_all = {
+    "BaseProvider": BaseProvider,
+    "CohereProvider": CohereProvider,
+    "XAIProvider": XAIProvider,
+    "InMemoryVectorStore": InMemoryVectorStore,
+}

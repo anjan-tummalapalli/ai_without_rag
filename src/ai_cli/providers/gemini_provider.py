@@ -539,3 +539,6 @@ class GeminiProvider(AIProvider):
             combined = prompt
 
         return self._send_impl(combined)
+    
+    def send(self, prompt: str, **kwargs) -> str:
+        return self._send_impl(prompt)

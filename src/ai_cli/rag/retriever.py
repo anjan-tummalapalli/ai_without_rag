@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
 from ai_cli.config.rag_config import TOP_K
 from ai_cli.rag.embeddings import EmbeddingGenerator
@@ -26,9 +26,9 @@ class Retriever:
     def retrieve(
         self,
         query: str,
-        top_k: Optional[int] = None,
-        filter_fn: Optional[Callable[[Chunk], bool]] = None,
-    ) -> List[RetrievalResult]:
+        top_k: int | None = None,
+        filter_fn: Callable[[Chunk], bool] | None = None,
+    ) -> list[RetrievalResult]:
         k = top_k if top_k is not None else self.top_k
         query_vec = self.embedder.embed_text(query)
         hits = self.store.search(query_vec, top_k=k, filter_fn=filter_fn)
@@ -40,7 +40,7 @@ class Retriever:
     def build_context(
         self,
         query: str,
-        top_k: Optional[int] = None,
+        top_k: int | None = None,
         separator: str = "\n\n---\n\n",
     ) -> str:
         results = self.retrieve(query, top_k=top_k)

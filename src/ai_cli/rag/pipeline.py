@@ -5,9 +5,9 @@ For a simpler sliding-window chunker, see ``ai_cli.rag.chunker``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
-from typing import Callable, List, Optional, Tuple
+from collections.abc import Callable
+from dataclasses import dataclass
 
 
 @dataclass
@@ -38,7 +38,7 @@ class SemanticChunker:
         self,
         max_tokens: int = 512,
         overlap_tokens: int = 64,
-        sentence_splitter: Optional[Callable[[str], List[Tuple[str, int, int]]]] = None,
+        sentence_splitter: Callable[[str], list[tuple[str, int, int]]] | None = None,
     ):
         if max_tokens <= 0:
             raise ValueError("max_tokens must be > 0")
@@ -47,7 +47,7 @@ class SemanticChunker:
         self.overlap_tokens = max(0, min(overlap_tokens, max_tokens - 1))
         self._custom_splitter = sentence_splitter
 
-    def _default_sentence_spans(self, text: str) -> List[Tuple[str, int, int]]:
+    def _default_sentence_spans(self, text: str) -> list[tuple[str, int, int]]:
         """
         Returns list of (sentence_text, start_index, end_index) using a simple regex.
         Falls back to whole text if nothing matched.
@@ -72,16 +72,16 @@ class SemanticChunker:
             spans.append((ts, start, start + len(ts)))
         return spans
 
-    def _sentence_spans(self, text: str) -> List[Tuple[str, int, int]]:
+    def _sentence_spans(self, text: str) -> list[tuple[str, int, int]]:
         if self._custom_splitter:
             return self._custom_splitter(text)
         return self._default_sentence_spans(text)
 
-    def _token_spans(self, text: str) -> List[Tuple[int, int]]:
+    def _token_spans(self, text: str) -> list[tuple[int, int]]:
         """Return list of (start, end) spans for tokens across the whole text."""
         return [(m.start(), m.end()) for m in self.TOKEN_RE.finditer(text)]
 
-    def chunk_text(self, text: str, source: str) -> List[Chunk]:
+    def chunk_text(self, text: str, source: str) -> list[Chunk]:
         sentences = self._sentence_spans(text)
         if not sentences:
             return []
@@ -89,7 +89,7 @@ class SemanticChunker:
         token_spans = self._token_spans(text)
         # precompute token index -> (start,end)
         # for fast mapping, build a list of token indices belonging to each sentence
-        sent_token_indices: List[List[int]] = []
+        sent_token_indices: list[list[int]] = []
         tok_idx = 0
         N_tokens = len(token_spans)
 
@@ -106,8 +106,8 @@ class SemanticChunker:
             # next sentence may reuse current j as starting point
             tok_idx = j
 
-        chunks: List[Chunk] = []
-        cur_tokens_idxs: List[int] = []
+        chunks: list[Chunk] = []
+        cur_tokens_idxs: list[int] = []
 
         def flush_current_chunk():
             if not cur_tokens_idxs:

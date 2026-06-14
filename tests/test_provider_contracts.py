@@ -6,6 +6,7 @@ from ai_cli.providers.registry import (
 def test_all_chat_providers_have_ask():
     for cls in CHAT_PROVIDERS.values():
         assert hasattr(cls, "ask")
+        hasattr(cls, "ask") or hasattr(cls, "chat")
 
 def test_all_embedding_providers_have_embed():
     for cls in EMBEDDING_PROVIDERS.values():
@@ -14,3 +15,4 @@ def test_all_embedding_providers_have_embed():
 def test_registry_builds():
     for cls in CHAT_PROVIDERS.values():
         assert cls is not None
+

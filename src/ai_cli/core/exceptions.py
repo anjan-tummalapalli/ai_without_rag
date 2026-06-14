@@ -1,9 +1,9 @@
 # /Users/anjan/Documents/New project/ai_chat/ai_cli/src/ai_cli/core/exceptions.py
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
 import json
 import traceback
+from typing import Any
 
 
 class AIProviderError(Exception):
@@ -21,10 +21,10 @@ class AIProviderError(Exception):
         self,
         message: str,
         *,
-        code: Optional[str] = None,
+        code: str | None = None,
         retryable: bool = False,
-        details: Optional[Dict[str, Any]] = None,
-        cause: Optional[BaseException] = None,
+        details: dict[str, Any] | None = None,
+        cause: BaseException | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -46,7 +46,7 @@ class AIProviderError(Exception):
         # keep it short; fallback to default if too long
         return " ".join(parts)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize the exception (useful for logging or returning structured errors)."""
         return {
             "message": self.message,
@@ -62,8 +62,8 @@ class AIProviderError(Exception):
 
     @classmethod
     def from_exception(
-        cls, exc: BaseException, *, message: Optional[str] = None, **kwargs: Any
-    ) -> "AIProviderError":
+        cls, exc: BaseException, *, message: str | None = None, **kwargs: Any
+    ) -> AIProviderError:
         """Wrap an existing exception into an AIProviderError while preserving context."""
         msg = message or str(exc) or exc.__class__.__name__
         return cls(msg, cause=exc, **kwargs)
@@ -90,10 +90,10 @@ class ProviderRequestError(AIProviderError):
         self,
         message: str,
         *,
-        status_code: Optional[int] = None,
-        provider_name: Optional[str] = None,
-        request_id: Optional[str] = None,
-        response_body: Optional[Any] = None,
+        status_code: int | None = None,
+        provider_name: str | None = None,
+        request_id: str | None = None,
+        response_body: Any | None = None,
         **kwargs: Any,
     ) -> None:
         details = kwargs.pop("details", {}) or {}
@@ -120,7 +120,7 @@ class ChunkingError(AIProviderError):
     details example: {"text_length": 12345, "chunk_size": 1024, "chunk_index": 5}
     """
 
-    def __init__(self, message: str, *, chunk_index: Optional[int] = None, **kwargs: Any) -> None:
+    def __init__(self, message: str, *, chunk_index: int | None = None, **kwargs: Any) -> None:
         details = kwargs.pop("details", {}) or {}
         if chunk_index is not None:
             details["chunk_index"] = chunk_index
@@ -133,7 +133,7 @@ class EmbeddingError(AIProviderError):
     details example: {"model": "text-embedding-3", "input_tokens": 512}
     """
 
-    def __init__(self, message: str, *, model: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, message: str, *, model: str | None = None, **kwargs: Any) -> None:
         details = kwargs.pop("details", {}) or {}
         if model:
             details["model"] = model
@@ -146,7 +146,7 @@ class VectorDBError(AIProviderError):
     details example: {"operation": "upsert", "db": "faiss", "index_name": "docs_v1"}
     """
 
-    def __init__(self, message: str, *, operation: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, message: str, *, operation: str | None = None, **kwargs: Any) -> None:
         details = kwargs.pop("details", {}) or {}
         if operation:
             details["operation"] = operation
@@ -163,8 +163,8 @@ class RetrievalError(AIProviderError):
         self,
         message: str,
         *,
-        query: Optional[str] = None,
-        retrieved: Optional[int] = None,
+        query: str | None = None,
+        retrieved: int | None = None,
         **kwargs: Any,
     ) -> None:
         details = kwargs.pop("details", {}) or {}
@@ -176,7 +176,7 @@ class RetrievalError(AIProviderError):
 
 
 # Small utility for capturing stack traces for debugging/logging without raising.
-def capture_exception_info(exc: BaseException) -> Dict[str, Any]:
+def capture_exception_info(exc: BaseException) -> dict[str, Any]:
     return {
         "type": exc.__class__.__name__,
         "message": str(exc),

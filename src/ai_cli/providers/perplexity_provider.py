@@ -213,3 +213,10 @@ class PerplexityProvider(AIProvider):
             return answer, contexts
         except Exception as exc:
             raise ProviderRequestError(f"Perplexity RAG request failed: {exc}") from exc
+        
+    def send(self, prompt: str, **kwargs) -> str:
+        response = self.client.chat.completions.create(
+                                model=self.model,
+                                messages=[{"role": "user", "content": prompt}],
+                            )
+        return response.choices[0].message.content
