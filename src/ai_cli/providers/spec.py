@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any
+
 
 @dataclass(frozen=True)
 class ProviderRequest:
     provider: str
-    model: Optional[str] = None
-    api_key: Optional[str] = None
+    model: str | None = None
+    api_key: str | None = None
     kwargs: dict[str, Any] = None

@@ -17,7 +17,7 @@ import heapq
 import math
 import os
 import warnings
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider
@@ -86,7 +86,7 @@ class InMemoryVectorDB:
 
     Stored items are dicts with keys:
         - id: unique identifier (str)
-        - vector: List[float]
+        - vector: list[float]
         - norm: precomputed L2 norm (float)
         - metadata: dict
         - text: original chunk text (str)
@@ -94,9 +94,9 @@ class InMemoryVectorDB:
 
     def __init__(self) -> None:
         """Initialise an empty vector store."""
-        self._items: List[Dict[str, Any]] = []
+        self._items: list[dict[str, Any]] = []
 
-    def upsert(self, items: Sequence[Dict[str, Any]]) -> None:
+    def upsert(self, items: list[dict[str, Any]]) -> None:
         """Insert or replace items by id, precomputing each vector's norm.
 
         Args:
@@ -119,9 +119,9 @@ class InMemoryVectorDB:
 
     @staticmethod
     def _cosine_similarity_with_norms(
-        a: Sequence[float],
+        a: list[float],
         a_norm: float,
-        b: Sequence[float],
+        b: list[float],
         b_norm: float,
     ) -> float:
         """Return cosine similarity using precomputed norms.
@@ -137,12 +137,12 @@ class InMemoryVectorDB:
         """
         if a_norm == 0.0 or b_norm == 0.0:
             return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
+        dot = sum(x * y for x, y in zip(a, b, strict=True))
         return dot / (a_norm * b_norm)
 
     def query(
-        self, vector: Sequence[float], top_k: int = 5
-    ) -> List[Dict[str, Any]]:
+        self, vector: list[float], top_k: int = 5
+    ) -> list[dict[str, Any]]:
         """Return *top_k* items most similar to *vector*.
 
         Args:
@@ -184,10 +184,10 @@ class GeminiProvider(AIProvider):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
         self,
-        model: Optional[str] = None,
-        api_key: Optional[str] = None,
-        embedding_model: Optional[str] = None,
-        vector_db_client: Optional[Any] = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        embedding_model: str | None = None,
+        vector_db_client: Any | None = None,
         chunk_size: int = 500,
         chunk_overlap: int = 50,
         **kwargs,
@@ -297,9 +297,9 @@ class GeminiProvider(AIProvider):
     def chunk_text(
         self,
         text: str,
-        chunk_size: Optional[int] = None,
-        overlap: Optional[int] = None,
-    ) -> List[str]:
+        chunk_size: int | None = None,
+        overlap: int | None = None,
+    ) -> list[str]:
         """Split *text* into overlapping character-window chunks.
 
         Args:
@@ -319,7 +319,7 @@ class GeminiProvider(AIProvider):
         if text_len == 0:
             return []
 
-        chunks: List[str] = []
+        chunks: list[str] = []
         for start in range(0, text_len, step):
             end = start + chunk_size
             chunks.append(text[start:end])
@@ -330,7 +330,7 @@ class GeminiProvider(AIProvider):
     # -----------------------
     # Embeddings utilities
     # -----------------------
-    def _create_embeddings(self, inputs: Sequence[str]) -> List[List[float]]:
+    def _create_embeddings(self, inputs: list[str]) -> list[list[float]]:
         """Return embedding vectors for *inputs* via the Gemini embedding API.
 
         Args:
@@ -352,7 +352,7 @@ class GeminiProvider(AIProvider):
                 "Embedding API not available in google-generativeai SDK"
             )
 
-        extra: Dict[str, Any] = {}
+        extra: dict[str, Any] = {}
         if self.embedding_model:
             extra["model"] = self.embedding_model
 
@@ -366,7 +366,7 @@ class GeminiProvider(AIProvider):
             if not data:
                 raise ProviderRequestError("Embedding API returned no data")
 
-            vectors: List[List[float]] = []
+            vectors: list[list[float]] = []
             for item in data:
                 emb = (
                     item.get("embedding")
@@ -393,7 +393,7 @@ class GeminiProvider(AIProvider):
         self,
         doc_id: str,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any | None] = None,
     ) -> None:
         """Chunk *text*, embed each chunk, and upsert into the vector store.
 
@@ -415,14 +415,14 @@ class GeminiProvider(AIProvider):
                 "Embedding count does not match chunk count"
             )
 
-        chunk_items: List[Dict[str, Any]] = [
+        chunk_items: list[dict[str, Any]] = [
             {
                 "id": f"{doc_id}::chunk::{i}",
                 "vector": vec,
                 "metadata": metadata or {},
                 "text": chunk,
             }
-            for i, (chunk, vec) in enumerate(zip(chunks, vectors))
+            for i, (chunk, vec) in enumerate(zip(chunks, vectors, strict=True))
         ]
 
         try:
@@ -434,7 +434,7 @@ class GeminiProvider(AIProvider):
 
     def query_vector_db(
         self, query: str, top_k: int = 3
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Embed *query* and return the *top_k* nearest chunks.
 
         Args:
@@ -498,7 +498,7 @@ class GeminiProvider(AIProvider):
         prompt: str,
         top_k: int = 3,
         prepend_context: bool = True,
-        context_prefix: Optional[str] = None,
+        context_prefix: str | None = None,
     ) -> str:
         """Retrieve context from the vector store and send augmented prompt.
 

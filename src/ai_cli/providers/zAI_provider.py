@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider, ProviderMetadata
@@ -34,8 +34,8 @@ class ZAIProvider(AIProvider):
     def __init__(
         self,
         provider_name: str = "z.ai",
-        model: Optional[str] = None,
-        provider_meta: Optional[ProviderMetadata] = None,
+        model: str | None = None,
+        provider_meta: ProviderMetadata | None = None,
         **kwargs: Any,
     ) -> None:
         meta = provider_meta or self.DEFAULT_META

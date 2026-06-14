@@ -25,7 +25,8 @@ Default Models:
 from __future__ import annotations
 
 import os
-from typing import Any, List
+from typing import Any
+
 from openai import OpenAI  # type: ignore
 
 
@@ -93,8 +94,8 @@ class DeepSeekProvider:
                 ) from exc
 
      def embeddings(
-          self, texts: List[str], model: str | None = None
-     ) -> List[List[float]]:
+          self, texts: list[str], model: str | None = None
+     ) -> list[list[float]]:
           """
           Create embeddings for a list of texts.
 

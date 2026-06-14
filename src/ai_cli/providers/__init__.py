@@ -7,14 +7,15 @@ Provides a list of public provider class names without importing them.
 This avoids circular import issues during package initialization.
 """
 from .base import AIProvider
-from .xAI_provider import XAIProvider, InMemoryVectorStore
-from .openai_provider import OpenAIProvider
-from .gemini_provider import GeminiProvider
 from .cohere_provider import CohereProvider
-from .zAI_provider import ZAIProvider
-from .perplexity_provider import PerplexityProvider
 from .deepseek_provider import DeepSeekProvider
 from .echo_provider import EchoProvider
+from .gemini_provider import GeminiProvider
+from .openai_provider import OpenAIProvider
+from .perplexity_provider import PerplexityProvider
+from .xAI_provider import InMemoryVectorStore, XAIProvider
+from .zAI_provider import ZAIProvider
+
 __all__ = [
     "AIProvider",
     "XAIProvider",

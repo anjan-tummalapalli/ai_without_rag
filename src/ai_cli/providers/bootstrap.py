@@ -1,7 +1,7 @@
 from ai_cli.providers.loader import load_all_providers
 from ai_cli.providers.registry import (
-    register_provider,
     register_chat_provider,
+    register_provider,
 )
 
 _initialized = False

@@ -12,7 +12,7 @@ using Perplexity's OpenAI-compatible API and adds utilities to:
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 try:
     import numpy as np  # type: ignore
@@ -28,8 +28,8 @@ from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider
 from ai_cli.rag.chunker import chunk_text
 from ai_cli.rag.embeddings import EmbeddingsProvider
-from ai_cli.rag.vector_store import InMemoryVectorStore
 from ai_cli.rag.models import Chunk
+from ai_cli.rag.vector_store import InMemoryVectorStore
 
 
 class PerplexityProvider(AIProvider):
@@ -37,12 +37,18 @@ class PerplexityProvider(AIProvider):
 
     def __init__(
         self,
-        model: Optional[str] = None,
-        api_key: Optional[str] = None,
+        model: str | None = None,
+        api_key: str | None = None,
         *args,
         **kwargs,
     ) -> None:
-        super().__init__(provider_name="perplexity", model=model or "sonar-pro", api_key=api_key, *args, **kwargs)
+        super().__init__(
+            *args,
+            provider_name="perplexity",
+            model=model or "sonar-pro",
+            api_key=api_key,
+            **kwargs,
+        )
 
         if OpenAI is None:
             raise ProviderRequestError(
@@ -54,8 +60,8 @@ class PerplexityProvider(AIProvider):
         self.client = OpenAI(api_key=self.api_key, base_url=self.BASE_URL)
 
         # RAG components (lazy-init)
-        self.embeddings_provider: Optional[EmbeddingsProvider] = None
-        self.vector_store: Optional[InMemoryVectorStore] = None
+        self.embeddings_provider: EmbeddingsProvider | None = None
+        self.vector_store: InMemoryVectorStore | None = None
 
     def _to_np_array(self, data, dtype=None):
         """
@@ -68,7 +74,7 @@ class PerplexityProvider(AIProvider):
             return np.asarray(data, dtype=dtype)
         return np.asarray(data)
 
-    def _create_chat_completion(self, prompt: str, temperature: Optional[float] = None) -> str:
+    def _create_chat_completion(self, prompt: str, temperature: float | None = None) -> str:
         """Wrapper for chat completion calls with centralized error handling.
 
         Parameters
@@ -111,7 +117,7 @@ class PerplexityProvider(AIProvider):
     # Advanced RAG helpers
     # -------------------------
 
-    def _ensure_rag_components(self, embed_model: Optional[str] = None) -> None:
+    def _ensure_rag_components(self, embed_model: str | None = None) -> None:
         if self.embeddings_provider is None:
             self.embeddings_provider = EmbeddingsProvider(model=embed_model) if embed_model else EmbeddingsProvider()
         if self.vector_store is None:
@@ -122,8 +128,8 @@ class PerplexityProvider(AIProvider):
         documents: Sequence[str],
         chunk_size: int = 500,
         overlap: int = 50,
-        embed_model: Optional[str] = None,
-        ids_prefix: Optional[str] = None,
+        embed_model: str | None = None,
+        ids_prefix: str | None = None,
     ) -> None:
         """
         Build an in-memory RAG index from given documents.
@@ -132,8 +138,8 @@ class PerplexityProvider(AIProvider):
         if self.vector_store is None or self.embeddings_provider is None:
             raise ProviderRequestError("RAG components not initialized")
 
-        all_chunks: List[str] = []
-        metadatas: List[dict] = []
+        all_chunks: list[str] = []
+        metadatas: list[dict] = []
         for doc_idx, doc in enumerate(documents):
             chunks = chunk_text(doc, chunk_size=chunk_size, overlap=overlap)
             for i, c in enumerate(chunks):
@@ -148,7 +154,7 @@ class PerplexityProvider(AIProvider):
         emb_array = self._to_np_array(embeddings, dtype="float32")
 
         chunks_for_store = []
-        for text, meta in zip(all_chunks, metadatas):
+        for text, meta in zip(all_chunks, metadatas, strict=False):
             chunk_id = f"doc_{meta['doc_index']}_chunk_{meta['chunk_index']}"
             if ids_prefix:
                 chunk_id = f"{ids_prefix}{chunk_id}"
@@ -169,10 +175,10 @@ class PerplexityProvider(AIProvider):
         self,
         query: str,
         k: int = 3,
-        prompt_template: Optional[str] = None,
-        embed_model: Optional[str] = None,
+        prompt_template: str | None = None,
+        embed_model: str | None = None,
         temperature: float = 0.0,
-    ) -> Tuple[str, List[dict]]:
+    ) -> tuple[str, list[dict]]:
         """
         Perform a RAG query and return (answer, retrieved_contexts).
         """
@@ -185,8 +191,8 @@ class PerplexityProvider(AIProvider):
 
         hits = self.vector_store.search(q_arr, top_k=k)
 
-        contexts: List[dict] = []
-        context_texts: List[str] = []
+        contexts: list[dict] = []
+        context_texts: list[str] = []
         for hit in hits:
             chunk = hit["chunk"]
             score = hit.get("score", 0.0)

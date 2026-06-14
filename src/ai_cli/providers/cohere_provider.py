@@ -16,7 +16,7 @@ from __future__ import annotations
 import importlib
 import math
 import os
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import cohere  # type: ignore
@@ -52,10 +52,10 @@ class CohereProvider(AIProvider):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
         self,
-        model: Optional[str] = None,
-        api_key: Optional[str] = None,
+        model: str | None = None,
+        api_key: str | None = None,
         rag_enabled: bool = False,
-        embedding_model: Optional[str] = None,
+        embedding_model: str | None = None,
         chunk_size: int = 500,
         chunk_overlap: int = 50,
         vector_store_backend: str = "memory",
@@ -91,13 +91,13 @@ class CohereProvider(AIProvider):
         self.vector_store_backend: str = vector_store_backend
 
         # Simple in-memory vector store
-        self._vectors: List[List[float]] = []
-        self._docs: List[Dict[str, Any]] = []
+        self._vectors: list[list[float]] = []
+        self._docs: list[dict[str, Any]] = []
 
     # -------------------------
     # Chunking utilities
     # -------------------------
-    def _chunk_text(self, text: str) -> List[str]:
+    def _chunk_text(self, text: str) -> list[str]:
         """Chunk *text* into overlapping character windows.
 
         Args:
@@ -112,7 +112,7 @@ class CohereProvider(AIProvider):
         if self.chunk_size <= 0:
             return [text]
 
-        chunks: List[str] = []
+        chunks: list[str] = []
         start = 0
         text_length = len(text)
         while start < text_length:
@@ -126,7 +126,7 @@ class CohereProvider(AIProvider):
     # -------------------------
     # Embedding utilities
     # -------------------------
-    def _create_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def _create_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Embed *texts* via the Cohere Embeddings API.
 
         Args:
@@ -147,7 +147,7 @@ class CohereProvider(AIProvider):
                 raise ProviderRequestError(
                     "Cohere embed response missing embeddings field"
                 )
-            embeddings: List[List[float]] = (  # type: ignore[attr-defined]
+            embeddings: list[list[float]] = (  # type: ignore[attr-defined]
                 resp.embeddings
             )
             if not isinstance(embeddings, list) or len(embeddings) != len(
@@ -167,8 +167,8 @@ class CohereProvider(AIProvider):
     # -------------------------
     def upsert_documents(
         self,
-        texts: List[str],
-        metadatas: Optional[List[Dict[str, Any]]] = None,
+        texts: list[str],
+        metadatas: list[dict[str, Any | None]] = None,
     ) -> None:
         """Chunk, embed, and store *texts* in the in-memory vector store.
 
@@ -179,8 +179,8 @@ class CohereProvider(AIProvider):
         if not texts:
             return
 
-        chunk_texts: List[str] = []
-        chunk_meta: List[Dict[str, Any]] = []
+        chunk_texts: list[str] = []
+        chunk_meta: list[dict[str, Any]] = []
         for doc_idx, doc_text in enumerate(texts):
             doc_meta = (
                 metadatas[doc_idx]
@@ -188,7 +188,7 @@ class CohereProvider(AIProvider):
                 else None
             )
             for chunk_idx, chunk in enumerate(self._chunk_text(doc_text)):
-                meta: Dict[str, Any] = {
+                meta: dict[str, Any] = {
                     "doc_index": doc_idx,
                     "chunk_index": chunk_idx,
                 }
@@ -201,13 +201,16 @@ class CohereProvider(AIProvider):
             return
 
         for vec, txt, meta in zip(
-            self._create_embeddings(chunk_texts), chunk_texts, chunk_meta
-        ):
+                                  self._vectors,
+                                  self._documents,
+                                  self._metadata,
+                                  strict=True,
+                                 ):
             self._vectors.append(vec)
             self._docs.append({"text": txt, "meta": meta})
 
     @staticmethod
-    def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    def _cosine_similarity(a: list[float], b: list[float]) -> float:
         """Return the cosine similarity between vectors *a* and *b*.
 
         Args:
@@ -219,7 +222,7 @@ class CohereProvider(AIProvider):
         """
         if not a or not b:
             return 0.0
-        dot = sum(ai * bi for ai, bi in zip(a, b))
+        dot = sum(ai * bi for ai, bi in zip(a, b, strict=True))
         norm_a = math.sqrt(sum(ai * ai for ai in a))
         norm_b = math.sqrt(sum(bi * bi for bi in b))
         if norm_a == 0.0 or norm_b == 0.0:
@@ -228,7 +231,7 @@ class CohereProvider(AIProvider):
 
     def query_documents(
         self, query: str, top_k: int = 5
-    ) -> List[Tuple[Dict[str, Any], float]]:
+    ) -> list[tuple[dict[str, Any], float]]:
         """Retrieve the *top_k* most relevant chunks for *query*.
 
         Args:
@@ -246,7 +249,7 @@ class CohereProvider(AIProvider):
             return []
         qvec = query_vecs[0]
 
-        scored: List[Tuple[int, float]] = sorted(
+        scored: list[tuple[int, float]] = sorted(
             (
                 (idx, self._cosine_similarity(qvec, vec))
                 for idx, vec in enumerate(self._vectors)
@@ -289,7 +292,7 @@ class CohereProvider(AIProvider):
             )
             if not response:
                 raise ProviderRequestError("Cohere returned empty response")
-            text: Optional[str] = getattr(response, "text", None)
+            text: str | None = getattr(response, "text", None)
             if text is None:
                 text = str(response)
             if not text:

@@ -5,8 +5,8 @@ import os
 
 from openai import OpenAI
 
-from ..contracts import ChatProvider, EmbeddingProvider
 from ..base import BaseProvider, ProviderConfig
+from ..contracts import ChatProvider, EmbeddingProvider
 from ..registry import register_provider
 
 

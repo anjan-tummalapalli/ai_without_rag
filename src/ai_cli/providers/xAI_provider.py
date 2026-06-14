@@ -35,8 +35,10 @@ response_with_context = provider.send_rag("How do operators handle CRDs?", top_k
 print(response_with_context)
 """
 
+import logging
+from typing import Any
+
 from openai.types.chat import ChatCompletionMessageParam  # noqa: E402
-from typing import Any, List, Dict, Optional
 
 # Optional third‑party imports with safe fallbacks
 try:
@@ -49,14 +51,11 @@ try:
 except Exception:
     OpenAI = None  # type: ignore
 
-import logging
-logger = logging.getLogger(__name__)
-
-from typing import Optional, List, Dict, Any, Tuple
-
-# Import the shared base provider and error type from the package.
-from .base import AIProvider
 from ai_cli.core.exceptions import ProviderRequestError
+
+from .base import AIProvider
+
+logger = logging.getLogger(__name__)
 
 
 class InMemoryVectorStore:
@@ -70,10 +69,10 @@ class InMemoryVectorStore:
     def __init__(self) -> None:
         # lazy import guard: numpy may be missing in some environments
         # use Any for runtime-safe typing to avoid referencing the `np` variable
-        self._vectors: Optional[Any] = None
-        self._metadatas: List[Dict[str, Any]] = []
+        self._vectors: Any | None = None
+        self._metadatas: list[dict[str, Any]] = []
 
-    def upsert(self, embeddings: List[List[float]], metadatas: List[Dict[str, Any]]) -> None:
+    def upsert(self, embeddings: list[list[float]], metadatas: list[dict[str, Any]]) -> None:
         if np is None:
             raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
         if len(embeddings) != len(metadatas):
@@ -87,7 +86,7 @@ class InMemoryVectorStore:
             self._vectors = np.vstack([self._vectors, arr])
             self._metadatas.extend(metadatas)
 
-    def _cosine_similarity(self, q: List[float], vecs: List[List[float]]) -> List[float]:
+    def _cosine_similarity(self, q: list[float], vecs: list[list[float]]) -> list[float]:
         if np is None:
             raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
         q_norm = q / (np.linalg.norm(q) + 1e-12)
@@ -95,7 +94,7 @@ class InMemoryVectorStore:
         sims = vecs_norm.dot(q_norm)
         return sims
 
-    def query(self, embedding: List[float], top_k: int = 5) -> List[Tuple[Dict[str, Any], float]]:
+    def query(self, embedding: list[float], top_k: int = 5) -> list[tuple[dict[str, Any], float]]:
         if np is None:
             raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
         if self._vectors is None or len(self._metadatas) == 0:
@@ -136,20 +135,20 @@ class XAIProvider(AIProvider):
 
     def __init__(
         self,
-        model: Optional[str] = None,
-        api_key: Optional[str] = None,
-        embedding_model: Optional[str] = None,
-        vector_store: Optional[InMemoryVectorStore] = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        embedding_model: str | None = None,
+        vector_store: InMemoryVectorStore | None = None,
         *args,
         **kwargs,
     ) -> None:
         super().__init__(
-            provider_name="xai",
-            model=model or "grok-2-latest",
-            api_key=api_key,
-            *args,
-            **kwargs,
-        )
+                         *args,
+                         provider_name="xai",
+                         model=model or "grok-2-latest",
+                         api_key=api_key,
+                         **kwargs,
+                         )
         # OpenAI-compatible client
         if OpenAI is None:
             raise ProviderRequestError("openai package is required. Install with `pip install openai`")
@@ -165,7 +164,7 @@ class XAIProvider(AIProvider):
     # Chunking utilities
     # --------------------
     @staticmethod
-    def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+    def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
         """
         Chunk text into pieces of approximately chunk_size characters with overlap.
 
@@ -188,7 +187,7 @@ class XAIProvider(AIProvider):
         if overlap >= chunk_size:
             raise ValueError("overlap must be smaller than chunk_size")
 
-        chunks: List[str] = []
+        chunks: list[str] = []
         start = 0
         text_len = len(text)
         while start < text_len:
@@ -208,7 +207,7 @@ class XAIProvider(AIProvider):
     # --------------------
     # Embedding utilities
     # --------------------
-    def embed_texts(self, texts: List[str]) -> List[List[float]]:
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """
         Create embeddings for a list of texts using xAI embeddings endpoint.
 
@@ -221,7 +220,7 @@ class XAIProvider(AIProvider):
                 input=texts,
             )
             # resp.data is a list matching texts
-            embeddings: List[List[float]] = [item.embedding for item in resp.data]
+            embeddings: list[list[float]] = [item.embedding for item in resp.data]
             return embeddings
         except Exception as exc:
             raise ProviderRequestError(f"xAI embeddings request failed: {exc}") from exc
@@ -229,13 +228,13 @@ class XAIProvider(AIProvider):
     # --------------------
     # Vector store helpers
     # --------------------
-    def add_documents(self, docs: List[str], chunk_size: int = 1000, overlap: int = 200) -> int:
+    def add_documents(self, docs: list[str], chunk_size: int = 1000, overlap: int = 200) -> int:
         """
         Chunk documents, embed chunks and upsert into the vector store.
 
         Returns number of chunks inserted.
         """
-        all_chunks: List[str] = []
+        all_chunks: list[str] = []
         for doc in docs:
             chunks = self.chunk_text(doc, chunk_size=chunk_size, overlap=overlap)
             all_chunks.extend(chunks)
@@ -246,7 +245,7 @@ class XAIProvider(AIProvider):
         self.vector_store.upsert(embeddings, metadatas)
         return len(all_chunks)
 
-    def retrieve(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def retrieve(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """
         Retrieve top_k most relevant chunks for the query.
 
@@ -261,12 +260,12 @@ class XAIProvider(AIProvider):
     # --------------------
     # Generation (standard + RAG)
     # --------------------
-    def _call_model(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def _call_model(self, prompt: str, system_prompt: str | None = None) -> str:
         """
         Internal helper: send prompt (with optional system message) to the Grok model.
         """
         try:
-            messages: List[ChatCompletionMessageParam] = []
+            messages: list[ChatCompletionMessageParam] = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
@@ -292,7 +291,7 @@ class XAIProvider(AIProvider):
             logger.warning(f"XAIProvider encountered an error: {e}")
             return "[Error: unable to get response]"
 
-    def send_rag(self, prompt: str, top_k: int = 4, instruction: Optional[str] = None) -> str:
+    def send_rag(self, prompt: str, top_k: int = 4, instruction: str | None = None) -> str:
         """
         Perform RAG: retrieve relevant chunks and generate an answer grounded on them.
 

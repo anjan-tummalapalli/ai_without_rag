@@ -1,28 +1,27 @@
-from typing import Type
 
 from ai_cli.providers.registry import (
-    register_provider,
     register_chat_provider,
     register_embedding_provider,
+    register_provider,
 )
 
 
 def provider(name: str):
-    def wrapper(cls: Type):
+    def wrapper(cls: type):
         register_provider(name, cls)
         return cls
     return wrapper
 
 
 def chat_provider(name: str):
-    def wrapper(cls: Type):
+    def wrapper(cls: type):
         register_chat_provider(name, cls)
         return cls
     return wrapper
 
 
 def embedding_provider(name: str):
-    def wrapper(cls: Type):
+    def wrapper(cls: type):
         register_embedding_provider(name, cls)
         return cls
     return wrapper

@@ -18,7 +18,13 @@ class EchoProvider(AIProvider):
 
     def __init__(self, model: str | None = "echo", api_key: str | None = None, *args, **kwargs):
         # No external service is required, but we keep the signature compatible.
-        super().__init__(model=model, api_key=api_key, *args, **kwargs)
+        super().__init__(
+                         *args,
+                         provider_name="perplexity",
+                         model=model or "sonar-pro",
+                         api_key=api_key,
+                         **kwargs,
+                        )
         self.provider_name = "echo"
 
     def _send_impl(self, prompt: str) -> str:

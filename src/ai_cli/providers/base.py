@@ -126,7 +126,7 @@ class AIProvider:
         Raises:
             PromptValidationError: If the prompt is invalid or too long.
         """
-        if not isinstance(prompt, str):
+        if not isinstance(prompt, dict | list):
             raise PromptValidationError("prompt must be string")
  
         if "\x00" in prompt:
@@ -185,7 +185,7 @@ class AIProvider:
         if isinstance(response, str):
             return response
  
-        if isinstance(response, (dict, list, tuple, int, float, bool)):
+        if isinstance(response, dict | list | tuple | int | float | bool):
             return json.dumps(response, ensure_ascii=False)
  
         try:

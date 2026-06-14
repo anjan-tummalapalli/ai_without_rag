@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List
+
 
 class ChatProvider(ABC):
     @abstractmethod
@@ -8,7 +8,7 @@ class ChatProvider(ABC):
 
 class EmbeddingProvider(ABC):
     @abstractmethod
-    def embed(self, texts: List[str]) -> List[List[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         pass
 
 class RAGProvider(ChatProvider, EmbeddingProvider):

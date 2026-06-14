@@ -1,5 +1,6 @@
 import os
 
+
 def resolve_api_key(provider: str, explicit: str | None = None) -> str | None:
     if explicit:
         return explicit

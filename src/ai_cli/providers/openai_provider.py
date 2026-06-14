@@ -8,7 +8,7 @@ defensive checks, and safer save/load behavior.
 from __future__ import annotations
 
 import os
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any
 
 try:
     import numpy as np  # type: ignore[import-not-found]
@@ -22,6 +22,12 @@ except Exception:  # pragma: no cover - openai optional in some environments
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider
+from ai_cli.providers.registry import (
+    register_chat_provider,
+    register_embedding_provider,
+    register_provider,
+)
+
 
 class OpenAIProvider(AIProvider):
     PROVIDER_NAME = "openai"
@@ -30,8 +36,8 @@ class OpenAIProvider(AIProvider):
     DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
     def __init__(
         self,
-        model: Optional[str] = None,
-        api_key: Optional[str] = None,
+        model: str | None = None,
+        api_key: str | None = None,
         *args,
         **kwargs,
     ) -> None:
@@ -51,7 +57,7 @@ class OpenAIProvider(AIProvider):
 
         # In-memory vector store (numpy array of shape (N, D)) and metadata list
         self._vectors = None  # type: Optional[Any]
-        self._metadatas: List[Dict[str, Any]] = []
+        self._metadatas: list[dict[str, Any]] = []
 
     def _send_impl(self, prompt: str) -> str:
         try:
@@ -85,13 +91,13 @@ class OpenAIProvider(AIProvider):
     # ----------------------------
     # RAG utility methods
     # ----------------------------
-    def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+    def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
         if overlap < 0:
             overlap = 0
         words = text.split()
-        chunks: List[str] = []
+        chunks: list[str] = []
         start = 0
         n = len(words)
         while start < n:
@@ -102,14 +108,14 @@ class OpenAIProvider(AIProvider):
             start = end - overlap
         return chunks
 
-    def _create_embeddings(self, inputs: List[str], model: Optional[str] = None, batch_size: int = 256) -> List[List[float]]:
+    def _create_embeddings(self, inputs: list[str], model: str | None = None, batch_size: int = 256) -> list[list[float]]:
         """
         Create embeddings for inputs in batches. Returns list of embeddings.
         """
         if np is None:
             raise ProviderRequestError("NumPy is required for embedding operations. Install numpy.")
         model = model or self.DEFAULT_EMBEDDING_MODEL
-        embeddings: List[List[float]] = []
+        embeddings: list[list[float]] = []
         # Batch to avoid request size limits
         for i in range(0, len(inputs), batch_size):
             batch = inputs[i : i + batch_size]
@@ -124,18 +130,18 @@ class OpenAIProvider(AIProvider):
                 embeddings.append(list(emb))
         return embeddings
 
-    def embed_chunks(self, chunks: List[str], embedding_model: Optional[str] = None) -> List[List[float]]:
+    def embed_chunks(self, chunks: list[str], embedding_model: str | None = None) -> list[list[float]]:
         return self._create_embeddings(chunks, model=embedding_model)
 
     def build_vector_store(
         self,
-        documents: List[Dict[str, str]],
+        documents: list[dict[str, str]],
         chunk_size: int = 500,
         overlap: int = 50,
-        embedding_model: Optional[str] = None,
+        embedding_model: str | None = None,
     ) -> None:
-        all_chunks: List[str] = []
-        metadatas: List[Dict[str, Any]] = []
+        all_chunks: list[str] = []
+        metadatas: list[dict[str, Any]] = []
 
         for doc in documents:
             doc_id = doc.get("id") or doc.get("source") or "unknown"
@@ -166,7 +172,7 @@ class OpenAIProvider(AIProvider):
             self._vectors = np.concatenate((self._vectors, vecs), axis=0)
             self._metadatas.extend(metadatas)
 
-    def query_vector_store(self, query_embedding: List[float], top_k: int = 5) -> List[Tuple[float, Dict[str, Any]]]:
+    def query_vector_store(self, query_embedding: list[float], top_k: int = 5) -> list[tuple[float, dict[str, Any]]]:
         if np is None:
             raise ProviderRequestError("NumPy is required for vector store operations. Install numpy.")
         if self._vectors is None or len(self._metadatas) == 0:
@@ -189,7 +195,7 @@ class OpenAIProvider(AIProvider):
         else:
             top_idxs = np.argsort(-scores)
 
-        results: List[Tuple[float, Dict[str, Any]]] = []
+        results: list[tuple[float, dict[str, Any]]] = []
         for idx in top_idxs[:k]:
             results.append((float(scores[idx]), self._metadatas[int(idx)]))
         return results
@@ -200,8 +206,8 @@ class OpenAIProvider(AIProvider):
         top_k: int = 5,
         chunk_size: int = 500,
         overlap: int = 50,
-        embedding_model: Optional[str] = None,
-        prompt_template: Optional[str] = None,
+        embedding_model: str | None = None,
+        prompt_template: str | None = None,
     ) -> str:
         if self._vectors is None or len(self._metadatas) == 0:
             raise ProviderRequestError("Vector store is empty. Call build_vector_store first.")
@@ -228,8 +234,8 @@ class OpenAIProvider(AIProvider):
             prompt = (
                 "You are an assistant that answers user queries using the provided context. "
                 "If the answer is not contained in the context, say you don't know.\n\n"
-                "Context:\n{context}\n\nQuestion:\n{query}\n\nAnswer concisely:"
-            ).format(context=context_text, query=query)
+                f"Context:\n{context_text}\n\nQuestion:\n{query}\n\nAnswer concisely:"
+            )
         else:
             prompt = prompt_template.format(context=context_text, query=query)
 
@@ -279,12 +285,6 @@ class OpenAIEmbeddingProvider:
             input=texts,
         )
         return [d.embedding for d in resp.data]
-
-from ai_cli.providers.registry import (
-    register_provider,
-    register_chat_provider,
-    register_embedding_provider,
-)
 
 register_provider("openai", OpenAIProvider)
 register_chat_provider("openai", OpenAIProvider)

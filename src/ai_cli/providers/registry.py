@@ -7,15 +7,14 @@ are imported. ``ai_cli.providers.bootstrap.init_providers`` loads all provider
 modules lazily.
 """
 
-from typing import Dict, Type
 
 # Core mappings populated by provider modules at import time
-PROVIDER_MAP: Dict[str, Type] = {}
+PROVIDER_MAP: dict[str, type] = {}
 
 # Legacy name used by plugins/tests
 PROVIDERS = PROVIDER_MAP
-CHAT_PROVIDERS: Dict[str, Type] = {}
-EMBEDDING_PROVIDERS: Dict[str, Type] = {}
+CHAT_PROVIDERS: dict[str, type] = {}
+EMBEDDING_PROVIDERS: dict[str, type] = {}
 
 # Backward compatibility alias
 PROVIDERS = PROVIDER_MAP
@@ -28,7 +27,7 @@ class ProviderRegistry(dict):
 
 PROVIDERS = ProviderRegistry()
 
-def register_provider(name: str, cls: Type, metadata=None) -> None:
+def register_provider(name: str, cls: type, metadata=None) -> None:
     """
     Register a provider.
 
@@ -50,7 +49,7 @@ def register_provider(name: str, cls: Type, metadata=None) -> None:
     return cls
 
 
-def register_chat_provider(name: str, cls: Type) -> None:
+def register_chat_provider(name: str, cls: type) -> None:
     """Register a chat‑capable provider.
 
     This also registers the class as a generic provider so that ``build_provider``
@@ -60,7 +59,7 @@ def register_chat_provider(name: str, cls: Type) -> None:
     PROVIDER_MAP[name] = cls
 
 
-def register_embedding_provider(name: str, cls: Type) -> None:
+def register_embedding_provider(name: str, cls: type) -> None:
     """Register an embedding provider.
 
     Embedding providers are also usable as generic providers.

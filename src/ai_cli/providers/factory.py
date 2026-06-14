@@ -1,6 +1,6 @@
+from ai_cli.providers.config import resolve_api_key
 from ai_cli.providers.loader import load_all_providers
 from ai_cli.providers.resolver import resolve_provider_name
-from ai_cli.providers.config import resolve_api_key
 
 _PROVIDERS = load_all_providers()
 
