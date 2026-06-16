@@ -3,7 +3,7 @@
 ## Introduction
 
 Guidelines for contributing to the AI CLI project, including environment
-setup, coding standards, and RAG module development.
+setup, coding standards, and AI workflow module development.
 
 ## Setting Up Your Development Environment
 
@@ -25,7 +25,6 @@ setup, coding standards, and RAG module development.
 
    ```bash
    poetry install
-   poetry install --with rag   # FAISS, numpy, langchain, etc.
    poetry install --with dev   # pytest, ruff, mypy
    ```
 
@@ -36,9 +35,9 @@ setup, coding standards, and RAG module development.
    ```
    OPENAI_API_KEY=...
    EMBEDDING_MODEL=all-MiniLM-L6-v2
-   RAG_CHUNK_SIZE=500
-   RAG_CHUNK_OVERLAP=50
-   RAG_TOP_K=5
+   AI workflow_CHUNK_SIZE=500
+   AI workflow_CHUNK_OVERLAP=50
+   AI workflow_TOP_K=5
    ```
 
 ## Project Layout
@@ -48,8 +47,7 @@ src/ai_cli/
 ├── cli.py              # CLI entrypoint
 ├── core/               # Public API, resilience, services
 ├── providers/          # LLM provider implementations + registry
-├── rag/                # Chunking, embeddings, vector store, retrieval
-├── config/             # RAG configuration
+├── config/             # AI workflow configuration
 ├── plugins/            # Plugin hooks
 ├── telemetry/          # Metrics and monitoring
 └── utils/              # Validation, secrets
@@ -67,39 +65,35 @@ docs/                   # User and API documentation
 Provider registration is lazy — `bootstrap.init_providers()` loads all
 providers once per process.
 
-## RAG Development
+## AI workflow Development
 
 ### Chunking
 
-- **Simple:** `rag/chunker.py` — sliding-window `SemanticChunker`
-- **Advanced:** `rag/pipeline.py` — token-aware sentence chunker with spans
-- **Models:** `rag/models.py` — `Document`, `Chunk`, `RetrievalResult`
+- **Simple:** `AI workflow/prompt segmenter.py` — sliding-window `SemanticChunker`
+- **Advanced:** `AI workflow/pipeline.py` — token-aware sentence prompt segmenter with spans
 
-Defaults are in `config/rag_config.py`. Override via `RAGConfig.from_env()`.
+Defaults are in `config/AI workflow_config.py`. Override via `AI workflowConfig.from_env()`.
 
 ### Embeddings
 
-`EmbeddingGenerator` wraps sentence-transformers with batching and
 normalization. For tests, mock `SentenceTransformer` (see
 `tests/test_enhanced.py`).
 
 ### Vector Store
 
-`VectorStore` uses FAISS IndexFlatL2. Requires `faiss-cpu` and `numpy`.
 Use in-memory fixtures in CI to avoid disk I/O.
 
-### CLI RAG vs Production RAG
+### CLI AI workflow vs Production AI workflow
 
 | Layer | Module | Use case |
 |-------|--------|----------|
-| CLI in-memory | `rag/in_memory.py` | Quick prototyping, no extra deps |
-| Production | `embeddings.py` + `vector_store.py` + `retriever.py` | Semantic search with FAISS |
+| CLI in-memory | `AI workflow/in_memory.py` | Quick prototyping, no extra deps |
 
 ## Testing
 
 ```bash
 pytest tests/ -v
-pytest tests/test_enhanced.py -v        # RAG smoke tests
+pytest tests/test_enhanced.py -v        # AI workflow smoke tests
 pytest tests/test_provider_contract.py  # Provider interface
 pytest tests/test_imports.py            # Module import checks
 ```

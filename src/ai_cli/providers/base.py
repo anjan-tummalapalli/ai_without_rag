@@ -10,8 +10,6 @@ from typing import Any
 @dataclass
 class ProviderMetadata:
     name: str
-    supports_rag: bool = False
-    supports_embeddings: bool = False
 
 
 # =========================================================
@@ -27,6 +25,14 @@ class BaseProvider:
     # -------------------------
     # Chat
     # -------------------------
+    def embed(self, *args, **kwargs):
+        """
+        Optional embedding interface. Providers that support embeddings should
+        override this method. Default implementation raises NotImplementedError
+        so the attribute exists for provider contract checks/tests.
+        """
+        raise NotImplementedError("embed() not implemented by this provider")
+
     def send(self, prompt: str, **kwargs) -> str:
         raise NotImplementedError
     
@@ -34,7 +40,7 @@ class BaseProvider:
         return self.send(prompt, **kwargs)
 
     # -------------------------
-    # RAG API (optional)
+
     # -------------------------
     def upsert_documents(
         self,
@@ -94,4 +100,3 @@ __all__ = [
     "ProviderMetadata",
     "EchoProvider",
 ]
-

@@ -12,8 +12,3 @@ class EmbeddingProvider(ABC):
     @abstractmethod
     def embed(self, texts: list[str]) -> list[list[float]]:
         pass
-
-class RAGProvider(ChatProvider, EmbeddingProvider):
-    @abstractmethod
-    def add_documents(self, documents):
-        pass

@@ -393,65 +393,6 @@ class SimpleVectorStore:
         return results
 
 
-class RAGManager:
-    """
-    High-level helper to build a vector store from documents and perform retrieval.
-    Usage:
-      - Instantiate with a provider that implements get_embeddings(texts)
-      - build_store_from_texts(documents, chunk_size=500, overlap=50)
-      - query(prompt, top_k=5) -> returns list of (metadata, score, chunk_text)
-    """
-
-    def __init__(self, embedding_provider: AIProvider):
-        if not hasattr(embedding_provider, "get_embeddings"):
-            raise ValueError("Provider must implement get_embeddings(texts: List[str])")
-        if np is None:
-            raise ProviderConfigurationError("numpy is required for RAGManager")
-        self.provider = embedding_provider
-        self.store = SimpleVectorStore()
-
-    def build_store_from_texts(
-        self,
-        texts: list[str],
-        chunk_size: int = 500,
-        overlap: int = 50,
-        metadata_fn: Any | None = None,
-    ) -> None:
-        """
-        Chunk each text and embed the chunks; metadata_fn, if provided, should accept (text_index, chunk_index, chunk_str)
-        and return a metadata dict.
-        """
-        all_chunks: list[str] = []
-        metadatas: list[dict[str, Any]] = []
-        for ti, text in enumerate(texts):
-            chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
-            for ci, chunk in enumerate(chunks):
-                all_chunks.append(chunk)
-                meta = metadata_fn(ti, ci, chunk) if metadata_fn else {"doc_index": ti, "chunk_index": ci}
-                metadatas.append(meta)
-        if not all_chunks:
-            return
-        embeddings = self.provider.get_embeddings(all_chunks)
-        self.store.add(embeddings, metadatas)
-
-    def query(self, query_text: str, top_k: int = 5) -> list[tuple[dict[str, Any], float, str]]:
-        """
-        Return list of (metadata, score, chunk_text) for top_k nearest chunks.
-        """
-        embeddings = self.provider.get_embeddings([query_text])
-        if not embeddings:
-            return []
-        q_vec = embeddings[0]
-        results = self.store.query(q_vec, top_k=top_k)
-        # enrich results with chunk text if available
-        enriched: list[tuple[dict[str, Any], float, str]] = []
-        # We don't store raw chunks in SimpleVectorStore; reconstruct via metadatas if they included chunk text
-        for meta, score in results:
-            chunk_text_val = meta.get("chunk_text") or meta.get("text") or ""
-            enriched.append((meta, score, chunk_text_val))
-        return enriched
-
-
 # Register them
 register_provider("openai", OpenAIProvider, PROVIDERS["openai"])
 register_provider("perplexity", PerplexityProvider, PROVIDERS["perplexity"])

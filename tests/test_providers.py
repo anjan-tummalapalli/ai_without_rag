@@ -82,7 +82,6 @@ def test_openai_provider_rag(openai_mock, monkeypatch):
     p.build_vector_store([{"id": "doc1", "text": "hello world"}])
     assert p._vectors is not None
 
-    assert p.answer_with_rag("hello query") == "rag response"
 
 
 # GeminiProvider

@@ -17,7 +17,6 @@ PROVIDER_MAP: dict[str, type] = {}
 # Legacy name used by plugins/tests
 PROVIDERS = PROVIDER_MAP
 CHAT_PROVIDERS: dict[str, type] = {}
-EMBEDDING_PROVIDERS: dict[str, type] = {}
 
 # Backward compatibility alias
 PROVIDERS = PROVIDER_MAP
@@ -62,12 +61,10 @@ def register_chat_provider(name: str, cls: type) -> None:
     PROVIDER_MAP[name] = cls
 
 
-def register_embedding_provider(name: str, cls: type) -> None:
     """Register an embedding provider.
 
     Embedding providers are also usable as generic providers.
     """
-    EMBEDDING_PROVIDERS[name] = cls
     PROVIDER_MAP[name] = cls
 
 
@@ -80,15 +77,6 @@ def get_chat_provider(name: str, **kwargs):
     if name not in CHAT_PROVIDERS:
         raise ValueError(f"Unknown chat provider: {name}")
     return CHAT_PROVIDERS[name](**kwargs)
-
-
-def get_embedding_provider(name: str, **kwargs):
-    """Retrieve an instantiated embedding provider.
-    """
-    ensure_initialized()
-    if name not in EMBEDDING_PROVIDERS:
-        raise ValueError(f"Unknown embedding provider: {name}")
-    return EMBEDDING_PROVIDERS[name](**kwargs)
 
 
 def list_providers():
