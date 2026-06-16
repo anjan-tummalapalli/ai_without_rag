@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from ai_cli.providers.xAI_provider import XAIProvider
+
 
 @patch("ai_cli.providers.xAI_provider.OpenAI")
 def test_xai_provider_empty_response(openai_mock, monkeypatch):

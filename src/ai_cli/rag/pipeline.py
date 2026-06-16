@@ -169,3 +169,11 @@ class SemanticChunker:
             }
 
         return chunks
+
+class RAGPipeline:
+    """
+    Base RAG pipeline interface (or minimal stub for now)
+    """
+    
+    def __init__(self):
+        pass

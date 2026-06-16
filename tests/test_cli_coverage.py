@@ -1,5 +1,6 @@
 from ai_cli.cli import build_parser
 
+
 def test_cli_build_parser():
     parser = build_parser()
     assert parser is not None

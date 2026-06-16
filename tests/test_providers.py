@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # pytest is not imported directly because this test module relies on pytest's
 # fixture injection at runtime; remove the unused import to avoid editor/linter
 # errors when pytest isn't installed in the environment.
-
 from ai_cli.providers.base import EchoProvider
-from ai_cli.providers.openai_provider import OpenAIProvider
-from ai_cli.providers.gemini_provider import GeminiProvider
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli.providers.gemini_provider import GeminiProvider
+from ai_cli.providers.openai_provider import OpenAIProvider
 from ai_cli.providers.perplexity_provider import PerplexityProvider
 from ai_cli.providers.xAI_provider import XAIProvider
 

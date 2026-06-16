@@ -22,27 +22,23 @@ class CohereProvider(BaseProvider):
     """
 
     def __init__(self, *, rag_enabled: bool = False, **kwargs):
-        super().__init__(**kwargs)
-
-        self.rag_enabled = rag_enabled
-
-        api_key = (
-                   kwargs.get("api_key")
-                   or getattr(self, "api_key", None)
-                   or os.getenv("COHERE_API_KEY")
-                  )
-
-        if not api_key:
-            raise ValueError("COHERE_API_KEY is required")
-
-        self.client = cohere.Client(api_key)
-
         # ----------------------------
         # In-memory vector store
         # ----------------------------
         self._documents: list[str] = []
         self._vectors: list[list[float]] = []
         self._metadata: list[dict[str, Any]] = []
+        super().__init__(**kwargs)
+        self.rag_enabled = rag_enabled
+        api_key = (
+            kwargs.get("api_key")
+            or getattr(self, "api_key", None)
+            or os.getenv("COHERE_API_KEY")
+        )
+        if not api_key:
+            raise ValueError("COHERE_API_KEY is required")
+
+        self.client = cohere.Client(api_key)
 
     # =========================================================
     # Chat
@@ -214,7 +210,7 @@ class CohereProvider(BaseProvider):
         self._metadata.clear()
 
     def query_documents(self, query: str, top_k: int = 5):
-        if not self.vector_store:
+        if not self.rag_enabled:
             raise ValueError("RAG is not enabled for this provider")
 
-        return self.vector_store.search(query, top_k=top_k)
+        return self.retrieve(query, top_k=top_k)

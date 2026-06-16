@@ -1,9 +1,9 @@
+from ai_cli.core.exceptions import ResponseValidationError
 from ai_cli.utils.validation import (
     HallucinationDetector,
     ResponseValidator,
     chunk_text,
 )
-from ai_cli.core.exceptions import ResponseValidationError
 
 
 def test_hallucination_empty_response():

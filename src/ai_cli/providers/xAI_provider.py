@@ -52,6 +52,7 @@ except Exception:
     OpenAI = None  # type: ignore
 
 from ai_cli.core.exceptions import ProviderRequestError
+from ai_cli.rag.vector_store import InMemoryVectorStore
 
 from .base import AIProvider
 
@@ -366,10 +367,28 @@ class XAIProvider(AIProvider):
             return False
     
     def send(self, prompt: str, **kwargs) -> str:
-        response = self.client.chat.completions.create(
-                                                       model=self.model,
-                                                       messages=[{"role": "user", "content": prompt}],
-                                                      )
-        return response.choices[0].message.content
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                **kwargs,
+            )
 
-__all__ = ["XAIProvider", "InMemoryVectorStore"]
+            if not getattr(response, "choices", None):
+                return "[Error: unable to get response]"
+            content = response.choices[0].message.content
+            if not content:
+                return "[Error: unable to get response]"
+            return content
+
+        except Exception as exc:
+            raise ProviderRequestError(
+                f"xAI request failed: {exc}"
+            ) from exc
+
+__all__ = [
+    "BaseProvider",
+    "CohereProvider",
+    "XAIProvider",
+    "InMemoryVectorStore",
+]

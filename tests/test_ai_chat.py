@@ -1,12 +1,14 @@
 # ai_cli/rag.py
 from __future__ import annotations
-import math
+
 import hashlib
-from typing import List, Tuple, Iterable, Dict
 import heapq
+import math
+from collections.abc import Iterable
+
 
 # Chunking
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
         """
         Simple deterministic chunker that splits on whitespace.
         - chunk_size: approximate number of characters per chunk
@@ -15,7 +17,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
         if not isinstance(text, str) or not text.strip():
                 return []
         text = text.strip()
-        chunks: List[str] = []
+        chunks: list[str] = []
         start = 0
         n = len(text)
         while start < n:
@@ -36,11 +38,11 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
         return chunks
 
 # Deterministic "embedding" using hash -> fixed-dim float vector in [-1,1]
-def _text_to_embedding(text: str, dim: int = 64) -> List[float]:
+def _text_to_embedding(text: str, dim: int = 64) -> list[float]:
         if not isinstance(text, str):
                 text = ""
         h = hashlib.sha256(text.encode("utf8")).digest()
-        vec: List[float] = []
+        vec: list[float] = []
         i = 0
         # iterate over hash bytes, repeat as needed
         while len(vec) < dim:
@@ -49,14 +51,14 @@ def _text_to_embedding(text: str, dim: int = 64) -> List[float]:
                 i += 1
         return vec[:dim]
 
-def embed_texts(texts: Iterable[str], dim: int = 64) -> List[List[float]]:
+def embed_texts(texts: Iterable[str], dim: int = 64) -> list[list[float]]:
         return [_text_to_embedding(t or "", dim=dim) for t in texts]
 
 # Cosine similarity helpers
-def _dot(a: List[float], b: List[float]) -> float:
-        return sum(x * y for x, y in zip(a, b))
+def _dot(a: list[float], b: list[float]) -> float:
+        return sum(x * y for x, y in zip(a, b, strict=False))
 
-def _norm(a: List[float]) -> float:
+def _norm(a: list[float]) -> float:
         s = sum(x * x for x in a)
         return math.sqrt(s) if s > 0.0 else 0.0
 
@@ -64,9 +66,9 @@ def _norm(a: List[float]) -> float:
 class VectorStore:
         def __init__(self, dim: int = 64):
                 self.dim = dim
-                self._docs: Dict[str, str] = {}
-                self._embeddings: Dict[str, List[float]] = {}
-                self._norms: Dict[str, float] = {}
+                self._docs: dict[str, str] = {}
+                self._embeddings: dict[str, list[float]] = {}
+                self._norms: dict[str, float] = {}
 
         def add(self, doc_id: str, text: str) -> None:
                 emb = _text_to_embedding(text, dim=self.dim)
@@ -74,11 +76,11 @@ class VectorStore:
                 self._embeddings[doc_id] = emb
                 self._norms[doc_id] = _norm(emb)
 
-        def add_many(self, items: Iterable[Tuple[str, str]]) -> None:
+        def add_many(self, items: Iterable[tuple[str, str]]) -> None:
                 for doc_id, text in items:
                         self.add(doc_id, text)
 
-        def query(self, query_text: str, top_k: int = 3, min_score: float = 0.0) -> List[Tuple[str, str, float]]:
+        def query(self, query_text: str, top_k: int = 3, min_score: float = 0.0) -> list[tuple[str, str, float]]:
                 """
                 Returns top_k (doc_id, text, score) ordered by score desc.
                 Uses a min-heap of size top_k for O(n log k) selection.
@@ -88,7 +90,7 @@ class VectorStore:
                 if q_norm == 0.0:
                         return []
 
-                heap: List[Tuple[float, str, str]] = []  # (score, doc_id, text)
+                heap: list[tuple[float, str, str]] = []  # (score, doc_id, text)
                 for doc_id, emb in self._embeddings.items():
                         doc_norm = self._norms.get(doc_id, 0.0)
                         if doc_norm == 0.0:
@@ -108,7 +110,7 @@ class VectorStore:
                 results.sort(key=lambda t: t[2], reverse=True)
                 return results
 
-        def all_docs(self) -> Dict[str, str]:
+        def all_docs(self) -> dict[str, str]:
                 return dict(self._docs)
 
 # Convenience: build a VectorStore from a long document (chunked)

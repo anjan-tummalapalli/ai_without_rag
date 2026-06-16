@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from typing import Any
 
 
-class InMemoryRAGPipeline:
+class InMemoryVectorStore:
     """
     In-memory RAG pipeline with deterministic hash-based embeddings.
 
@@ -22,6 +22,8 @@ class InMemoryRAGPipeline:
     def __init__(self, embed_dim: int = 128) -> None:
         self.embed_dim = embed_dim
         self._store: list[dict[str, Any]] = []
+        self.documents = []
+        self.embeddings = []
 
     def chunk_text(
         self, text: str, chunk_size: int = 500, overlap: int = 50
@@ -104,6 +106,3 @@ class InMemoryRAGPipeline:
     def __len__(self) -> int:
         return len(self._store)
 
-
-# Backward-compatible alias used by the CLI
-RAGPipeline = InMemoryRAGPipeline

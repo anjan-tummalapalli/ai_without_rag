@@ -3,6 +3,7 @@ from ai_cli.providers.registry import (
     EMBEDDING_PROVIDERS,
 )
 
+
 def test_all_chat_providers_have_ask():
     for cls in CHAT_PROVIDERS.values():
         assert hasattr(cls, "ask")

@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import types
-import contextlib
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Lightweight pytest fallback (keeps original behavior if pytest not present)
 try:
     import pytest
 except Exception:
     import re
-    import contextlib as _contextlib
 
     class _RaisesContext:
         def __init__(self, expected_exception, match=None):

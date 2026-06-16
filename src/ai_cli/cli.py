@@ -14,7 +14,6 @@ from typing import Any
 
 from ai_cli.core.api import ask
 from ai_cli.providers.bootstrap import init_providers
-from ai_cli.rag.in_memory import InMemoryRAGPipeline
 
 VERSION = "0.3.0"
 
@@ -322,7 +321,7 @@ def run_interactive(
     timeout: int,
     profile: str | None = None,
     stream: bool = False,
-    rag: InMemoryRAGPipeline | None = None,
+    rag: RAGPipeline | None = None,
     rag_chunk_size: int = 500,
     rag_chunk_overlap: int = 50,
     rag_top_k: int = 5,
@@ -348,7 +347,7 @@ def run_interactive(
     if pipeline is None:
             # Allow interactive RAG commands (/index, /search) even when
             # --rag was not supplied at startup.
-            pipeline = InMemoryRAGPipeline(embed_dim=128)
+            pipeline = RAGPipeline(embed_dim=128)
 
     while True:
             try:
@@ -489,9 +488,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error("profile must be a string")
 
     # Initialize RAG pipeline if requested (or if rag-docs provided)
-    rag_pipeline: InMemoryRAGPipeline | None = None
+    rag_pipeline: RAGPipeline | None = None
     if args.rag or args.rag_docs:
-            rag_pipeline = InMemoryRAGPipeline(embed_dim=128)
+            rag_pipeline = RAGPipeline(embed_dim=128)
 
     # Index documents provided on the command line (file paths or raw text)
     if args.rag_docs and rag_pipeline is not None:

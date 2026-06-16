@@ -1,9 +1,10 @@
 from .base import BaseProvider
 from .cohere_provider import CohereProvider
-from .xAI_provider import XAIProvider
+from .xAI_provider import InMemoryVectorStore, XAIProvider
 
 __all__ = [
     "BaseProvider",
     "CohereProvider",
     "XAIProvider",
+    "InMemoryVectorStore",
 ]

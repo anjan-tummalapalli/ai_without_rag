@@ -1,10 +1,11 @@
 import pytest
 
 from ai_cli.providers.registry import (
-    register_provider,
     build_provider,
     list_providers,
+    register_provider,
 )
+
 
 class DummyProvider:
     pass
