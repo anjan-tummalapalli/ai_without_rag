@@ -2,12 +2,15 @@
 __pycache__/
 
 *.pyc
-
 .coverage
-
 .DS_Store
-
 .env
-
 dist/
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so

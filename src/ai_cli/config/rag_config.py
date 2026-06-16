@@ -29,14 +29,6 @@ class EmbeddingConfig:
 
 
 @dataclass
-class VectorStoreConfig:
-    store_type: str = "faiss"
-    faiss_index_path: Path = Path("index.faiss")
-    recreate: bool = False
-    metric: str = "cosine"
-
-
-@dataclass
 class RAGConfig:
     base_dir: Path
     index_dir: Path
@@ -51,10 +43,6 @@ class RAGConfig:
 
     embedding: EmbeddingConfig = field(
         default_factory=EmbeddingConfig
-    )
-
-    vector_store: VectorStoreConfig = field(
-        default_factory=VectorStoreConfig
     )
 
     def __post_init__(self) -> None:
@@ -128,11 +116,6 @@ class RAGConfig:
         if "embedding" in data:
             data["embedding"] = EmbeddingConfig(
                 **data["embedding"]
-            )
-
-        if "vector_store" in data:
-            data["vector_store"] = VectorStoreConfig(
-                **data["vector_store"]
             )
 
         return cls(**data)

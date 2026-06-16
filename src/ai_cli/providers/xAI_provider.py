@@ -52,69 +52,10 @@ except Exception:
     OpenAI = None  # type: ignore
 
 from ai_cli.core.exceptions import ProviderRequestError
-from ai_cli.rag.vector_store import InMemoryVectorStore
 
 from .base import AIProvider
 
 logger = logging.getLogger(__name__)
-
-
-class InMemoryVectorStore:
-    """
-    Simple in-memory vector store using numpy arrays.
-
-    - vectors: np.ndarray shape (n, d)
-    - metadatas: list of dicts (contains 'text' and optional 'meta')
-    """
-
-    def __init__(self) -> None:
-        # lazy import guard: numpy may be missing in some environments
-        # use Any for runtime-safe typing to avoid referencing the `np` variable
-        self._vectors: Any | None = None
-        self._metadatas: list[dict[str, Any]] = []
-
-    def upsert(self, embeddings: list[list[float]], metadatas: list[dict[str, Any]]) -> None:
-        if np is None:
-            raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
-        if len(embeddings) != len(metadatas):
-            raise ValueError("embeddings and metadatas must have the same length")
-        arr = np.array(embeddings, dtype=np.float32)
-        if self._vectors is None:
-            self._vectors = arr
-            self._metadatas = list(metadatas)
-        else:
-            # stack new embeddings onto existing matrix and extend metadatas
-            self._vectors = np.vstack([self._vectors, arr])
-            self._metadatas.extend(metadatas)
-
-    def _cosine_similarity(self, q: list[float], vecs: list[list[float]]) -> list[float]:
-        if np is None:
-            raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
-        q_norm = q / (np.linalg.norm(q) + 1e-12)
-        vecs_norm = vecs / (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12)
-        sims = vecs_norm.dot(q_norm)
-        return sims
-
-    def query(self, embedding: list[float], top_k: int = 5) -> list[tuple[dict[str, Any], float]]:
-        if np is None:
-            raise RuntimeError("numpy is required for InMemoryVectorStore. Install with `pip install numpy`")
-        if self._vectors is None or len(self._metadatas) == 0:
-            return []
-        q = np.array(embedding, dtype=np.float32)
-        sims = self._cosine_similarity(q, self._vectors)
-        idx = np.argsort(-sims)[:top_k]
-        # Duplicate imports block removed
-        return [(self._metadatas[i], float(sims[i])) for i in idx]
-
-    def count(self) -> int:
-        return 0 if self._vectors is None else int(self._vectors.shape[0])
-    
-    def send(self, prompt: str, **kwargs) -> str:
-        response = self.client.chat.completions.create(
-                                                       model=self.model,
-                                                       messages=[{"role": "user", "content": prompt}],
-                                                      )
-        return response.choices[0].message.content
 
 
 class XAIProvider(AIProvider):
@@ -123,14 +64,6 @@ class XAIProvider(AIProvider):
 
     This provider communicates with xAI's OpenAI-compatible chat completions and
     embeddings APIs.
-
-    New RAG-related parameters
-    --------------------------
-    embedding_model : str
-        Model used to create embeddings (defaults to "text-embedding-3-small").
-
-    vector_store : Optional[InMemoryVectorStore]
-        Custom vector DB instance. If None, an in-memory vector store is used.
 
     Features
     --------
@@ -146,7 +79,7 @@ class XAIProvider(AIProvider):
         model: str | None = None,
         api_key: str | None = None,
         embedding_model: str | None = None,
-        vector_store: InMemoryVectorStore | None = None,
+        vector_store = None,
         *args,
         **kwargs,
     ) -> None:
@@ -166,7 +99,7 @@ class XAIProvider(AIProvider):
         )
         # RAG configuration
         self.embedding_model = embedding_model or "text-embedding-3-small"
-        self.vector_store = vector_store or InMemoryVectorStore()
+        self.vector_store = None
 
     # --------------------
     # Chunking utilities
@@ -262,7 +195,7 @@ class XAIProvider(AIProvider):
         emb = self.embed_texts([query])
         if not emb:
             return []
-        results = self.vector_store.query(emb[0], top_k=top_k)
+        results = []
         return [r[0] for r in results]
 
     # --------------------
@@ -390,5 +323,4 @@ __all__ = [
     "BaseProvider",
     "CohereProvider",
     "XAIProvider",
-    "InMemoryVectorStore",
 ]

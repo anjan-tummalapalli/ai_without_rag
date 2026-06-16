@@ -331,68 +331,6 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
     return chunks
 
 
-class SimpleVectorStore:
-    """
-    Minimal in-memory vector store using numpy.
-    - Add vectors and metadata
-    - Query by cosine similarity (brute-force)
-
-    Requires numpy. Designed for small-to-moderate datasets and demonstration/testing.
-    """
-
-    def __init__(self) -> None:
-        if np is None:
-            raise ProviderConfigurationError("numpy is required for SimpleVectorStore")
-        self._vectors = np.zeros((0, 0), dtype=float)  # shape (n, dim)
-        self._metadatas: list[dict[str, Any]] = []
-        self._dim: int | None = None
-
-    def add(self, vectors: list[list[float]], metadatas: list[dict[str, Any]] | None = None) -> None:
-        if not vectors:
-            return
-        arr = np.array(vectors, dtype=float)
-        if self._dim is None:
-            self._dim = arr.shape[1]
-            self._vectors = arr
-        else:
-            if arr.shape[1] != self._dim:
-                raise ValueError("All vectors must have same dimensionality")
-            self._vectors = np.vstack([self._vectors, arr])
-        if metadatas:
-            self._metadatas.extend(metadatas)
-        else:
-            self._metadatas.extend([{} for _ in range(len(vectors))])
-
-    @staticmethod
-    def _cosine_similarity_matrix(a: Any, b: Any) -> Any:
-        # a: (m, d), b: (n, d) -> returns (m, n) as a numpy.ndarray
-        # Use Any for type hints to avoid referencing the numpy variable in type expressions
-        # when numpy may not be present at type checking / import time.
-        a_norm = np.linalg.norm(a, axis=1, keepdims=True)
-        b_norm = np.linalg.norm(b, axis=1, keepdims=True)
-        # avoid division by zero
-        a_norm[a_norm == 0] = 1.0
-        b_norm[b_norm == 0] = 1.0
-        sim = (a @ b.T) / (a_norm * b_norm.T)
-        return sim
-
-    def query(self, query_vector: list[float], top_k: int = 5) -> list[tuple[dict[str, Any], float]]:
-        if self._dim is None or self._vectors.shape[0] == 0:
-            return []
-        q = np.array([query_vector], dtype=float)
-        if q.shape[1] != self._dim:
-            raise ValueError("Query vector dimensionality does not match store")
-        sims = self._cosine_similarity_matrix(q, self._vectors)[0]  # shape (n,)
-        # get top_k indices
-        top_k = max(1, min(top_k, len(sims)))
-        idx = np.argpartition(-sims, top_k - 1)[:top_k]
-        idx_sorted = idx[np.argsort(-sims[idx])]
-        results: list[tuple[dict[str, Any], float]] = []
-        for i in idx_sorted:
-            results.append((self._metadatas[i], float(sims[i])))
-        return results
-
-
 # Register them
 register_provider("openai", OpenAIProvider, PROVIDERS["openai"])
 register_provider("perplexity", PerplexityProvider, PROVIDERS["perplexity"])

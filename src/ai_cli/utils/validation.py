@@ -199,105 +199,6 @@ class Embedder:
                 out.append(v)
         return out
 
-
-class VectorStore:
-    """
-    Simple vector store abstraction with optional FAISS backend.
-
-    Usage:
-        store = VectorStore(dim=embedder.dim)
-        store.add(texts, embeddings, metadatas)
-        results = store.search(query_embedding, top_k=5)
-    """
-
-    def __init__(self, dim: int = _DEFAULT_EMBED_DIM, use_faiss: bool = True):
-        self.dim = dim
-        self._use_faiss = use_faiss and _HAS_FAISS
-        self._ids: list[int] = []
-        self._texts: list[str] = []
-        self._metadatas: list[dict[str, Any] | None] = []
-        self._next_id = 0
-
-        if self._use_faiss:
-            self._index = faiss.IndexFlatIP(dim)  # inner product; embeddings should be normalized
-            self._id_to_pos: dict[int, int] = {}
-        else:
-            self._index = None
-            self._embeddings = []  # store numpy arrays or lists
-
-    def add(self, texts: Sequence[str], embeddings: Sequence, metadatas: Sequence[dict[str, Any] | None] | None = None):
-        """
-        Add documents and corresponding embeddings to the store.
-
-        Args:
-            texts: sequence of document text strings
-            embeddings: sequence of vectors (numpy arrays or lists)
-            metadatas: optional sequence of metadata dicts
-        """
-        if metadatas is None:
-            metadatas = [None] * len(texts)
-
-        for text, emb, md in zip(texts, embeddings, metadatas, strict=False):
-            id_ = self._next_id
-            self._next_id += 1
-            self._ids.append(id_)
-            self._texts.append(text)
-            self._metadatas.append(md)
-            if self._use_faiss:
-                vec = np.asarray(emb, dtype="float32")
-                # normalize for inner product similarity
-                norm = np.linalg.norm(vec)
-                if norm > 0:
-                    vec = vec / norm
-                self._index.add(np.expand_dims(vec, axis=0))
-                self._id_to_pos[id_] = len(self._ids) - 1
-            else:
-                self._embeddings.append(np.asarray(emb, dtype="float32") if np is not None else emb)
-
-    def _search_in_memory(self, query_vec, top_k: int):
-        if np is None:
-            raise RuntimeError("numpy required for in-memory search")
-        q = np.asarray(query_vec, dtype="float32")
-        qnorm = np.linalg.norm(q)
-        if qnorm > 0:
-            q = q / qnorm
-        sims = []
-        for _ in items:
-            emb_arr = np.asarray(emb, dtype="float32")
-            embnorm = np.linalg.norm(emb_arr)
-            if embnorm > 0:
-                emb_arr = emb_arr / embnorm
-            sims.append(float(np.dot(q, emb_arr)))
-        # argsort descending
-        ranked_idx = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
-        return [(self._ids[i], sims[i], self._texts[i], self._metadatas[i]) for i in ranked_idx]
-
-    def search(self, query_embedding, top_k: int = 5) -> list[tuple[int, float, str, dict[str, Any] | None]]:
-        """
-        Search the store for nearest neighbors.
-
-        Returns:
-            list of tuples: (doc_id, score, text, metadata)
-        """
-        if self._use_faiss:
-            if np is None:
-                raise RuntimeError("numpy required for faiss backend")
-            q = np.asarray(query_embedding, dtype="float32")
-            qnorm = np.linalg.norm(q)
-            if qnorm > 0:
-                q = q / qnorm
-            D, I = self._index.search(np.expand_dims(q, axis=0), top_k)
-            results = []
-            for score, pos in zip(D[0], I[0], strict=False):
-                if pos < 0:
-                    continue
-                doc_id = self._ids[pos]
-                results.append((doc_id, float(score), self._texts[pos], self._metadatas[pos]))
-            return results
-        else:
-            return self._search_in_memory(query_embedding, top_k=top_k)
-
-
 # ---------------------------
 # Example glue: RAG helper
 # ---------------------------
@@ -319,7 +220,7 @@ class RAGHelper:
 
     def __init__(self, embedder: Embedder | None = None, vector_store: VectorStore | None = None):
         self.embedder = embedder or Embedder()
-        self.store = vector_store or VectorStore(dim=self.embedder.dim)
+        self.store = None
 
     def index_document(self, doc_text: str, chunk_size: int = 500, overlap: int = 50, metadata: dict[str, Any] | None = None):
         chunks = chunk_text(doc_text, chunk_size=chunk_size, overlap=overlap)

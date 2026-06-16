@@ -9,7 +9,6 @@ modules lazily.
 from ai_cli.providers.base import BaseProvider
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.xAI_provider import XAIProvider
-from ai_cli.rag.in_memory import InMemoryVectorStore
 
 # Core mappings populated by provider modules at import time
 PROVIDER_MAP: dict[str, type] = {}
@@ -112,5 +111,4 @@ provider_all = {
     "BaseProvider": BaseProvider,
     "CohereProvider": CohereProvider,
     "XAIProvider": XAIProvider,
-    "InMemoryVectorStore": InMemoryVectorStore,
 }

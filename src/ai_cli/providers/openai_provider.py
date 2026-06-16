@@ -138,51 +138,6 @@ class OpenAIProvider(BaseProvider):
                 embeddings.append(list(emb))
         return embeddings
 
-    def build_vector_store(
-        self,
-        documents: list[dict[str, str]],
-        chunk_size: int = 500,
-        overlap: int = 50,
-        embedding_model: str | None = None,
-    ) -> None:
-        all_chunks: list[str] = []
-        metadatas: list[dict[str, Any]] = []
-        for doc in documents:
-            doc_id = doc.get("id") or doc.get("source") or "unknown"
-            text = doc.get("text", "")
-            chunks = self.chunk_text(
-                text, chunk_size=chunk_size, overlap=overlap
-            )
-            for idx, chunk in enumerate(chunks):
-                metadatas.append(
-                    {"source_id": doc_id, "chunk_index": idx, "text": chunk}
-                )
-                all_chunks.append(chunk)
-
-        if not all_chunks:
-            return
-
-        embeddings = self._create_embeddings(
-            all_chunks, model=embedding_model
-        )
-
-        if np is None:
-            raise ProviderRequestError(
-                "NumPy is required for vector store operations."
-            )
-
-        vecs = np.asarray(embeddings, dtype=float)
-        norms = np.linalg.norm(vecs, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        vecs = vecs / norms
-
-        if self._vectors is None:
-            self._vectors = vecs
-            self._metadatas = metadatas
-        else:
-            self._vectors = np.concatenate((self._vectors, vecs), axis=0)
-            self._metadatas.extend(metadatas)
-
     def retrieve(
         self,
         query: str,
@@ -236,46 +191,6 @@ class OpenAIProvider(BaseProvider):
         for idx in top_idxs[:k]:
             results.append((float(scores[idx]), self._metadatas[int(idx)]))
         return results
-
-    def save_vector_store(self, path: str) -> None:
-        if np is None:
-            raise ProviderRequestError(
-                "NumPy is required for vector store operations."
-            )
-        if self._vectors is None:
-            raise ProviderRequestError("No vector store to save")
-        try:
-            parent = os.path.dirname(path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            np.savez_compressed(
-                path,
-                vectors=self._vectors.astype(np.float32),
-                metadatas=np.array(self._metadatas, dtype=object),
-            )
-        except Exception as exc:
-            raise ProviderRequestError(
-                f"Failed to save vector store: {exc}"
-            ) from exc
-
-    def load_vector_store(self, path: str) -> None:
-        if np is None:
-            raise ProviderRequestError(
-                "NumPy is required for vector store operations."
-            )
-        try:
-            data = np.load(path, allow_pickle=True)
-            vectors = data["vectors"].astype(float)
-            metadatas = data["metadatas"].tolist()
-            norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-            norms[norms == 0] = 1.0
-            vectors = vectors / norms
-            self._vectors = vectors
-            self._metadatas = metadatas
-        except Exception as exc:
-            raise ProviderRequestError(
-                f"Failed to load vector store: {exc}"
-            ) from exc
 
     def ask(self, prompt: str, **kwargs: Any) -> str:
         return self.send(prompt, **kwargs)
