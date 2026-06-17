@@ -33,8 +33,7 @@ except Exception:
 
 from ai_cli.core.exceptions import ProviderRequestError
 
-from .base import AIProvider, BaseProvider
-from .cohere_provider import CohereProvider
+from .base import AIProvider
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +138,4 @@ class XAIProvider(AIProvider):
             raise ProviderRequestError(f"xAI request failed: {exc}") from exc
 
 
-__all__ = [
-    "XAIProvider",
-    "CohereProvider",
-    "BaseProvider",
-]
+__all__ = ["XAIProvider", "InMemoryVectorStore"]

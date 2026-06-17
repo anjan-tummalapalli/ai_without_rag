@@ -9,6 +9,7 @@ from dataclasses import dataclass
 @dataclass
 class ProviderMetadata:
     name: str
+    supports_rag: bool = False
 
 
 # =========================================================

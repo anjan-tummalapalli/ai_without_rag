@@ -21,8 +21,7 @@ class ZAIProvider(AIProvider):
     """
 
     DEFAULT_META = ProviderMetadata(
-        name="z.ai",
-        supports_rag=False,    
+        name="z.ai"   
     )
 
     def __init__(

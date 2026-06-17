@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 # Local exceptions
 from ai_cli.core.exceptions import ResponseValidationError
 
+VectorStore = None
+
 MIN_RESPONSE_LENGTH = 5
 
 log = logging.getLogger(__name__)
