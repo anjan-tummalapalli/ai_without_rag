@@ -6,4 +6,5 @@ __all__ = [
     "BaseProvider",
     "CohereProvider",
     "XAIProvider",
+    "InMemoryVectorStore",
 ]

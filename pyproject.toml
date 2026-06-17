@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "ai-cli"
 version = "0.2.0"
-description = "AI CLI gateway for multi-provider LLM orchestration and RAG."
+description = "AI CLI gateway for multi-provider LLM orchestration."
 authors = ["Your Name <youremail@example.com>"]
 license = "MIT"
 readme = "README.md"
@@ -20,9 +20,7 @@ keywords = [
     "devops",
     "sre",
     "ai-gateway",
-    "observability",
-    "RAG",
-    "vector-db",
+    "observability"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -51,7 +49,6 @@ pydantic = "^2.7.0"
 python-dotenv = "^1.0.1"
 requests = "^2.32.0"
 rich = "^13.7.0"
-sentence-transformers = "^5.0.0"
 structlog = "^24.2.0"
 tenacity = "^8.3.0"
 tiktoken = "^0.8.0"
@@ -64,35 +61,6 @@ opentelemetry-exporter-otlp = "^1.25.0"
 # CLI entrypoints
 [tool.poetry.scripts]
 ai-cli = "ai_cli.cli:main"
-ai-cli-rag = "ai_cli.rag:main"
-
-# Optional RAG-related and heavy dependencies are grouped to avoid installing them by default.
-[tool.poetry.group.rag.dependencies]
-# High-level orchestration
-langchain = "^0.3.0"
-langchain-core = "^0.3.0"
-langchain-community = "^0.3.0"
-
-# Vector DBs / adapters
-chromadb = "^0.5.0"
-qdrant-client = "^1.6.0"
-pymilvus = "^2.2.0"
-weaviate-client = "^4.4.0"
-
-# Embeddings / index / numeric
-faiss-cpu = "^1.8.0"
-numpy = "^2.0.0"
-scikit-learn = "^1.2.2"
-
-# Document parsing / NLP helpers
-pypdf = "^5.0.0"
-unstructured = "^0.7.0"
-nltk = "^3.8.1"
-markdown = "^3.7"
-transformers = "^4.35.0"
-sentencepiece = "^0.1.99"
-ftfy = "^6.1.1"
-datasets = "^4.8.5"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.6.0"
@@ -113,18 +81,6 @@ ruff = "^0.4.4"
 types-requests = "^2.32.0.20240523"
 
 [tool.poetry.extras]
-# convenient aliases for optional groups
-rag = [
-    "langchain",
-    "langchain-core",
-    "langchain-community",
-    "chromadb",
-    "qdrant-client",
-    "faiss-cpu",
-    "numpy",
-    "pypdf",
-    "transformers",
-]
 docs = ["mkdocs", "mkdocs-material", "mkdocstrings"]
 
 [build-system]
@@ -151,21 +107,22 @@ no_implicit_optional = true
 warn_return_any = true
 warn_unused_ignores = true
 
+[tool.coverage.run]
+source = ["ai_cli"]
+branch = true
+relative_files = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = """
 -v
 --strict-markers
---cov=src/ai_cli
+--cov=ai_cli
 --cov-report=term-missing
 """
-markers = ["integration", "slow", "provider", "rag"]
-
-[tool.coverage.run]
-source = ["src/ai_cli"]
-branch = true
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
+markers = ["integration", "slow", "provider"]

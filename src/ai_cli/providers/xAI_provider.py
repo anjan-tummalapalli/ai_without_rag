@@ -1,12 +1,8 @@
 """
-xAI Grok provider implementation for ai_cli with Advanced RAG support.
+xAI Grok provider implementation for ai_cli.
 
 This module integrates xAI Grok models into the ai_cli provider framework using
-xAI's OpenAI-compatible API and adds utilities for Retrieval-Augmented Generation (RAG):
-- text chunking with overlap
-- embedding creation via xAI embeddings endpoint
-- an in-memory vector DB (with cosine similarity) for storage and retrieval
-- helper routines to upsert documents and perform retrieval + generation.
+xAI's OpenAI-compatible API.
 
 Environment Variables
 ---------------------
@@ -20,31 +16,15 @@ export XAI_API_KEY="your_api_key"
 Usage
 -----
 provider = XAIProvider(
-    model="grok-2-latest",
-    embedding_model="text-embedding-3-small"
+    model="grok-2-latest"
 )
 
-# Add long documents (they will be chunked, embedded and stored)
-provider.add_documents(["Long document text ...", "Another doc ..."])
-
-# Regular prompt (no RAG)
 response = provider.send("Explain Kubernetes operators")
-
-# RAG-enabled generation (retrieval + generation)
-response_with_context = provider.send_rag("How do operators handle CRDs?", top_k=4)
-print(response_with_context)
 """
 
 import logging
-from typing import Any
 
 from openai.types.chat import ChatCompletionMessageParam  # noqa: E402
-
-# Optional third‑party imports with safe fallbacks
-try:
-    import numpy as np
-except Exception:
-    np = None  # type: ignore
 
 try:
     from openai import OpenAI  # type: ignore
@@ -53,23 +33,17 @@ except Exception:
 
 from ai_cli.core.exceptions import ProviderRequestError
 
-from .base import AIProvider
+from .base import AIProvider, BaseProvider
+from .cohere_provider import CohereProvider
 
 logger = logging.getLogger(__name__)
 
 
 class XAIProvider(AIProvider):
     """
-    AI provider implementation for xAI Grok models with added RAG helpers.
+    AI provider implementation for xAI Grok models.
 
-    This provider communicates with xAI's OpenAI-compatible chat completions and
-    embeddings APIs.
-
-    Features
-    --------
-    - chunk_text: split long documents into chunks with overlap
-    - add_documents: chunk, embed and upsert documents into the vector store
-    - send_rag: retrieve top-k relevant chunks and generate an answer using context
+    This provider communicates with xAI's OpenAI-compatible chat completions APIs.
     """
 
     BASE_URL = "https://api.x.ai/v1"
@@ -78,129 +52,25 @@ class XAIProvider(AIProvider):
         self,
         model: str | None = None,
         api_key: str | None = None,
-        embedding_model: str | None = None,
-        vector_store = None,
         *args,
         **kwargs,
     ) -> None:
         super().__init__(
-                         *args,
-                         provider_name="xai",
-                         model=model or "grok-2-latest",
-                         api_key=api_key,
-                         **kwargs,
-                         )
-        # OpenAI-compatible client
+            *args,
+            provider_name="xai",
+            model=model or "grok-2-latest",
+            api_key=api_key,
+            **kwargs,
+        )
         if OpenAI is None:
-            raise ProviderRequestError("openai package is required. Install with `pip install openai`")
+            raise ProviderRequestError(
+                "openai package is required. Install with `pip install openai`"
+            )
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.BASE_URL,
         )
-        # RAG configuration
-        self.embedding_model = embedding_model or "text-embedding-3-small"
-        self.vector_store = None
 
-    # --------------------
-    # Chunking utilities
-    # --------------------
-    @staticmethod
-    def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
-        """
-        Chunk text into pieces of approximately chunk_size characters with overlap.
-
-        This is a simple character-based chunker that tries to avoid breaking in the
-        middle of words when possible.
-
-        Parameters
-        ----------
-        text : str
-        chunk_size : int
-        overlap : int
-
-        Returns
-        -------
-        List[str]
-            List of text chunks.
-        """
-        if chunk_size <= 0:
-            raise ValueError("chunk_size must be positive")
-        if overlap >= chunk_size:
-            raise ValueError("overlap must be smaller than chunk_size")
-
-        chunks: list[str] = []
-        start = 0
-        text_len = len(text)
-        while start < text_len:
-            end = min(start + chunk_size, text_len)
-            # Try to avoid splitting in the middle of a word if not at end
-            if end < text_len and text[end] not in (" ", "\n"):
-                # backtrack to last space within a small window
-                back = text.rfind(" ", start, end)
-                if back > start:
-                    end = back
-            chunk = text[start:end].strip()
-            if chunk:
-                chunks.append(chunk)
-            start = max(start + 1, end - overlap) if end < text_len else end
-        return chunks
-
-    # --------------------
-    # Embedding utilities
-    # --------------------
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """
-        Create embeddings for a list of texts using xAI embeddings endpoint.
-
-        Returns list of embedding vectors (list of floats).
-        """
-        try:
-            # xAI/OpenAI-compatible embeddings create
-            resp = self.client.embeddings.create(
-                model=self.embedding_model,
-                input=texts,
-            )
-            # resp.data is a list matching texts
-            embeddings: list[list[float]] = [item.embedding for item in resp.data]
-            return embeddings
-        except Exception as exc:
-            raise ProviderRequestError(f"xAI embeddings request failed: {exc}") from exc
-
-    # --------------------
-    # Vector store helpers
-    # --------------------
-    def add_documents(self, docs: list[str], chunk_size: int = 1000, overlap: int = 200) -> int:
-        """
-        Chunk documents, embed chunks and upsert into the vector store.
-
-        Returns number of chunks inserted.
-        """
-        all_chunks: list[str] = []
-        for doc in docs:
-            chunks = self.chunk_text(doc, chunk_size=chunk_size, overlap=overlap)
-            all_chunks.extend(chunks)
-        if not all_chunks:
-            return 0
-        embeddings = self.embed_texts(all_chunks)
-        metadatas = [{"text": txt} for txt in all_chunks]
-        self.vector_store.upsert(embeddings, metadatas)
-        return len(all_chunks)
-
-    def retrieve(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        """
-        Retrieve top_k most relevant chunks for the query.
-
-        Returns list of metadata dicts (contains 'text') in order of relevance.
-        """
-        emb = self.embed_texts([query])
-        if not emb:
-            return []
-        results = []
-        return [r[0] for r in results]
-
-    # --------------------
-    # Generation (standard + RAG)
-    # --------------------
     def _call_model(self, prompt: str, system_prompt: str | None = None) -> str:
         """
         Internal helper: send prompt (with optional system message) to the Grok model.
@@ -210,14 +80,15 @@ class XAIProvider(AIProvider):
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
-            response = self.client.chat.completions.create(messages=messages, model=self.model, temperature=0.7)
+            response = self.client.chat.completions.create(
+                messages=messages, model=self.model, temperature=0.7
+            )
 
             if not getattr(response, "choices", None):
                 raise ProviderRequestError("xAI returned no completion choices")
             message = response.choices[0].message
 
             if not message or not getattr(message, "content", None):
-                # Return a placeholder indicating no content was returned
                 return "[No response from xAI]"
             return message.content.strip()
         except Exception as exc:
@@ -228,58 +99,8 @@ class XAIProvider(AIProvider):
         try:
             return self._call_model(prompt)
         except ProviderRequestError as e:
-            # Log the error and return a placeholder to avoid empty outputs
             logger.warning(f"XAIProvider encountered an error: {e}")
             return "[Error: unable to get response]"
-
-    def send_rag(self, prompt: str, top_k: int = 4, instruction: str | None = None) -> str:
-        """
-        Perform RAG: retrieve relevant chunks and generate an answer grounded on them.
-
-        Parameters
-        ----------
-        prompt : str
-            User question to answer.
-        top_k : int
-            Number of retrieved chunks to include.
-        instruction : Optional[str]
-            Optional instructions for the model about how to use the retrieved context.
-
-        Returns
-        -------
-        str
-            Generated response text.
-        """
-        try:
-            retrieved = self.retrieve(prompt, top_k=top_k)
-            if not retrieved:
-                # Fallback to normal generation if no context available
-                return self._send_impl(prompt)
-
-            context_parts = [
-                f"Source {i+1}:\n{item.get('text', '')}"
-                for i, item in enumerate(retrieved)
-            ]
-            context = "\n\n".join(context_parts)
-
-            # Build system prompt: use provided instruction or default guidance
-            if instruction:
-                system_prompt = instruction
-            else:
-                system_prompt = (
-                    "You are a helpful assistant. Use the provided context to "
-                    "answer the user's question. Cite sources when appropriate. "
-                    "If the context is insufficient, say so and do not hallucinate."
-                )
-
-            # Combine context with user question
-            augmented_prompt = (
-                f"Context:\n{context}\n\nUser question:\n{prompt}\n\n"
-                "Answer using the context above.")
-
-            return self._call_model(augmented_prompt, system_prompt=system_prompt)
-        except Exception as exc:
-            raise ProviderRequestError(f"RAG request failed: {exc}") from exc
 
     def health_check(self) -> bool:
         """
@@ -298,7 +119,7 @@ class XAIProvider(AIProvider):
             return bool(getattr(response, "choices", None))
         except Exception:
             return False
-    
+
     def send(self, prompt: str, **kwargs) -> str:
         try:
             response = self.client.chat.completions.create(
@@ -315,12 +136,11 @@ class XAIProvider(AIProvider):
             return content
 
         except Exception as exc:
-            raise ProviderRequestError(
-                f"xAI request failed: {exc}"
-            ) from exc
+            raise ProviderRequestError(f"xAI request failed: {exc}") from exc
+
 
 __all__ = [
-    "BaseProvider",
-    "CohereProvider",
     "XAIProvider",
+    "CohereProvider",
+    "BaseProvider",
 ]

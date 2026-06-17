@@ -83,7 +83,7 @@ class TextChunker:
         total_word_index = 0   # running word index across sentences
         chunk_index = 0
 
-        for _ in range(n):
+        for tokens in sent_tokens:
             sent_len = len(tokens)
             # If current is empty, mark start index at current total_word_index
             if not current_tokens:

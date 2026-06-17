@@ -1,15 +1,10 @@
 """
-OpenAI ChatGPT provider implementation for ai_cli with RAG support.
+OpenAI ChatGPT provider implementation for ai_cli.
 """
 from __future__ import annotations
 
 import os
 from typing import Any
-
-try:
-    import numpy as np  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - optional dependency
-    np = None  # type: ignore
 
 try:
     from openai import OpenAI  # type: ignore[import-not-found]
@@ -24,7 +19,6 @@ from ai_cli.providers.registry import register_chat_provider, register_provider
 class OpenAIProvider(BaseProvider):
     PROVIDER_NAME = "openai"
     DEFAULT_CHAT_MODEL = "gpt-5.5"
-    DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 
     def __init__(
         self,
@@ -43,8 +37,6 @@ class OpenAIProvider(BaseProvider):
                 "'pip install openai'."
             )
         self.client = OpenAI(api_key=self.api_key)
-        self._vectors: Any | None = None
-        self._metadatas: list[dict[str, Any]] = []
 
     def _send_impl(self, prompt: str) -> str:
         try:
@@ -84,153 +76,8 @@ class OpenAIProvider(BaseProvider):
     def send(self, prompt: str, **kwargs: Any) -> str:
         return self._send_impl(prompt)
 
-    # ----------------------------
-    # RAG / embedding helpers
-    # ----------------------------
-    def chunk_text(
-        self, text: str, chunk_size: int = 500, overlap: int = 50
-    ) -> list[str]:
-        if chunk_size <= 0:
-            raise ValueError("chunk_size must be > 0")
-        if overlap < 0:
-            overlap = 0
-        words = text.split()
-        chunks: list[str] = []
-        start = 0
-        n = len(words)
-        while start < n:
-            end = start + chunk_size
-            chunks.append(" ".join(words[start:end]))
-            if end >= n:
-                break
-            start = end - overlap
-        return chunks
-
-    def _create_embeddings(
-        self,
-        inputs: list[str],
-        model: str | None = None,
-        batch_size: int = 256,
-    ) -> list[list[float]]:
-        if np is None:
-            raise ProviderRequestError(
-                "NumPy is required for embeddings. Install numpy."
-            )
-        model = model or self.DEFAULT_EMBEDDING_MODEL
-        embeddings: list[list[float]] = []
-        for i in range(0, len(inputs), batch_size):
-            batch = inputs[i : i + batch_size]
-            try:
-                resp = self.client.embeddings.create(model=model, input=batch)
-            except Exception as exc:
-                raise ProviderRequestError(
-                    f"Embedding request failed: {exc}"
-                ) from exc
-            data = getattr(resp, "data", None) or []
-            for item in data:
-                emb = getattr(item, "embedding", None) or (
-                    item.get("embedding") if isinstance(item, dict) else None
-                )
-                if emb is None:
-                    raise ProviderRequestError(
-                        "Embedding response missing field"
-                    )
-                embeddings.append(list(emb))
-        return embeddings
-
-    def retrieve(
-        self,
-        query: str,
-        top_k: int = 5,
-        embedding_model: str | None = None,
-    ) -> list[tuple[float, dict[str, Any]]]:
-        if np is None:
-            raise ProviderRequestError(
-                "NumPy is required for retrieval operations."
-            )
-        if self._vectors is None or len(self._metadatas) == 0:
-            raise ProviderRequestError(
-                "Vector store is empty. Call build_vector_store first."
-            )
-
-        try:
-            emb_resp = self.client.embeddings.create(
-                model=embedding_model or self.DEFAULT_EMBEDDING_MODEL,
-                input=[query],
-            )
-            item = getattr(emb_resp, "data", [])[0]
-            query_emb = getattr(item, "embedding", None) or (
-                item.get("embedding") if isinstance(item, dict) else None
-            )
-            if query_emb is None:
-                raise ProviderRequestError(
-                    "Embedding response missing field"
-                )
-        except Exception as exc:
-            raise ProviderRequestError(
-                f"Embedding request failed: {exc}"
-            ) from exc
-
-        q = np.asarray(query_emb, dtype=float)
-        q_norm = np.linalg.norm(q)
-        if q_norm == 0:
-            q_norm = 1.0
-        q = q / q_norm
-
-        scores = self._vectors @ q
-        n = scores.shape[0]
-        k = min(max(1, top_k), n)
-
-        if k < n:
-            idxs = np.argpartition(-scores, k - 1)[:k]
-            top_idxs = idxs[np.argsort(-scores[idxs])]
-        else:
-            top_idxs = np.argsort(-scores)
-
-        results: list[tuple[float, dict[str, Any]]] = []
-        for idx in top_idxs[:k]:
-            results.append((float(scores[idx]), self._metadatas[int(idx)]))
-        return results
-
     def ask(self, prompt: str, **kwargs: Any) -> str:
         return self.send(prompt, **kwargs)
-
-
-class OpenAIEmbeddingProvider:
-    def __init__(
-        self,
-        model: str = "text-embedding-3-small",
-        api_key: str | None = None,
-    ) -> None:
-        self.model = model
-        if OpenAI is None:
-            raise ProviderRequestError(
-                "The 'openai' package is not installed. Install it via "
-                "'pip install openai'."
-            )
-        self.client = OpenAI(api_key=api_key)
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        try:
-            resp = self.client.embeddings.create(
-                model=self.model, input=texts
-            )
-        except Exception as exc:
-            raise ProviderRequestError(
-                f"Embedding request failed: {exc}"
-            ) from exc
-        out: list[list[float]] = []
-        for d in getattr(resp, "data", []):
-            emb = getattr(d, "embedding", None) or (
-                d.get("embedding") if isinstance(d, dict) else None
-            )
-            if emb is None:
-                raise ProviderRequestError(
-                    "Embedding response missing field"
-                )
-            out.append(list(emb))
-        return out
-
 
 register_provider("openai", OpenAIProvider)
 register_chat_provider("openai", OpenAIProvider)

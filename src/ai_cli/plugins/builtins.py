@@ -2,18 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
-
-# Optional imports for embeddings/vector math
-# Use TYPE_CHECKING to allow static type checkers to see numpy typings while avoiding
-# hard import-time errors for environments that don't have numpy installed.
-if TYPE_CHECKING:
-    import numpy as np  # pragma: no cover - type checking only  # type: ignore
-else:
-    try:
-        import numpy as np
-    except Exception:  # pragma: no cover - optional dependency
-        np = None  # type: ignore
 
 from ai_cli.core.exceptions import (
     ProviderConfigurationError,
@@ -25,19 +13,7 @@ from ai_cli.providers.registry import PROVIDERS, register_provider
 
 logger = logging.getLogger(__name__)
 
-"""
-Advanced RAG utilities added here:
 
-- Chunking: chunk_text(text, chunk_size=500, overlap=50)
-- Embedding: provider.get_embeddings(texts) implemented for OpenAI and OpenAI-compatible providers
-- Vector store: SimpleVectorStore (in-memory, numpy-backed brute-force search)
-- RAGManager: helpers to build vector stores from documents and query them
-
-Notes:
-- numpy is optional; if not installed, embedding/vector operations that require numpy will raise a clear error.
-- Embedding model names are defaults; you can override by specifying provider.model when constructing providers.
-- This file also fixes previous indentation/method placement issues for OpenAICompatibleProvider.
-"""
 
 
 class OpenAIProvider(AIProvider):
@@ -89,34 +65,6 @@ class OpenAIProvider(AIProvider):
             raise ResponseValidationError("Empty response")
         return content.strip()
 
-    def get_embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
-        """
-        Return embeddings for a list of texts using OpenAI embeddings API.
-        """
-        try:
-            import importlib
-            OpenAI = importlib.import_module("openai").OpenAI
-        except Exception as exc:
-            raise ProviderConfigurationError("Install openai package") from exc
-
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ProviderConfigurationError("OPENAI_API_KEY not set")
-
-        client = OpenAI(api_key=api_key, timeout=self.timeout)
-        emb_model = model or (self.model if self.model else "text-embedding-3-small")
-        try:
-            # The OpenAI SDK may vary in API shape; handle common shape
-            response = client.embeddings.create(model=emb_model, input=texts)
-        except Exception as exc:
-            raise ProviderRequestError(f"OpenAI embeddings request failed: {exc}") from exc
-
-        # Response shape: data[i].embedding
-        try:
-            embeddings = [d.embedding for d in response.data]
-        except Exception as exc:
-            raise ResponseValidationError("Invalid embeddings response structure") from exc
-        return embeddings
 
 
 class OpenAICompatibleProvider(AIProvider):
@@ -170,22 +118,6 @@ class OpenAICompatibleProvider(AIProvider):
             raise ResponseValidationError("Empty response")
         return content.strip()
 
-    def get_embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
-        """
-        Return embeddings for a list of texts using an OpenAI-compatible embeddings endpoint.
-        """
-        client = self._get_openai_client()
-        emb_model = model or (self.model if self.model else "text-embedding-3-small")
-        try:
-            response = client.embeddings.create(model=emb_model, input=texts)
-        except Exception as exc:
-            raise ProviderRequestError(f"{self.provider_name} embeddings request failed: {exc}") from exc
-
-        try:
-            embeddings = [d.embedding for d in response.data]
-        except Exception as exc:
-            raise ResponseValidationError("Invalid embeddings response structure") from exc
-        return embeddings
 
 
 class PerplexityProvider(OpenAICompatibleProvider):
@@ -305,30 +237,6 @@ class CohereProvider(AIProvider):
         return content.strip()
 
 
-# ---- RAG helpers ----
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
-    """
-    Split text into overlapping chunks of approx chunk_size characters.
-    Overlap ensures context continuity.
-    """
-    if chunk_size <= 0:
-        raise ValueError("chunk_size must be > 0")
-    if overlap < 0:
-        raise ValueError("overlap must be >= 0")
-    if overlap >= chunk_size:
-        raise ValueError("overlap must be smaller than chunk_size")
-
-    chunks: list[str] = []
-    start = 0
-    text_len = len(text)
-    while start < text_len:
-        end = start + chunk_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        if end >= text_len:
-            break
-        start = end - overlap
-    return chunks
 
 
 # Register them

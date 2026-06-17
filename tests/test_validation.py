@@ -2,7 +2,6 @@ from ai_cli.core.exceptions import ResponseValidationError
 from ai_cli.utils.validation import (
     HallucinationDetector,
     ResponseValidator,
-    chunk_text,
 )
 
 
@@ -35,14 +34,7 @@ def test_response_validator_empty():
 
     try:
         validator.validate("")
-        assert False
+        raise AssertionError("Expected ResponseValidationError")
     except ResponseValidationError:
         assert True
 
-
-def test_chunk_invalid_size():
-    try:
-        chunk_text("hello", chunk_size=0)
-        assert False
-    except ValueError:
-        assert True

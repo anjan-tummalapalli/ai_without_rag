@@ -169,7 +169,7 @@ def _build_ask_kwargs(
 
 
 def _decode_chunk(chunk: Any) -> str:
-    if isinstance(chunk, (bytes, bytearray)):
+    if isinstance(chunk, bytes | bytearray):
         try:
             return bytes(chunk).decode("utf-8")
         except UnicodeDecodeError:
@@ -195,7 +195,7 @@ async def _drain_async_result(result: Any) -> int:
                 print(_decode_chunk(part), end="", flush=True)
             print()
             return 0
-        if isinstance(value, Iterable) and not isinstance(value, (str, bytes, dict)):
+        if isinstance(value, Iterable) and not isinstance(value, str | bytes | dict):
             for part in value:
                 print(_decode_chunk(part), end="", flush=True)
             print()
@@ -217,18 +217,18 @@ def _handle_sync_result(result: Any) -> int:
             return asyncio.run(_drain_async_result(result))
         if isinstance(result, AsyncIterable):
             return asyncio.run(_drain_async_result(result))
-        if isinstance(result, Iterable) and not isinstance(result, (str, bytes, dict)):
+        if isinstance(result, Iterable) and not isinstance(result, str | bytes | dict):
             for part in result:
                 print(_decode_chunk(part), end="", flush=True)
             print()
             return 0
-        if isinstance(result, (bytes, bytearray)):
+        if isinstance(result, bytes | bytearray):
             try:
                 print(bytes(result).decode("utf-8"))
             except UnicodeDecodeError:
                 print(bytes(result).decode("utf-8", errors="replace"))
             return 0
-        if isinstance(result, (dict, list)):
+        if isinstance(result, dict | list):
             print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
             return 0
         print(str(result))
