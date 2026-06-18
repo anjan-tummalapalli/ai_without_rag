@@ -108,13 +108,14 @@ warn_return_any = true
 warn_unused_ignores = true
 
 [tool.coverage.run]
-source = ["src/ai_cli"]
+source = ["ai_cli"]
+branch = true
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = """
@@ -124,3 +125,4 @@ addopts = """
 --cov-report=term-missing
 """
 markers = ["integration", "slow", "provider"]
+
