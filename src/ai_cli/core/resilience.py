@@ -8,6 +8,27 @@ from collections.abc import Callable, Iterable
 from functools import wraps
 from typing import Any, TypeVar
 
+
+def test_rate_limiter():
+    limiter = RateLimiter(
+        capacity=1,
+        rate_per_second=0
+    )
+
+    assert limiter.allow()
+    assert not limiter.allow()
+
+
+def test_circuit_breaker_opens():
+    cb = CircuitBreaker(threshold=1)
+    wrapped = cb.wrap(lambda: 1/0)
+    try:
+        wrapped()
+    except ZeroDivisionError:
+        pass
+
+    assert cb.allow() is False
+
 T = TypeVar("T")
 
 def execute_with_fallback(
