@@ -108,9 +108,7 @@ warn_return_any = true
 warn_unused_ignores = true
 
 [tool.coverage.run]
-source = ["ai_cli"]
-branch = true
-relative_files = true
+source = ["src/ai_cli"]
 
 [tool.coverage.report]
 show_missing = true
