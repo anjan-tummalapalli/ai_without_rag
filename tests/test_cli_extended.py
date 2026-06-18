@@ -12,6 +12,9 @@ except Exception:  # pragma: no cover - fallback when pytest is not installed
 
     pytest = _DummyPytest()
 
+from ai_cli import cli
+
+
 def test_get_ask_callable_success(monkeypatch):
     import types
 
@@ -168,7 +171,18 @@ def test_decode_chunk_all_types():
 
 def test_main_interactive_branch(monkeypatch):
     from ai_cli import cli
-
     monkeypatch.setattr(cli, "run_interactive", lambda *a, **k: 0)
-
     assert cli.main(["--interactive"]) == 0
+
+def test_ai_chat_basic_flow():
+    from ai_cli.ai_chat import ask
+    result = ask("hello")
+    assert result is not None
+
+def test_cli_main_empty_args():
+    with pytest.raises(SystemExit):
+        cli.main([])
+
+def test_cli_main_missing_prompt():
+    with pytest.raises(SystemExit):
+        cli.main(["--prompt", ""])

@@ -107,10 +107,6 @@ no_implicit_optional = true
 warn_return_any = true
 warn_unused_ignores = true
 
-[tool.coverage.run]
-source = ["ai_cli"]
-branch = true
-
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
@@ -126,3 +122,6 @@ addopts = """
 """
 markers = ["integration", "slow", "provider"]
 
+[tool.coverage.run]
+source = ["src/ai_cli"]
+branch = true
