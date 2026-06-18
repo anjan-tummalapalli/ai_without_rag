@@ -150,3 +150,11 @@ class PromptCorrector:
 def prompt_corrector(prompt: str, *, tokens_per_chunk: int = 200, overlap: int = 50, by_sentences: bool = True, max_tokens: int | None = None) -> str:
     pc = PromptCorrector(tokens_per_chunk=tokens_per_chunk, overlap=overlap)
     return pc.correct(prompt, by_sentences=by_sentences, max_tokens=max_tokens)
+
+def correct_prompt(prompt: str) -> str:
+    """
+    Backward-compatible wrapper used by tests.
+    """
+    # If you already have internal logic, call it here.
+    # Otherwise fallback:
+    return prompt

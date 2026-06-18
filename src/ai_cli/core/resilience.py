@@ -6,7 +6,23 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from functools import wraps
-from typing import Any
+from typing import Any, TypeVar
+
+T = TypeVar("T")
+
+def execute_with_fallback(
+    primary_fn: Callable[..., T],
+    fallback_fn: Callable[..., T],
+    *args,
+    **kwargs
+) -> T:
+    """
+    Execute primary_fn; if it fails, execute fallback_fn.
+    """
+    try:
+        return primary_fn(*args, **kwargs)
+    except Exception:
+        return fallback_fn(*args, **kwargs)
 
 
 # Cache: TTL + thread-safety (memory)
@@ -282,3 +298,4 @@ class RateLimiter:
             if deadline is not None and time.monotonic() >= deadline:
                 return False
             await asyncio.sleep(max(0.001, 1.0 / max(1.0, self.rate_per_second)))
+        

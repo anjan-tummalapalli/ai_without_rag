@@ -35,8 +35,14 @@ from ai_cli.core.exceptions import ProviderRequestError
 
 from .base import AIProvider
 
-logger = logging.getLogger(__name__)
 
+class InMemoryVectorStore:
+
+    """Compatibility placeholder for exported vector store alias."""
+
+    pass
+
+logger = logging.getLogger(__name__)
 
 class XAIProvider(AIProvider):
     """

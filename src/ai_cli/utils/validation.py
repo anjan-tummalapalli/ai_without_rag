@@ -12,6 +12,11 @@ MIN_RESPONSE_LENGTH = 5
 
 log = logging.getLogger(__name__)
 
+try:
+    from ai_cli.rag.vector_store import VectorStore
+except ModuleNotFoundError:
+    VectorStore = None
+
 
 @dataclass
 class HallucinationResult:

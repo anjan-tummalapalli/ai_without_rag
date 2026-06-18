@@ -39,6 +39,7 @@ class OpenAIProvider(BaseProvider):
         self.client = OpenAI(api_key=self.api_key)
 
     def _send_impl(self, prompt: str) -> str:
+        self._ensure_key()
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -78,6 +79,10 @@ class OpenAIProvider(BaseProvider):
 
     def ask(self, prompt: str, **kwargs: Any) -> str:
         return self.send(prompt, **kwargs)
+    
+    def _ensure_key(self):
+        if not self.api_key and not os.getenv("OPENAI_API_KEY"):
+            raise ProviderRequestError("OPENAI_API_KEY is required for OpenAIProvider")
 
 register_provider("openai", OpenAIProvider)
 register_chat_provider("openai", OpenAIProvider)
