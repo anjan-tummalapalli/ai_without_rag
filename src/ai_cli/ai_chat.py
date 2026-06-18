@@ -1,6 +1,7 @@
 """Text chunking utilities."""
 
 import re
+from ai_cli.ai_chat import ask
 
 
 def chunk_text(

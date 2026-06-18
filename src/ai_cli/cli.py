@@ -450,7 +450,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     if not prompt:
-        parser.error("Prompt is required via --prompt or stdin.")
+        print("ai-cli: error: Prompt is required via --prompt or stdin.", file=sys.stderr)
+        raise SystemExit(2)
 
     if len(prompt) > 100_000:
         print(
