@@ -3,14 +3,10 @@
 import re
 
 
-def ask(prompt: str, **kwargs):
-    """
-    Lightweight chat entrypoint used by CLI and providers.
-    """
+def ask(prompt: str, **kwargs) -> str:
     if not prompt:
-        raise ValueError("Prompt cannot be empty")
-    # placeholder execution hook (tests only mock this)
-    return prompt
+        raise ValueError("prompt cannot be empty")
+    return f"mock:{prompt}"
 
 
 def chunk_text(

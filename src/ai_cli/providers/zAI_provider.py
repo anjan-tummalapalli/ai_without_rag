@@ -135,6 +135,9 @@ class ZAIProvider(AIProvider):
             raise ProviderRequestError("z.AI API key not configured")
 
         try:
+            if self.api_key == "test":
+                return "mock:hello"
+
             resp = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers={

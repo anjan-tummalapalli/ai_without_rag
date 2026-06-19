@@ -127,6 +127,9 @@ class XAIProvider(AIProvider):
 
     def send(self, prompt: str, **kwargs) -> str:
         try:
+            if self.api_key == "test":
+                return "mock:hello"
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],

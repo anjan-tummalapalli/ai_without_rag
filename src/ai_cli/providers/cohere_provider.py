@@ -92,10 +92,8 @@ class CohereProvider(BaseProvider):
             return "mock:hello"
 
         # Call Cohere's generate endpoint and return the first generation's text.
-        resp = self.client.generate(
-            prompt=prompt,
-        )
-        return resp.generations[0].text
+        resp = self.client.chat(prompt)
+        return resp.text
 
     # =========================================================
     # Embeddings

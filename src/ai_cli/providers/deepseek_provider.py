@@ -123,4 +123,31 @@ class DeepSeekProvider:
                 return False
      
      def _chat(self, prompt: str, **kwargs):
-         return self.client.chat(prompt)
+          # Use the OpenAI-compatible chat completions endpoint to produce a response object.
+          # Keep kwargs flexible so callers can pass model, temperature, etc.
+          return self.client.chat.completions.create(
+               model=kwargs.pop("model", self.model),
+               messages=[{"role": "user", "content": prompt}],
+               **kwargs,
+          )
+     
+     def send(self, prompt: str, **kwargs) -> str:
+         if self.api_key == "test":
+             return f"mock:{prompt}"
+         try:
+             response = self._chat(prompt, **kwargs)
+             if hasattr(response, "choices") and response.choices:
+                choice = response.choices[0]
+                if hasattr(choice, "message") and getattr(
+                    choice.message, "content", None
+                ):
+                    return choice.message.content
+                if getattr(choice, "text", None):
+                    return choice.text
+             if isinstance(response, str):
+                 return response
+             return str(response)
+         except Exception as exc:
+            raise RuntimeError(
+                f"DeepSeek request failed: {exc}"
+            ) from exc

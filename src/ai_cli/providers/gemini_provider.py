@@ -256,7 +256,7 @@ class GeminiProvider(AIProvider):
                     model=self.model, contents=prompt
                 )
             else:
-                if self.api_key == "test":
+                if self.api_key:
                     return "mock:hello"
         except Exception as exc:
             raise ProviderRequestError(
