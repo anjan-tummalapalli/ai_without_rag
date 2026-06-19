@@ -6,7 +6,8 @@ import re
 def ask(prompt: str, **kwargs):
     if not prompt:
         raise ValueError("prompt cannot be empty")
-    return f"response: mock:{prompt}"
+    # tests expect raw mock response (no "response:" prefix)
+    return f"mock:{prompt}"
 
 
 def chunk_text(

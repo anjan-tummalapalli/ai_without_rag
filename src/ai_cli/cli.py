@@ -430,7 +430,7 @@ def main(argv: list[str] | None = None) -> int:
         argv = []
 
     if not argv:
-        raise SystemExit(2)
+        return 2
 
     parser = build_parser()
     args = parser.parse_args(argv)
