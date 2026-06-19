@@ -3,10 +3,10 @@
 import re
 
 
-def ask(prompt: str, **kwargs) -> str:
+def ask(prompt: str, **kwargs):
     if not prompt:
         raise ValueError("prompt cannot be empty")
-    return f"mock:{prompt}"
+    return f"response: mock:{prompt}"
 
 
 def chunk_text(
