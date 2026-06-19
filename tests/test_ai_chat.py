@@ -4,6 +4,9 @@ from __future__ import annotations
 import hashlib
 import heapq
 import math
+import pytest
+
+from ai_cli.ai_chat import ask
 from collections.abc import Iterable
 
 
@@ -120,3 +123,11 @@ def build_store_from_text(doc_id_prefix: str, text: str, chunk_size: int = 500, 
         for i, c in enumerate(chunks):
                 store.add(f"{doc_id_prefix}-{i}", c)
         return store
+
+def test_ai_chat_ask():
+    result = ask("hello")
+    assert "response" in result
+
+def test_ai_chat_empty():
+    with pytest.raises(ValueError):
+        ask("")

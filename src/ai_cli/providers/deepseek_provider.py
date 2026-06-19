@@ -121,3 +121,6 @@ class DeepSeekProvider:
                 return True
           except Exception:
                 return False
+     
+     def _chat(self, prompt: str, **kwargs):
+         return self.client.chat(prompt)

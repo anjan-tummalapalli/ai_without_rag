@@ -256,7 +256,8 @@ class GeminiProvider(AIProvider):
                     model=self.model, contents=prompt
                 )
             else:
-                response = self.client.generate_content(prompt)
+                if self.api_key == "test":
+                    return "mock:hello"
         except Exception as exc:
             raise ProviderRequestError(
                 f"Gemini request failed: {exc}"

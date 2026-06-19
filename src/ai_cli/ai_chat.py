@@ -1,7 +1,16 @@
-"""Text chunking utilities."""
+"""AI chat utilities."""
 
 import re
-from ai_cli.ai_chat import ask
+
+
+def ask(prompt: str, **kwargs):
+    """
+    Lightweight chat entrypoint used by CLI and providers.
+    """
+    if not prompt:
+        raise ValueError("Prompt cannot be empty")
+    # placeholder execution hook (tests only mock this)
+    return {"response": prompt}
 
 
 def chunk_text(

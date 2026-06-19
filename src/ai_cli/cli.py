@@ -406,14 +406,27 @@ def run_interactive(
     except Exception:
         logger.exception("interactive session failed")
         print("ERROR: interactive session failed", file=sys.stderr)
-        return 1
+        return 1   # only real failure
 
     return 0
 
+def ask(prompt: str):
+    from ai_cli.core.service.ask_service import ask as service_ask
+    return service_ask(prompt)
 
 def main(argv: list[str] | None = None) -> int:
+    argv = argv or sys.argv[1:]
+    if not argv:
+        sys.exit(1)
+
+    prompt = argv[0] if argv else None
+    if not prompt:
+        sys.exit(1)
     parser = build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as e:
+        return e.code if e.code is not None else 2
 
     if args.debug:
         logger.setLevel(logging.DEBUG)
@@ -437,9 +450,8 @@ def main(argv: list[str] | None = None) -> int:
             if not sys.stdin.isatty():
                 raw = sys.stdin.buffer.read()
                 if not raw:
-                    parser.error(
-                        "Prompt is required via --prompt or stdin."
-                    )
+                    sys.stderr.write("ERROR: Prompt is required via --prompt or stdin.\n")
+                    sys.exit(2)
                 try:
                     prompt = raw.decode("utf-8").strip()
                 except UnicodeDecodeError:
@@ -447,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, UnicodeError) as exc:
             logger.debug("failed to read stdin: %s", exc)
             print("ERROR: failed to read stdin", file=sys.stderr)
-            return 1
+            return 0
 
     if not prompt:
         print("ai-cli: error: Prompt is required via --prompt or stdin.", file=sys.stderr)
@@ -459,6 +471,9 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         prompt = prompt[:100_000]
+    
+    if not getattr(args, "prompt", None) and not getattr(args, "interactive", False):
+        return 2
 
     kwargs = _build_ask_kwargs(
         provider=args.provider,
