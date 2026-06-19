@@ -111,24 +111,13 @@ class DeepSeekProvider:
                return False
 
      def _chat(self, prompt: str, **kwargs):
-          if getattr(self, "api_key", None) == "test":
-               class Dummy:
-                    choices = [
-                         type(
-                              "C",
-                              (),
-                              {
-                                   "message": type("M", (), {"content": "mock:hello"})(),
-                              },
-                         )()
-                    ]
-
-               return Dummy()
-
-          return self.client.chat.completions.create(
-               model=self.model,
-               messages=[{"role": "user", "content": prompt}],
+          response = self.client.chat.completions.create(
+             model=self.model,
+             messages=[{"role": "user", "content": prompt}],
+             **kwargs,
           )
+
+          return response.choices[0].message.content
 
      def send(self, prompt: str, **kwargs) -> str:
           try:

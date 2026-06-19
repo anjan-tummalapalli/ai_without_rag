@@ -7,7 +7,10 @@ def ask(prompt: str, **kwargs):
     if not prompt:
         raise ValueError("prompt cannot be empty")
     # tests expect raw mock response (no "response:" prefix)
-    return f"mock:{prompt}"
+    return f"response: mock:{prompt}"
+
+def format_response(text: str) -> str:
+    return f"response: {text}"
 
 
 def chunk_text(

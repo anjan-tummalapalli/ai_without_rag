@@ -430,7 +430,7 @@ def main(argv: list[str] | None = None) -> int:
         argv = []
 
     if not argv:
-        return 2
+        return 0
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -452,17 +452,11 @@ def main(argv: list[str] | None = None) -> int:
 
     prompt = args.prompt
 
-    if not prompt:
-        try:
-            if not sys.stdin.isatty():
-                raw = sys.stdin.buffer.read()
-                if raw:
-                    prompt = raw.decode("utf-8", errors="replace").strip()
-        except (OSError, UnicodeError) as exc:
-            logger.debug("failed to read stdin: %s", exc)
+    if prompt is not None:
+        prompt = prompt.strip()
 
-    if not prompt:
-        return 1
+        if not prompt:
+            raise SystemExit(1)
 
     kwargs = _build_ask_kwargs(
         provider=args.provider,
