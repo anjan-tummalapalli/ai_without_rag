@@ -4,10 +4,11 @@ from __future__ import annotations
 import hashlib
 import heapq
 import math
+from collections.abc import Iterable
+
 import pytest
 
 from ai_cli.ai_chat import ask
-from collections.abc import Iterable
 
 
 # Chunking

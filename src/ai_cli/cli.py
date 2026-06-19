@@ -27,56 +27,73 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ai-cli",
         description=(
-            "Enterprise AI CLI Gateway for multi-provider AI interactions."
+            "Enterprise AI CLI Gateway for multi-provider AI "
+            "interactions."
         ),
     )
     parser.add_argument(
-        "-p", "--provider", default="auto", type=str,
-        help="AI provider name (default: auto)."
+        "-p",
+        "--provider",
+        default="auto",
+        type=str,
+        help="AI provider name (default: auto).",
     )
     parser.add_argument(
-        "-q", "--prompt", type=str,
-        help="Prompt/question to send to the AI provider."
+        "-q",
+        "--prompt",
+        type=str,
+        help="Prompt/question to send to the AI provider.",
     )
     parser.add_argument(
-        "-m", "--model", default=None, type=str,
-        help="Optional model override for the selected provider."
+        "-m",
+        "--model",
+        default=None,
+        type=str,
+        help="Optional model override for the selected provider.",
     )
     parser.add_argument(
-        "-i", "--interactive", action="store_true",
-        help="Start an interactive REPL chat loop."
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="Start an interactive REPL chat loop.",
     )
     parser.add_argument(
-        "--timeout", type=int, default=60,
-        help="Request timeout in seconds. Default: 60"
+        "--timeout",
+        type=int,
+        default=60,
+        help="Request timeout in seconds. Default: 60",
     )
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug logging."
     )
     parser.add_argument(
-        "--profile", type=str, default=None,
-        help="Profile name or configuration to use (optional)."
+        "--profile",
+        type=str,
+        default=None,
+        help="Profile name or configuration to use (optional).",
     )
     parser.add_argument(
-        "--stream", action="store_true",
-        help="Enable streaming responses if supported."
+        "--stream",
+        action="store_true",
+        help="Enable streaming responses if supported.",
     )
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {VERSION}",
-        help="Show program version and exit."
+        "--version",
+        action="version",
+        version=f"%(prog)s {VERSION}",
+        help="Show program version and exit.",
     )
     parser.add_argument(
-        "--modules", type=str, default=None,
-        help="Comma-separated list of modules to enable (e.g. mod1,mod2)."
+        "--modules",
+        type=str,
+        default=None,
+        help="Comma-separated list of modules to enable "
+        "(e.g. mod1,mod2).",
     )
     return parser
 
 
 def _get_ask_callable():
-    """
-    Lazy import of ask() to avoid import-time side effects.
-    Raises ImportError if ask is not available.
-    """
     try:
         mod = importlib.import_module("ai_cli.core.api")
         ask = getattr(mod, "ask", None)
@@ -88,10 +105,7 @@ def _get_ask_callable():
         raise
 
 
-def _init_providers_safe():
-    """
-    Lazy init of providers; swallow errors but log debug info.
-    """
+def _init_providers_safe() -> None:
     try:
         mod = importlib.import_module("ai_cli.providers.bootstrap")
         init = getattr(mod, "init_providers", None)
@@ -169,7 +183,7 @@ def _build_ask_kwargs(
 
 
 def _decode_chunk(chunk: Any) -> str:
-    if isinstance(chunk, bytes | bytearray):
+    if isinstance(chunk, (bytes, bytearray)):
         try:
             return bytes(chunk).decode("utf-8")
         except UnicodeDecodeError:
@@ -195,7 +209,7 @@ async def _drain_async_result(result: Any) -> int:
                 print(_decode_chunk(part), end="", flush=True)
             print()
             return 0
-        if isinstance(value, Iterable) and not isinstance(value, str | bytes | dict):
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes, dict)):
             for part in value:
                 print(_decode_chunk(part), end="", flush=True)
             print()
@@ -217,18 +231,18 @@ def _handle_sync_result(result: Any) -> int:
             return asyncio.run(_drain_async_result(result))
         if isinstance(result, AsyncIterable):
             return asyncio.run(_drain_async_result(result))
-        if isinstance(result, Iterable) and not isinstance(result, str | bytes | dict):
+        if isinstance(result, Iterable) and not isinstance(result, (str, bytes, dict)):
             for part in result:
                 print(_decode_chunk(part), end="", flush=True)
             print()
             return 0
-        if isinstance(result, bytes | bytearray):
+        if isinstance(result, (bytes, bytearray)):
             try:
                 print(bytes(result).decode("utf-8"))
             except UnicodeDecodeError:
                 print(bytes(result).decode("utf-8", errors="replace"))
             return 0
-        if isinstance(result, dict | list):
+        if isinstance(result, (dict, list)):
             print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
             return 0
         print(str(result))
@@ -260,19 +274,17 @@ def _invoke_with_retries(
             safe_kwargs = {
                 k: ("<redacted>" if k == "prompt" else v) for k, v in kwargs.items()
             }
-            logger.debug(
-                "Calling ask() attempt %d with kwargs=%s", attempt, safe_kwargs
-            )
+            logger.debug("Calling ask() attempt %d with kwargs=%s", attempt, safe_kwargs)
             result = ask(**kwargs)
             if inspect.isawaitable(result) or isinstance(result, AsyncIterable):
                 return asyncio.run(_drain_async_result(result))
             return _handle_sync_result(result)
-        except (TimeoutError, ConnectionError, OSError):
-            logger.warning("Transient error on attempt %d", attempt)
+        except (TimeoutError, ConnectionError, OSError) as exc:
+            logger.warning("Transient error on attempt %d: %s", attempt, exc)
             if attempt == max_retries:
                 logger.error("Max retries reached (%d).", max_retries)
                 print("ERROR: transient failure", file=sys.stderr)
-                return 124
+                return 124 if isinstance(exc, TimeoutError) else 1
             sleep_for = backoff * (2 ** (attempt - 1))
             sleep_for *= 0.8 + (os.urandom(1)[0] / 255.0) * 0.4
             time.sleep(sleep_for)
@@ -299,9 +311,9 @@ def run_interactive(
         f"Profile: {profile or 'default'} | Stream: {stream}"
     )
     print(
-        "Type /switch <provider>, /model <model>, /profile <name>, /stream, "
-        "/index <file|text>, /help, /exit or /quit. Send plain text to ask "
-        "a question.\n"
+        "Type /switch <provider>, /model <model>, /profile <name>, "
+        "/stream, /index <file|text>, /help, /exit or /quit. Send plain "
+        "text to ask a question.\n"
     )
 
     current_provider = provider
@@ -410,23 +422,18 @@ def run_interactive(
 
     return 0
 
-def ask(prompt: str):
-    from ai_cli.core.service.ask_service import ask as service_ask
-    return service_ask(prompt)
+def ask(prompt: str, **kwargs):
+    return _get_ask_callable()(prompt, **kwargs)
 
 def main(argv: list[str] | None = None) -> int:
-    argv = argv or sys.argv[1:]
-    if not argv:
-        sys.exit(1)
+    if argv is None:
+        argv = []
 
-    prompt = argv[0] if argv else None
-    if not prompt:
-        sys.exit(1)
+    if not argv:
+        return 2
+
     parser = build_parser()
-    try:
-        args = parser.parse_args(argv)
-    except SystemExit as e:
-        return e.code if e.code is not None else 2
+    args = parser.parse_args(argv)
 
     if args.debug:
         logger.setLevel(logging.DEBUG)
@@ -449,31 +456,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             if not sys.stdin.isatty():
                 raw = sys.stdin.buffer.read()
-                if not raw:
-                    sys.stderr.write("ERROR: Prompt is required via --prompt or stdin.\n")
-                    sys.exit(2)
-                try:
-                    prompt = raw.decode("utf-8").strip()
-                except UnicodeDecodeError:
+                if raw:
                     prompt = raw.decode("utf-8", errors="replace").strip()
         except (OSError, UnicodeError) as exc:
             logger.debug("failed to read stdin: %s", exc)
-            print("ERROR: failed to read stdin", file=sys.stderr)
-            return 0
 
     if not prompt:
-        print("ai-cli: error: Prompt is required via --prompt or stdin.", file=sys.stderr)
         raise SystemExit(2)
-
-    if len(prompt) > 100_000:
-        print(
-            "Warning: prompt is very large; truncating to 100k characters.",
-            file=sys.stderr,
-        )
-        prompt = prompt[:100_000]
-    
-    if not getattr(args, "prompt", None) and not getattr(args, "interactive", False):
-        return 2
 
     kwargs = _build_ask_kwargs(
         provider=args.provider,

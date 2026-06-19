@@ -10,7 +10,7 @@ def ask(prompt: str, **kwargs):
     if not prompt:
         raise ValueError("Prompt cannot be empty")
     # placeholder execution hook (tests only mock this)
-    return {"response": prompt}
+    return prompt
 
 
 def chunk_text(
