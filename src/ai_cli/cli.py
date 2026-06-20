@@ -426,18 +426,11 @@ def ask(prompt: str, **kwargs):
     return _get_ask_callable()(prompt, **kwargs)
 
 def main(argv: list[str] | None = None) -> int:
-    """
-    CLI entrypoint.
-
-    - True CLI invocation (no argv provided) behaves like argparse and raises
-      SystemExit(2) on empty/no-arg runs.
-    - Programmatic invocation (argv provided) returns integer exit codes;
-      missing/empty prompt returns 1 instead of raising.
-    """
     parser = build_parser()
 
-    # Real CLI invocation: raiseSystemExit to mirror argparse behavior.
-    if argv is None:
+    # Treat both None (true CLI invocation) and an explicit empty argv list
+    # as "no-args" CLI runs -> raise SystemExit(2) to match argparse behavior.
+    if argv is None or (isinstance(argv, list) and len(argv) == 0):
         raise SystemExit(2)
 
     try:
@@ -452,8 +445,11 @@ def main(argv: list[str] | None = None) -> int:
 
     _init_providers_safe()
 
-    # Non-interactive requires a non-empty prompt. For programmatic callers
-    # return 1 on missing/empty prompt rather than raising.
+    # If caller explicitly passed --prompt with an empty value, mirror argparse and raise.
+    if "--prompt" in argv and (args.prompt is None or not str(args.prompt).strip()):
+        raise SystemExit(2)
+
+    # For other programmatic missing-prompt cases, return non-zero instead of raising.
     if not getattr(args, "interactive", False):
         if args.prompt is None or not str(args.prompt).strip():
             return 1
