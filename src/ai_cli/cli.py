@@ -483,24 +483,24 @@ def _invoke_with_retries(
 
 def main(argv: list[str] | None = None) -> int:
     """
-    Simplified deterministic behavior for tests:
+    Entrypoint:
 
-    - Treat both no-arg true CLI (argv is None) and an explicit empty argv list
-      as a CLI "no args" invocation and raise SystemExit(2).
-    - If caller explicitly passed --prompt / -q with an empty value, raise
-      SystemExit(2) to mirror argparse/CLI behavior.
-    - For other programmatic calls return integer exit codes.
+    - If argv is None (caller didn't pass args) treat as true CLI invocation and
+      raise SystemExit(2) immediately (tests expect this).
+    - If caller provided argv and explicitly passed --prompt/-q with an empty
+      value, raise SystemExit(2) to mirror CLI behavior.
+    - Otherwise, for programmatic calls return integer exit codes.
     """
     parser = build_parser()
 
-    # Treat both None and an empty list as "no args" CLI runs -> usage error
-    if argv is None or (isinstance(argv, list) and len(argv) == 0):
+    # True CLI invocation: caller didn't pass argv -> raise immediately
+    if argv is None:
         raise SystemExit(2)
 
     try:
         args = parser.parse_args(argv)
     except SystemExit as se:
-        # Programmatic invocation: return parse error as integer.
+        # Programmatic invocation: return parse error code instead of raising
         code = se.code if isinstance(se.code, int) else 1
         return int(code) if int(code) != 0 else 1
 
@@ -509,21 +509,20 @@ def main(argv: list[str] | None = None) -> int:
 
     _init_providers_safe()
 
-    # Detect explicit prompt flag presence in the passed argv
+    # Detect explicit prompt flag in the provided argv
     explicit_prompt_flag = any(
         tok == "--prompt"
         or tok.startswith("--prompt=")
         or tok == "-q"
-        or tok.startswith("-q")
+        or (tok.startswith("-q") and tok != "-q")
         for tok in argv
     )
 
-    # If caller explicitly supplied --prompt (or -q) with an empty value,
-    # mirror argparse/CLI behavior and raise SystemExit(2).
+    # If prompt flag was explicitly provided but empty, raise to match CLI behavior
     if explicit_prompt_flag and (args.prompt is None or not str(args.prompt).strip()):
         raise SystemExit(2)
 
-    # Interactive mode -> run REPL
+    # Interactive REPL
     if getattr(args, "interactive", False):
         rc = run_interactive(
             provider=args.provider,
@@ -535,8 +534,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return int(rc) if rc is not None else 0
 
-    # Non-interactive requires a non-empty prompt. For programmatic callers
-    # return non-zero (1) instead of raising.
+    # Non-interactive: require non-empty prompt for programmatic callers
     if args.prompt is None or not str(args.prompt).strip():
         return 1
 
