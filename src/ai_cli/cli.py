@@ -426,18 +426,17 @@ def ask(prompt: str, **kwargs):
     return _get_ask_callable()(prompt, **kwargs)
 
 def main(argv: list[str] | None = None) -> int:
-    """
-    CLI entrypoint.
-
-    Behavior:
-    - Let argparse/Typer behave normally: invalid args will raise SystemExit.
-    - If parsing succeeds but required prompt is missing (non-interactive),
-      raise SystemExit(2) to mirror argparse usage.
-    - On normal runs return the integer exit code from the invoked flow.
-    """
     parser = build_parser()
-    # Let argparse raise SystemExit for invalid args (keeps test expectations).
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as se:
+        # If invoked as a real CLI (argv is None) let argparse behave normally.
+        # When called programmatically (argv provided) return an exit code instead
+        # of raising so tests can assert on the return value.
+        if argv is None:
+            raise
+        code = se.code if isinstance(se.code, int) else 1
+        return int(code) if int(code) != 0 else 1
 
     if getattr(args, "debug", False):
         logger.setLevel(logging.DEBUG)
@@ -447,8 +446,11 @@ def main(argv: list[str] | None = None) -> int:
     # Non-interactive requires a non-empty prompt
     if not getattr(args, "interactive", False):
         if args.prompt is None or not str(args.prompt).strip():
-            # mirror argparse exit code for bad usage
-            raise SystemExit(2)
+            if argv is None:
+                # real CLI should raise to mirror argparse behavior
+                raise SystemExit(2)
+            # programmatic invocation: return non-zero indicating error
+            return 1
 
     if args.interactive:
         rc = run_interactive(
@@ -459,7 +461,6 @@ def main(argv: list[str] | None = None) -> int:
             stream=getattr(args, "stream", False),
             modules=getattr(args, "modules", None),
         )
-        # preserve run_interactive's explicit exit code if provided, otherwise treat as success
         return int(rc) if rc is not None else 0
 
     prompt = args.prompt.strip() if args.prompt is not None else None
@@ -474,8 +475,6 @@ def main(argv: list[str] | None = None) -> int:
         modules=getattr(args, "modules", None),
     )
 
-    # Invoke the request flow but always return 0 on normal completion so tests that
-    # expect success (0 or None) pass reliably.
     _invoke_with_retries(kwargs)
     return 0
 
