@@ -429,17 +429,27 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = []
 
+    # If no args provided, treat as invalid usage (return code 2)
     if not argv:
-        raise SystemExit(2)
+        return 2
 
     parser = build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as se:
+        # argparse uses SystemExit(code); translate into returned int
+        code = se.code if isinstance(se.code, int) else 1
+        return int(code)
 
     if args.debug:
         logger.setLevel(logging.DEBUG)
 
     _init_providers_safe()
 
+    # If not interactive and no prompt provided, return 2 (missing prompt)
+    if not args.interactive and not args.prompt:
+        return 2
+    
     if args.interactive:
         return run_interactive(
             args.provider,
@@ -454,9 +464,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if prompt is not None:
         prompt = prompt.strip()
-
         if not prompt:
-            raise SystemExit(2)
+            return 2
 
     kwargs = _build_ask_kwargs(
         provider=args.provider,
