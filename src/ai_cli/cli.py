@@ -430,7 +430,7 @@ def main(argv: list[str] | None = None) -> int:
         argv = []
 
     if not argv:
-        return 0
+        raise SystemExit(2)
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -456,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
         prompt = prompt.strip()
 
         if not prompt:
-            raise SystemExit(1)
+            raise SystemExit(2)
 
     kwargs = _build_ask_kwargs(
         provider=args.provider,
