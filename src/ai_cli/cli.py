@@ -428,9 +428,8 @@ def ask(prompt: str, **kwargs):
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
 
-    # Treat both None (true CLI invocation) and an explicit empty argv list
-    # as "no-args" CLI runs -> raise SystemExit(2) to match argparse behavior.
-    if argv is None or (isinstance(argv, list) and len(argv) == 0):
+    # True CLI invocation (no argv provided) should raise SystemExit(2)
+    if argv is None:
         raise SystemExit(2)
 
     try:
@@ -445,16 +444,8 @@ def main(argv: list[str] | None = None) -> int:
 
     _init_providers_safe()
 
-    # If caller explicitly passed --prompt with an empty value, mirror argparse and raise.
-    if "--prompt" in argv and (args.prompt is None or not str(args.prompt).strip()):
-        raise SystemExit(2)
-
-    # For other programmatic missing-prompt cases, return non-zero instead of raising.
-    if not getattr(args, "interactive", False):
-        if args.prompt is None or not str(args.prompt).strip():
-            return 1
-
-    if args.interactive:
+    # If interactive, run the interactive REPL and return its code.
+    if getattr(args, "interactive", False):
         rc = run_interactive(
             provider=args.provider,
             model=getattr(args, "model", None),
@@ -464,6 +455,10 @@ def main(argv: list[str] | None = None) -> int:
             modules=getattr(args, "modules", None),
         )
         return int(rc) if rc is not None else 0
+
+    # Non-interactive requires a non-empty prompt: programmatic callers get return code 1
+    if args.prompt is None or not str(args.prompt).strip():
+        return 1
 
     prompt = args.prompt.strip() if args.prompt is not None else None
 
