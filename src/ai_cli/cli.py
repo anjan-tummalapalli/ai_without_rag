@@ -431,8 +431,8 @@ def main(argv: list[str] | None = None) -> int:
 
     - If called with no explicit argv (argv is None) treat as a real CLI run and
       raise SystemExit(2) to mirror argparse usage for empty/no-arg invocation.
-    - If called programmatically (argv provided, even an empty list) return
-      integer exit codes and do NOT raise SystemExit for missing prompt.
+    - If called programmatically (argv provided) return integer exit codes.
+    - If the caller explicitly passed --prompt "" raise SystemExit(2).
     """
     parser = build_parser()
 
@@ -452,9 +452,13 @@ def main(argv: list[str] | None = None) -> int:
 
     _init_providers_safe()
 
-    # Non-interactive requires a non-empty prompt — programmatic callers get an int.
+    # Non-interactive requires a non-empty prompt
     if not getattr(args, "interactive", False):
         empty_prompt = args.prompt is None or not str(args.prompt).strip()
+        # If the caller explicitly provided --prompt (even programmatically) and it's empty,
+        # mirror CLI behavior and raise SystemExit(2).
+        if empty_prompt and "--prompt" in argv:
+            raise SystemExit(2)
         if empty_prompt:
             return 1
 
