@@ -429,16 +429,17 @@ def main(argv: list[str] | None = None) -> int:
     """
     CLI entrypoint.
 
-    - When called as a real CLI (argv is None) behave like argparse: exit with
-      code 2 on empty/no args.
-    - When called programmatically (argv provided) return int exit codes so tests
-      can assert results without seeing SystemExit.
+    Behavior:
+    - Raise SystemExit(2) for true CLI-empty runs (no argv or empty argv list).
+    - Raise SystemExit(2) when caller explicitly passed --prompt "".
+    - For other programmatic calls (argv provided) return integer exit codes.
     """
-    # Real CLI invocation: raise SystemExit(2) for empty/no-arg runs
-    if argv is None:
+    parser = build_parser()
+
+    # Treat both None (no arg passed) and an empty list as "no args" CLI runs.
+    if argv is None or (isinstance(argv, list) and len(argv) == 0):
         raise SystemExit(2)
 
-    parser = build_parser()
     try:
         args = parser.parse_args(argv)
     except SystemExit as se:
@@ -454,7 +455,10 @@ def main(argv: list[str] | None = None) -> int:
     # Non-interactive requires a non-empty prompt
     if not getattr(args, "interactive", False):
         empty_prompt = args.prompt is None or not str(args.prompt).strip()
-        # For programmatic callers, do NOT raise SystemExit even if --prompt was passed.
+        # If the caller explicitly provided --prompt (even programmatically) and it's empty,
+        # mirror CLI behavior and raise SystemExit(2).
+        if empty_prompt and "--prompt" in argv:
+            raise SystemExit(2)
         if empty_prompt:
             return 1
 
