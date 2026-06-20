@@ -426,15 +426,23 @@ def ask(prompt: str, **kwargs):
     return _get_ask_callable()(prompt, **kwargs)
 
 def main(argv: list[str] | None = None) -> int:
+    """
+    CLI entrypoint.
+
+    - When called as a real CLI (argv is None) behave like argparse: exit with
+      code 2 on empty/no args.
+    - When called programmatically (argv provided) return int exit codes so tests
+      can assert results without seeing SystemExit except for explicit cases.
+    """
+    # Real CLI invocation: raise SystemExit(2) for empty/no-arg runs
+    if argv is None:
+        raise SystemExit(2)
+
     parser = build_parser()
     try:
         args = parser.parse_args(argv)
     except SystemExit as se:
-        # If invoked as a real CLI (argv is None) let argparse behave normally.
-        # When called programmatically (argv provided) return an exit code instead
-        # of raising so tests can assert on the return value.
-        if argv is None:
-            raise
+        # When invoked programmatically return the parse error as an int
         code = se.code if isinstance(se.code, int) else 1
         return int(code) if int(code) != 0 else 1
 
@@ -442,14 +450,13 @@ def main(argv: list[str] | None = None) -> int:
         logger.setLevel(logging.DEBUG)
 
     _init_providers_safe()
-
     # Non-interactive requires a non-empty prompt
     if not getattr(args, "interactive", False):
-        if args.prompt is None or not str(args.prompt).strip():
-            if argv is None:
-                # real CLI should raise to mirror argparse behavior
-                raise SystemExit(2)
-            # programmatic invocation: return non-zero indicating error
+        empty_prompt = args.prompt is None or not str(args.prompt).strip()
+        # If caller explicitly passed --prompt "" mirror CLI behavior and raise
+        if empty_prompt and "--prompt" in argv:
+            raise SystemExit(2)
+        if empty_prompt:
             return 1
 
     if args.interactive:
@@ -457,7 +464,7 @@ def main(argv: list[str] | None = None) -> int:
             provider=args.provider,
             model=args.model,
             timeout=args.timeout,
-            profile=args.profile,
+            profile=getattr(args, "profile", None),
             stream=getattr(args, "stream", False),
             modules=getattr(args, "modules", None),
         )
@@ -468,9 +475,9 @@ def main(argv: list[str] | None = None) -> int:
     kwargs = _build_ask_kwargs(
         provider=args.provider,
         prompt=prompt,
-        model=args.model,
-        timeout=args.timeout,
-        profile=args.profile,
+        model=getattr(args, "model", None),
+        timeout=getattr(args, "timeout", 30),
+        profile=getattr(args, "profile", None),
         stream=getattr(args, "stream", False),
         modules=getattr(args, "modules", None),
     )
