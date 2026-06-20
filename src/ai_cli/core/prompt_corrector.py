@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
 
 
@@ -14,16 +13,7 @@ class Chunk:
 
 
 class TextChunker:
-    """
-    Configurable chunker with:
-    - pluggable tokenizer (default: simple whitespace)
-    - pluggable sentence splitter (default: simple punctuation-based)
-    - sentence-chunking that preserves sentence boundaries and supports overlap in words
-    - methods that return either plain strings (backwards compatible) or Chunk metadata
-    """
-
     SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-    DEFAULT_TOKEN_APPROX = 1
 
     def __init__(
         self,
@@ -35,18 +25,11 @@ class TextChunker:
     ) -> None:
         self.tokens_per_chunk = max(1, tokens_per_chunk)
         self.overlap = max(0, overlap)
-        self.tokenizer = tokenizer or self._words
-        self.sentence_splitter = sentence_splitter or (lambda t: [s.strip() for s in self.SENTENCE_SPLIT_RE.split(t) if s.strip()])
+        self.tokenizer = tokenizer or (lambda t: t.split())
+        self.sentence_splitter = sentence_splitter or (
+            lambda t: [s.strip() for s in self.SENTENCE_SPLIT_RE.split(t) if s.strip()]
+        )
         self.max_chunks = max_chunks
-
-    def _words(self, text: str) -> list[str]:
-        return text.split()
-
-    def _count_tokens(self, text: str) -> int:
-        return len(self.tokenizer(text))
-
-    def chunk_by_tokens(self, text: str) -> list[str]:
-        return [c.text for c in self.chunk_by_tokens_with_meta(text)]
 
     def chunk_by_tokens_with_meta(self, text: str) -> list[Chunk]:
         tokens = self.tokenizer(text)
@@ -59,15 +42,22 @@ class TextChunker:
         while i < len(tokens):
             chunk_tokens = tokens[i : i + self.tokens_per_chunk]
             chunk_text = " ".join(chunk_tokens)
-            chunks.append(Chunk(text=chunk_text, start_word=i, end_word=i + len(chunk_tokens), index=idx))
+            chunks.append(
+                Chunk(
+                    text=chunk_text,
+                    start_word=i,
+                    end_word=i + len(chunk_tokens),
+                    index=idx,
+                )
+            )
             idx += 1
             if self.max_chunks and idx >= self.max_chunks:
                 break
             i += step
         return chunks
 
-    def chunk_by_sentences(self, text: str, max_tokens: int | None = None) -> list[str]:
-        return [c.text for c in self.chunk_by_sentences_with_meta(text, max_tokens=max_tokens)]
+    def chunk_by_tokens(self, text: str) -> list[str]:
+        return [c.text for c in self.chunk_by_tokens_with_meta(text)]
 
     def chunk_by_sentences_with_meta(self, text: str, max_tokens: int | None = None) -> list[Chunk]:
         max_tokens = max_tokens or self.tokens_per_chunk
@@ -75,58 +65,44 @@ class TextChunker:
         if not sentences:
             return []
 
-        # Pre-tokenize sentences and keep token lists for each sentence
         sent_tokens = [self.tokenizer(s) for s in sentences]
         chunks: list[Chunk] = []
         current_tokens: list[str] = []
-        current_start_idx = 0  # word index of first token in current chunk
-        total_word_index = 0   # running word index across sentences
+        current_start_idx = 0
+        total_word_index = 0
         chunk_index = 0
 
         for tokens in sent_tokens:
             sent_len = len(tokens)
-            # If current is empty, mark start index at current total_word_index
             if not current_tokens:
                 current_start_idx = total_word_index
 
-            # If adding this sentence would overflow:
             if current_tokens and len(current_tokens) + sent_len > max_tokens:
-                # emit current chunk
                 chunk_text = " ".join(current_tokens)
                 chunks.append(Chunk(text=chunk_text, start_word=current_start_idx, end_word=current_start_idx + len(current_tokens), index=chunk_index))
                 chunk_index += 1
                 if self.max_chunks and chunk_index >= self.max_chunks:
                     return chunks
-                # compute overlap: take last `overlap` words from current chunk (by words)
                 overlap_count = min(self.overlap, len(current_tokens))
                 overlap_tokens = current_tokens[-overlap_count:] if overlap_count > 0 else []
-                # start new chunk with overlap + current sentence
                 current_tokens = overlap_tokens + tokens
-                # new start index is end - overlap_count
-                current_start_idx = (current_start_idx + len(current_tokens) - len(tokens) - overlap_count) + 0  # adjusted below via total_word_index tracking
-                # Note: rather than trying to recompute exact start idx by arithmetic here,
-                # easier approach is to set current_start_idx to total_word_index - overlap_count
                 current_start_idx = total_word_index - overlap_count
             else:
                 current_tokens.extend(tokens)
 
             total_word_index += sent_len
 
-        # emit the last chunk
         if current_tokens:
             chunk_text = " ".join(current_tokens)
             chunks.append(Chunk(text=chunk_text, start_word=current_start_idx, end_word=current_start_idx + len(current_tokens), index=chunk_index))
 
         return chunks
 
+    def chunk_by_sentences(self, text: str, max_tokens: int | None = None) -> list[str]:
+        return [c.text for c in self.chunk_by_sentences_with_meta(text, max_tokens=max_tokens)]
+
 
 class PromptCorrector:
-    """
-    Small wrapper around TextChunker providing:
-    - backward-compatible `correct` that returns joined chunk strings
-    - new method `correct_with_meta` returning Chunk metadata objects
-    """
-
     def __init__(self, tokens_per_chunk: int = 200, overlap: int = 50, **kwargs) -> None:
         self.chunker = TextChunker(tokens_per_chunk=tokens_per_chunk, overlap=overlap, **kwargs)
 
@@ -151,10 +127,11 @@ def prompt_corrector(prompt: str, *, tokens_per_chunk: int = 200, overlap: int =
     pc = PromptCorrector(tokens_per_chunk=tokens_per_chunk, overlap=overlap)
     return pc.correct(prompt, by_sentences=by_sentences, max_tokens=max_tokens)
 
+
 def correct_prompt(prompt: str) -> str:
     """
-    Backward-compatible wrapper used by tests.
+    Backwards-compatible wrapper expected by tests.
     """
-    # If you already have internal logic, call it here.
-    # Otherwise fallback:
-    return prompt
+    if not prompt:
+        return prompt
+    return prompt_corrector(prompt)

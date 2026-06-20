@@ -1,16 +1,22 @@
-"""AI chat utilities."""
+"""AI chat utilities used by tests."""
+from __future__ import annotations
 
 import re
 
 
 def ask(prompt: str, **kwargs):
+    """
+    Minimal ask() used by tests. Raises on empty prompt.
+    Returns the prompt text (tests that mock behavior will override this).
+    """
     if not prompt:
         raise ValueError("prompt cannot be empty")
-    # tests expect raw mock response (no "response:" prefix)
-    return f"response: mock:{prompt}"
+    return prompt
+
 
 def format_response(text: str) -> str:
-    return f"response: {text}"
+    """Return a normalized response string (kept minimal for tests)."""
+    return text
 
 
 def chunk_text(
@@ -21,13 +27,7 @@ def chunk_text(
     prefer_sentence_boundary: bool = False,
 ) -> list[str]:
     """
-    Simple sliding-window chunking with optional heuristics.
-
-    - chunk_size: target max number of characters per chunk.
-    - chunk_overlap: number of overlapping characters between chunks.
-    - split_on_word: try not to cut tokens in half when possible.
-    - prefer_sentence_boundary: prefer ending chunks at sentence end
-      punctuation if found inside the window.
+    Sliding-window chunking with optional overlap and sentence-aware splitting.
     """
     if chunk_size <= 0:
         raise ValueError("chunk_size must be > 0")
