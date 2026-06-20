@@ -425,27 +425,75 @@ def run_interactive(
 def ask(prompt: str, **kwargs):
     return _get_ask_callable()(prompt, **kwargs)
 
+def _invoke_with_retries(
+    kwargs: dict[str, Any], max_retries: int = 3, backoff: float = 0.5
+) -> int:
+    if max_retries < 1:
+        raise ValueError("max_retries must be at least 1")
+
+    # Prefer module-level ask (allows tests to monkeypatch ai_cli.cli.ask)
+    ask_func = globals().get("ask")
+    if not callable(ask_func):
+        try:
+            ask_func = _get_ask_callable()
+        except Exception:
+            logger.error("ask() is not available; aborting request")
+            print("ERROR: ask() backend unavailable", file=sys.stderr)
+            return 1
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            safe_kwargs = {
+                k: ("<redacted>" if k == "prompt" else v) for k, v in kwargs.items()
+            }
+            logger.debug("Calling ask() attempt %d with kwargs=%s", attempt, safe_kwargs)
+            result = ask_func(**kwargs)
+            if inspect.isawaitable(result) or isinstance(result, AsyncIterable):
+                return asyncio.run(_drain_async_result(result))
+            return _handle_sync_result(result)
+        except (TimeoutError, ConnectionError, OSError) as exc:
+            logger.warning("Transient error on attempt %d: %s", attempt, exc)
+            if attempt == max_retries:
+                logger.error("Max retries reached (%d).", max_retries)
+                print("ERROR: transient failure", file=sys.stderr)
+                return 124 if isinstance(exc, TimeoutError) else 1
+            sleep_for = backoff * (2 ** (attempt - 1))
+            sleep_for *= 0.8 + (os.urandom(1)[0] / 255.0) * 0.4
+            time.sleep(sleep_for)
+        except KeyboardInterrupt:
+            logger.warning("operation interrupted by user")
+            return 130
+        except (RuntimeError, TypeError, ValueError) as exc:
+            logger.debug("ai request failed: %s", exc)
+            print("ERROR: ai request failed", file=sys.stderr)
+            return 1
+# ...existing code...
+
 def main(argv: list[str] | None = None) -> int:
     """
-    CLI entrypoint with deterministic behavior for tests:
+    CLI entrypoint with deterministic behavior for tests.
 
-    - If called with argv is None or argv == []: treat as a real CLI empty run
-      and raise SystemExit(2) (argparse-style usage error).
-    - If caller explicitly passed --prompt with an empty value, raise SystemExit(2).
-    - For other programmatic calls (argv provided), translate parser SystemExit
-      into integer return codes so callers/tests can assert return values.
+    - True CLI invocation (argv is None): parse sys.argv[1:] and raise SystemExit(2)
+      when no CLI args or when missing prompt.
+    - Programmatic invocation (argv provided, may be empty list): return integer
+      exit codes instead of raising SystemExit.
     """
     parser = build_parser()
 
-    # Treat both None (no explicit argv) and an explicit empty list as "no args"
-    # CLI runs and raise SystemExit(2) to match test expectations.
-    if argv is None or (isinstance(argv, list) and len(argv) == 0):
+    is_real_cli = argv is None
+    parse_argv = sys.argv[1:] if is_real_cli else argv
+
+    # Real CLI with no args => usage error
+    if is_real_cli and (not parse_argv):
         raise SystemExit(2)
 
     try:
-        args = parser.parse_args(argv)
+        args = parser.parse_args(parse_argv)
     except SystemExit as se:
-        # Programmatic invocation: return parse error as int instead of raising.
+        # Real CLI: propagate parser exit
+        if is_real_cli:
+            raise
+        # Programmatic caller: return parse exit code as int
         code = se.code if isinstance(se.code, int) else 1
         return int(code) if int(code) != 0 else 1
 
@@ -454,19 +502,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _init_providers_safe()
 
-    # If caller explicitly supplied --prompt (or -q) with an empty value,
-    # mirror argparse behavior and raise SystemExit(2).
-    explicit_prompt_flag = any(
-        tok == "--prompt"
-        or tok.startswith("--prompt=")
-        or tok == "-q"
-        or tok.startswith("-q")
-        for tok in argv
-    )
-    if explicit_prompt_flag and (args.prompt is None or not str(args.prompt).strip()):
-        raise SystemExit(2)
-    
-        # Interactive mode -> run REPL and return its code.
+    # Interactive -> run REPL
     if getattr(args, "interactive", False):
         rc = run_interactive(
             provider=args.provider,
@@ -478,11 +514,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return int(rc) if rc is not None else 0
 
-    # Non-interactive requires a non-empty prompt; programmatic callers get a non-zero code.
+    # Non-interactive requires a non-empty prompt.
     if args.prompt is None or not str(args.prompt).strip():
+        if is_real_cli:
+            # Mirror argparse behavior for the real CLI
+            raise SystemExit(2)
         return 1
 
-    prompt = args.prompt.strip() if args.prompt is not None else None
+    prompt = args.prompt.strip()
 
     kwargs = _build_ask_kwargs(
         provider=args.provider,
