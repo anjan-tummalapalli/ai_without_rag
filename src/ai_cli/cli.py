@@ -432,7 +432,7 @@ def main(argv: list[str] | None = None) -> int:
     - When called as a real CLI (argv is None) behave like argparse: exit with
       code 2 on empty/no args.
     - When called programmatically (argv provided) return int exit codes so tests
-      can assert results without seeing SystemExit except for explicit cases.
+      can assert results without seeing SystemExit.
     """
     # Real CLI invocation: raise SystemExit(2) for empty/no-arg runs
     if argv is None:
@@ -442,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parser.parse_args(argv)
     except SystemExit as se:
-        # When invoked programmatically return the parse error as an int
+        # Programmatic invocation: return parse error as int instead of raising.
         code = se.code if isinstance(se.code, int) else 1
         return int(code) if int(code) != 0 else 1
 
@@ -450,12 +450,11 @@ def main(argv: list[str] | None = None) -> int:
         logger.setLevel(logging.DEBUG)
 
     _init_providers_safe()
+
     # Non-interactive requires a non-empty prompt
     if not getattr(args, "interactive", False):
         empty_prompt = args.prompt is None or not str(args.prompt).strip()
-        # If caller explicitly passed --prompt "" mirror CLI behavior and raise
-        if empty_prompt and "--prompt" in argv:
-            raise SystemExit(2)
+        # For programmatic callers, do NOT raise SystemExit even if --prompt was passed.
         if empty_prompt:
             return 1
 
@@ -463,7 +462,7 @@ def main(argv: list[str] | None = None) -> int:
         rc = run_interactive(
             provider=args.provider,
             model=args.model,
-            timeout=args.timeout,
+            timeout=getattr(args, "timeout", 30),
             profile=getattr(args, "profile", None),
             stream=getattr(args, "stream", False),
             modules=getattr(args, "modules", None),
