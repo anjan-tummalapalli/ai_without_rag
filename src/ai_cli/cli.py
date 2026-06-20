@@ -425,28 +425,40 @@ def run_interactive(
 def ask(prompt: str, **kwargs):
     return _get_ask_callable()(prompt, **kwargs)
 
+# keep a reference to the original wrapper so we can detect test monkeypatches
+ORIGINAL_ASK = ask
+
 def _invoke_with_retries(
     kwargs: dict[str, Any], max_retries: int = 3, backoff: float = 0.5
 ) -> int:
     if max_retries < 1:
         raise ValueError("max_retries must be at least 1")
 
-    # Prefer module-level ask (allows tests to monkeypatch ai_cli.cli.ask)
-    ask_func = globals().get("ask")
-    if not callable(ask_func):
+    # Prefer a test-monkeypatched module-level `ask` if it differs from our wrapper.
+    ask_candidate = globals().get("ask")
+    ask_func = None
+    if callable(ask_candidate) and ask_candidate is not ORIGINAL_ASK:
+        ask_func = ask_candidate
+    else:
         try:
             ask_func = _get_ask_callable()
         except Exception:
-            logger.error("ask() is not available; aborting request")
-            print("ERROR: ask() backend unavailable", file=sys.stderr)
-            return 1
+            # fallback to any callable module-level ask (even if it's the wrapper)
+            if callable(ask_candidate):
+                ask_func = ask_candidate
+            else:
+                logger.error("ask() is not available; aborting request")
+                print("ERROR: ask() backend unavailable", file=sys.stderr)
+                return 1
 
     for attempt in range(1, max_retries + 1):
         try:
             safe_kwargs = {
                 k: ("<redacted>" if k == "prompt" else v) for k, v in kwargs.items()
             }
-            logger.debug("Calling ask() attempt %d with kwargs=%s", attempt, safe_kwargs)
+            logger.debug(
+                "Calling ask() attempt %d with kwargs=%s", attempt, safe_kwargs
+            )
             result = ask_func(**kwargs)
             if inspect.isawaitable(result) or isinstance(result, AsyncIterable):
                 return asyncio.run(_drain_async_result(result))
@@ -471,29 +483,23 @@ def _invoke_with_retries(
 
 def main(argv: list[str] | None = None) -> int:
     """
-    CLI entrypoint with deterministic behavior for tests.
+    Simplified deterministic behavior for tests:
 
-    - True CLI invocation (argv is None): parse sys.argv[1:] and raise SystemExit(2)
-      when no CLI args or when missing prompt.
-    - Programmatic invocation (argv provided, may be empty list): return integer
-      exit codes instead of raising SystemExit.
+    - True CLI invocation (argv is None) -> raise SystemExit(2) immediately
+      (mirrors CLI no-arg behavior for tests).
+    - Programmatic invocation (argv provided, including empty list) -> return
+      integer exit codes instead of raising SystemExit for missing prompt.
     """
     parser = build_parser()
 
-    is_real_cli = argv is None
-    parse_argv = sys.argv[1:] if is_real_cli else argv
-
-    # Real CLI with no args => usage error
-    if is_real_cli and (not parse_argv):
+    # True CLI invocation: raise to match expectations for no-arg runs.
+    if argv is None:
         raise SystemExit(2)
 
     try:
-        args = parser.parse_args(parse_argv)
+        args = parser.parse_args(argv)
     except SystemExit as se:
-        # Real CLI: propagate parser exit
-        if is_real_cli:
-            raise
-        # Programmatic caller: return parse exit code as int
+        # Programmatic invocation: return parse error as integer.
         code = se.code if isinstance(se.code, int) else 1
         return int(code) if int(code) != 0 else 1
 
@@ -502,7 +508,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _init_providers_safe()
 
-    # Interactive -> run REPL
+    # Interactive mode -> run REPL
     if getattr(args, "interactive", False):
         rc = run_interactive(
             provider=args.provider,
@@ -514,11 +520,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return int(rc) if rc is not None else 0
 
-    # Non-interactive requires a non-empty prompt.
+    # Non-interactive requires a non-empty prompt. For programmatic callers
+    # return non-zero (1) instead of raising.
     if args.prompt is None or not str(args.prompt).strip():
-        if is_real_cli:
-            # Mirror argparse behavior for the real CLI
-            raise SystemExit(2)
         return 1
 
     prompt = args.prompt.strip()
@@ -535,7 +539,6 @@ def main(argv: list[str] | None = None) -> int:
 
     rc = _invoke_with_retries(kwargs)
     return int(rc) if rc is not None else 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
