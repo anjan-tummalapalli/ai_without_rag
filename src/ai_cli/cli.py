@@ -428,14 +428,23 @@ def ask(prompt: str, **kwargs):
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
 
-    # True CLI invocation (no argv provided) should raise SystemExit(2)
-    if argv is None:
-        raise SystemExit(2)
+    is_real_cli = argv is None
+    # For real CLI invocation, use sys.argv[1:] for parsing.
+    if is_real_cli:
+        # No CLI args -> argparse-style usage error
+        if len(sys.argv) <= 1:
+            raise SystemExit(2)
+        parse_argv = sys.argv[1:]
+    else:
+        parse_argv = argv
 
     try:
-        args = parser.parse_args(argv)
+        args = parser.parse_args(parse_argv)
     except SystemExit as se:
-        # Programmatic invocation: return parse error as int instead of raising.
+        # Real CLI: propagate to preserve normal CLI behavior.
+        if is_real_cli:
+            raise
+        # Programmatic caller: return exit code instead of raising.
         code = se.code if isinstance(se.code, int) else 1
         return int(code) if int(code) != 0 else 1
 
@@ -444,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _init_providers_safe()
 
-    # If interactive, run the interactive REPL and return its code.
+    # Interactive mode -> run REPL and return its code.
     if getattr(args, "interactive", False):
         rc = run_interactive(
             provider=args.provider,
@@ -456,8 +465,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         return int(rc) if rc is not None else 0
 
-    # Non-interactive requires a non-empty prompt: programmatic callers get return code 1
+    # Non-interactive requires a non-empty prompt.
     if args.prompt is None or not str(args.prompt).strip():
+        # Real CLI: mirror argparse exit behavior.
+        if is_real_cli:
+            raise SystemExit(2)
+        # Programmatic caller: return non-zero to indicate error.
         return 1
 
     prompt = args.prompt.strip() if args.prompt is not None else None
