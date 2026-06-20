@@ -461,7 +461,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.interactive:
         rc = run_interactive(
             provider=args.provider,
-            model=args.model,
+            model=getattr(args, "model", None),
             timeout=getattr(args, "timeout", 30),
             profile=getattr(args, "profile", None),
             stream=getattr(args, "stream", False),
