@@ -426,46 +426,41 @@ def ask(prompt: str, **kwargs):
     return _get_ask_callable()(prompt, **kwargs)
 
 def main(argv: list[str] | None = None) -> int:
-    if argv is None:
-        argv = []
+    """
+    CLI entrypoint.
 
-    # If no args provided, treat as invalid usage (return code 2)
-    if not argv:
-        return 2
-
+    Behavior:
+    - Let argparse/Typer behave normally: invalid args will raise SystemExit.
+    - If parsing succeeds but required prompt is missing (non-interactive),
+      raise SystemExit(2) to mirror argparse usage.
+    - On normal runs return the integer exit code from the invoked flow.
+    """
     parser = build_parser()
-    try:
-        args = parser.parse_args(argv)
-    except SystemExit as se:
-        # argparse uses SystemExit(code); translate into returned int
-        code = se.code if isinstance(se.code, int) else 1
-        return int(code)
+    # Let argparse raise SystemExit for invalid args (keeps test expectations).
+    args = parser.parse_args(argv)
 
-    if args.debug:
+    if getattr(args, "debug", False):
         logger.setLevel(logging.DEBUG)
 
     _init_providers_safe()
 
-    # If not interactive and no prompt provided, return 2 (missing prompt)
-    if not args.interactive and not args.prompt:
-        return 2
-    
+    # Non-interactive requires a non-empty prompt
+    if not getattr(args, "interactive", False):
+        if args.prompt is None or not str(args.prompt).strip():
+            # mirror argparse exit code for bad usage
+            raise SystemExit(2)
+
     if args.interactive:
         return run_interactive(
-            args.provider,
-            args.model,
-            args.timeout,
+            provider=args.provider,
+            model=args.model,
+            timeout=args.timeout,
             profile=args.profile,
-            stream=args.stream,
-            modules=args.modules,
+            stream=getattr(args, "stream", False),
+            modules=getattr(args, "modules", None),
         )
 
-    prompt = args.prompt
-
-    if prompt is not None:
-        prompt = prompt.strip()
-        if not prompt:
-            return 2
+    prompt = args.prompt.strip() if args.prompt is not None else None
 
     kwargs = _build_ask_kwargs(
         provider=args.provider,
@@ -473,8 +468,8 @@ def main(argv: list[str] | None = None) -> int:
         model=args.model,
         timeout=args.timeout,
         profile=args.profile,
-        stream=args.stream,
-        modules=args.modules,
+        stream=getattr(args, "stream", False),
+        modules=getattr(args, "modules", None),
     )
 
     return _invoke_with_retries(kwargs)
