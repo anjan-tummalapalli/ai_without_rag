@@ -479,21 +479,22 @@ def _invoke_with_retries(
             logger.debug("ai request failed: %s", exc)
             print("ERROR: ai request failed", file=sys.stderr)
             return 1
-# ...existing code...
+
 
 def main(argv: list[str] | None = None) -> int:
     """
     Simplified deterministic behavior for tests:
 
-    - True CLI invocation (argv is None) -> raise SystemExit(2) immediately
-      (mirrors CLI no-arg behavior for tests).
-    - Programmatic invocation (argv provided, including empty list) -> return
-      integer exit codes instead of raising SystemExit for missing prompt.
+    - Treat both no-arg true CLI (argv is None) and an explicit empty argv list
+      as a CLI "no args" invocation and raise SystemExit(2).
+    - If caller explicitly passed --prompt / -q with an empty value, raise
+      SystemExit(2) to mirror argparse/CLI behavior.
+    - For other programmatic calls return integer exit codes.
     """
     parser = build_parser()
 
-    # True CLI invocation: raise to match expectations for no-arg runs.
-    if argv is None:
+    # Treat both None and an empty list as "no args" CLI runs -> usage error
+    if argv is None or (isinstance(argv, list) and len(argv) == 0):
         raise SystemExit(2)
 
     try:
@@ -507,6 +508,20 @@ def main(argv: list[str] | None = None) -> int:
         logger.setLevel(logging.DEBUG)
 
     _init_providers_safe()
+
+    # Detect explicit prompt flag presence in the passed argv
+    explicit_prompt_flag = any(
+        tok == "--prompt"
+        or tok.startswith("--prompt=")
+        or tok == "-q"
+        or tok.startswith("-q")
+        for tok in argv
+    )
+
+    # If caller explicitly supplied --prompt (or -q) with an empty value,
+    # mirror argparse/CLI behavior and raise SystemExit(2).
+    if explicit_prompt_flag and (args.prompt is None or not str(args.prompt).strip()):
+        raise SystemExit(2)
 
     # Interactive mode -> run REPL
     if getattr(args, "interactive", False):
