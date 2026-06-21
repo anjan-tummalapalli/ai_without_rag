@@ -1,170 +1,326 @@
-from __future__ import annotations
-
 import asyncio
-import random
-import threading
+import inspect
 import time
-from collections import OrderedDict
-from collections.abc import Callable, Iterable
-from typing import Any, TypeVar
-
-T = TypeVar("T")
+from collections import deque
 
 
-def execute_with_fallback(primary_fn: Callable[..., T], fallback_fn: Callable[..., T], *args, **kwargs) -> T:
-    """
-    Execute primary_fn; if it raises, execute fallback_fn.
-    """
-    try:
-        return primary_fn(*args, **kwargs)
-    except Exception:
-        return fallback_fn(*args, **kwargs)
+class RateLimiter:
+    def __init__(
+        self,
+        capacity=1,
+        rate_per_second=1.0,
+        period=1.0,
+        **kwargs,
+    ):
+        self.capacity = capacity
+        self.rate_per_second = rate_per_second
 
+        # important:
+        self.period = (
+            period / rate_per_second
+            if rate_per_second > 0
+            else period
+        )
 
-class Cache:
-    def __init__(self, max_entries: int = 1000, prefix: str = "ai_gateway:"):
-        self.max_entries = max_entries
-        self.prefix = prefix
-        self._memory: OrderedDict[str, tuple[Any, float | None]] = OrderedDict()
-        self._lock = threading.RLock()
+        self.calls = deque()
 
-    def _purge_expired_locked(self) -> None:
+    def allow(self):
         now = time.monotonic()
-        keys_to_delete = []
-        for k, (_, expires_at) in list(self._memory.items()):
-            if expires_at is not None and expires_at <= now:
-                keys_to_delete.append(k)
-        for k in keys_to_delete:
-            self._memory.pop(k, None)
 
-    def get(self, key: str) -> Any:
-        with self._lock:
-            self._purge_expired_locked()
-            item = self._memory.pop(key, None)
-            if item is None:
-                return None
-            value, expires_at = item
-            self._memory[key] = (value, expires_at)
-            return value
+        while self.calls and (
+            now - self.calls[0]
+            >= self.period
+        ):
+            self.calls.popleft()
 
-    def set(self, key: str, value: Any, ttl: float | None = None) -> None:
-        expires_at = None if ttl is None else time.monotonic() + ttl
-        with self._lock:
-            self._memory.pop(key, None)
-            self._memory[key] = (value, expires_at)
-            while len(self._memory) > self.max_entries:
-                self._memory.popitem(last=False)
+        if len(self.calls) >= self.capacity:
+            return False
 
-    def delete(self, key: str) -> None:
-        with self._lock:
-            self._memory.pop(key, None)
+        self.calls.append(now)
+        return True
 
-    def clear(self) -> None:
-        with self._lock:
-            self._memory.clear()
+    async def acquire(self, timeout=None):
+        start = time.monotonic()
 
+        while not self.allow():
+            if timeout is not None and time.monotonic() - start >= timeout:
+                return False
+            await asyncio.sleep(0.01)
 
-class RetryEngine:
-    def __init__(self, max_attempts: int = 3, base_delay: float = 0.1, max_delay: float = 10.0, jitter: bool = True, retry_on: Iterable[type] | None = None):
-        self.max_attempts = max_attempts
-        self.base_delay = base_delay
-        self.max_delay = max_delay
-        self.jitter = jitter
-        self.retry_on = tuple(retry_on) if retry_on is not None else None
-
-    def _should_retry_for(self, exc: Exception) -> bool:
-        if self.retry_on is None:
-            return True
-        return isinstance(exc, self.retry_on)
-
-    def execute(self, func: Callable[..., Any], *args, **kwargs) -> Any:
-        last_exc = None
-        for attempt in range(self.max_attempts):
-            try:
-                return func(*args, **kwargs)
-            except Exception as exc:
-                last_exc = exc
-                if not self._should_retry_for(exc) or attempt == self.max_attempts - 1:
-                    raise
-                delay = min(self.max_delay, self.base_delay * (2 ** attempt))
-                if self.jitter:
-                    delay = random.uniform(0, delay)
-                time.sleep(delay)
-        raise last_exc
-
-
-class AsyncRetryEngine:
-    def __init__(self, max_attempts: int = 3, base_delay: float = 0.1, max_delay: float = 10.0, jitter: bool = True, retry_on: Iterable[type] | None = None):
-        self.max_attempts = max_attempts
-        self.base_delay = base_delay
-        self.max_delay = max_delay
-        self.jitter = jitter
-        self.retry_on = tuple(retry_on) if retry_on is not None else None
-
-    def _should_retry_for(self, exc: Exception) -> bool:
-        if self.retry_on is None:
-            return True
-        return isinstance(exc, self.retry_on)
-
-    async def execute(self, func: Callable[..., Any], *args, **kwargs) -> Any:
-        last_exc = None
-        for attempt in range(self.max_attempts):
-            try:
-                return await func(*args, **kwargs)
-            except Exception as exc:
-                last_exc = exc
-                if not self._should_retry_for(exc) or attempt == self.max_attempts - 1:
-                    raise
-                delay = min(self.max_delay, self.base_delay * (2 ** attempt))
-                if self.jitter:
-                    delay = random.uniform(0, delay)
-                await asyncio.sleep(delay)
-        raise last_exc
+        return True
 
 
 class CircuitBreaker:
-    CLOSED = "closed"
-    OPEN = "open"
-    HALF_OPEN = "half_open"
+    def __init__(
+        self,
+        threshold=3,
+        timeout=60,
+        failure_threshold=None,
+        recovery_timeout=None,
+        **kwargs,
+    ):
+        self.threshold = (
+            failure_threshold
+            if failure_threshold is not None
+            else threshold
+        )
 
-    def __init__(self, threshold: int = 5, timeout: float = 60.0, half_open_max_calls: int = 1):
-        self.threshold = threshold
-        self.timeout = timeout
-        self.half_open_max_calls = half_open_max_calls
+        self.recovery_timeout = (
+            recovery_timeout
+            if recovery_timeout is not None
+            else timeout
+        )
 
-        self._state = self.CLOSED
-        self._failures = 0
-        self._opened_at: float | None = None
-        self._half_open_successes = 0
-        self._half_open_calls = 0
-        self._lock = threading.RLock()
+        self.failure_count = 0
+        self.open = False
+        self.last_failure_time = None
 
-    def _now(self) -> float:
-        return time.monotonic()
+    def record_success(self):
+        self.failure_count = 0
+        self.open = False
 
-    def allow(self) -> bool:
-        with self._lock:
-            if self._state == self.OPEN:
-                assert self._opened_at is not None
-                if self._now() - self._opened_at >= self.timeout:
-                    self._state = self.HALF_OPEN
-                    self._half_open_calls = 0
-                    self._half_open_successes = 0
-                    return True
-                return False
+    def _record_success(self):
+        self.record_success()
+
+    def record_failure(self):
+        self.failure_count += 1
+
+        if self.failure_count >= self.threshold:
+            self.open = True
+            self.last_failure_time = time.monotonic()
+
+    def _record_failure(self):
+        self.record_failure()
+
+    def wrap(self, func):
+        if inspect.iscoroutinefunction(func):
+            async def async_wrapper(*args, **kwargs):
+                if not self.allow():
+                    raise RuntimeError("Circuit open")
+
+                try:
+                    result = await func(*args, **kwargs)
+                    self.record_success()
+                    return result
+
+                except Exception:
+                    self.record_failure()
+                    raise
+
+            return async_wrapper
+
+
+        def wrapper(*args, **kwargs):
+            if not self.allow():
+                raise RuntimeError("Circuit open")
+
+            try:
+                result = func(*args, **kwargs)
+                self.record_success()
+                return result
+
+            except Exception:
+                self.record_failure()
+                raise
+        return wrapper
+    
+    def allow(self):
+        if not self.open:
             return True
 
-    def record_success(self) -> None:
-        with self._lock:
-            self._failures = 0
-            if self._state == self.HALF_OPEN:
-                self._half_open_successes += 1
-                if self._half_open_successes >= self.half_open_max_calls:
-                    self._state = self.CLOSED
+        if (
+            self.last_failure_time
+            and time.monotonic() - self.last_failure_time
+            > self.recovery_timeout
+        ):
+            self.open = False
+            return True
 
-    def record_failure(self) -> None:
-        with self._lock:
-            self._failures += 1
-            if self._failures >= self.threshold:
-                self._state = self.OPEN
-                self._opened_at = self._now()
+        return False
+
+
+class RetryEngine:
+    def __init__(
+        self,
+        max_attempts=3,
+        retries=None,
+        base_delay=0,
+        retry_on=None,
+        retry_filter=None,
+        **kwargs,
+    ):
+        self.max_attempts = retries or max_attempts
+        self.base_delay = base_delay
+        self.retry_on = retry_on or retry_filter
+
+    def execute(self, func, *args, **kwargs):
+        if inspect.iscoroutinefunction(func):
+            raise TypeError(
+                "RetryEngine cannot execute async functions"
+            )
+
+        last = None
+
+        for _ in range(self.max_attempts):
+            try:
+                return func(*args, **kwargs)
+            
+            except Exception as exc:
+                last = exc
+
+                if self.retry_on:
+                    if isinstance(self.retry_on, tuple):
+                        if not isinstance(exc, self.retry_on):
+                            break
+
+                    elif not self.retry_on(exc):
+                        break
+
+                if self.base_delay:
+                    time.sleep(self.base_delay)
+        raise last
+
+    def run(self, func, *args, **kwargs):
+        return self.execute(func, *args, **kwargs)
+
+    def decorator(self):
+
+        def deco(func):
+
+            def wrapper(*args, **kwargs):
+                return self.execute(
+                    func,
+                    *args,
+                    **kwargs,
+                )
+
+            return wrapper
+
+        return deco
+
+
+class AsyncRetryEngine:
+    def __init__(
+        self,
+        max_attempts=3,
+        retries=None,
+        base_delay=0,
+        **kwargs,
+    ):
+        self.max_attempts = retries or max_attempts
+        self.base_delay = base_delay
+
+    def decorator(self):
+
+        def deco(func):
+
+            if not inspect.iscoroutinefunction(func):
+                raise TypeError(
+                    "AsyncRetryEngine requires async function"
+                )
+
+            async def wrapper(*args, **kwargs):
+                last = None
+
+                for _ in range(self.max_attempts):
+                    try:
+                        return await func(*args, **kwargs)
+                    except Exception as exc:
+                        last = exc
+
+                raise last
+
+            return wrapper
+
+        return deco
+
+    def __call__(self, func):
+        return self.decorator()(func)
+    
+    async def execute(self, func, *args, **kwargs):
+        if not inspect.iscoroutinefunction(func):
+            raise TypeError(
+                "AsyncRetryEngine requires async function"
+            )
+
+        last = None
+
+        for _ in range(self.max_attempts):
+            try:
+                return await func(*args, **kwargs)
+            except Exception as exc:
+                last = exc
+
+        raise last
+
+
+class Cache:
+    def __init__(
+        self,
+        max_entries=100,
+        redis_url=None,
+        **kwargs,
+    ):
+        self.max_entries=max_entries
+        self.data={}
+
+    def set(self, key, value, ttl=None):
+        expiry = (
+            time.monotonic() + ttl
+            if ttl
+            else None
+        )
+
+        if len(self.data) >= self.max_entries:
+            oldest = next(iter(self.data))
+            del self.data[oldest]
+
+        self.data[key] = (value, expiry)
+
+    def get(self, key, default=None):
+        if key not in self.data:
+            return default
+
+        value, expiry = self.data[key]
+
+        if expiry and time.monotonic() > expiry:
+            del self.data[key]
+            return default
+
+        return value
+
+    def delete(self, key):
+        self.data.pop(key, None)
+
+    def clear(self):
+        self.data.clear()
+
+
+def execute_with_fallback(
+    primary,
+    fallback=None,
+    fallback_fn=None,
+    *args,
+    **kwargs,
+):
+    if fallback is None:
+        fallback = fallback_fn
+
+    try:
+        return primary(*args, **kwargs)
+
+    except Exception:
+        if fallback is not None:
+            return fallback(*args, **kwargs)
+
+        return None
+
+
+__all__ = [
+    "RateLimiter",
+    "CircuitBreaker",
+    "RetryEngine",
+    "AsyncRetryEngine",
+    "Cache",
+    "execute_with_fallback",
+]

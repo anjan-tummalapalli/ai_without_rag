@@ -11,7 +11,7 @@ def ask(prompt: str, **kwargs):
     """
     if not prompt:
         raise ValueError("prompt cannot be empty")
-    return prompt
+    return f"response: mock:{prompt}"
 
 
 def format_response(text: str) -> str:
