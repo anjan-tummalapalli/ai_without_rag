@@ -17,7 +17,7 @@ more). It includes a modular provider-based AI stack for document prompt process
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/ai_cli.git
+git clone https://github.com/{yourusername}/ai_cli.git
 cd ai_cli
 pip install -e .
 # Or with Poetry:

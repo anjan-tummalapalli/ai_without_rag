@@ -75,11 +75,13 @@ class ZAIProvider(AIProvider):
             ) from exc
 
         try:
+            timeout = self.timeout if self.timeout else 30
+
             resp = requests.post(
-                self.base_url,
-                json=payload,
-                headers=headers,
-                timeout=getattr(self, "timeout", 30) or 30,
+                                self.base_url,
+                                json=payload,
+                                headers=headers,
+                                timeout=timeout,
             )
         except requests.RequestException as exc:
             raise ProviderRequestError(f"network error: {exc}") from exc
@@ -138,18 +140,20 @@ class ZAIProvider(AIProvider):
             if self.api_key == "test":
                 return "mock:hello"
 
+            timeout = self.timeout if self.timeout else 30
+
             resp = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "prompt": prompt
-                },
-                timeout=getattr(self, "timeout", 30) or 30,
-            )
+                                 f"{self.base_url}/chat/completions",
+                                  headers={
+                                           "Authorization": f"Bearer {self.api_key}",
+                                           "Content-Type": "application/json",
+                                  },
+                                  json={
+                                        "model": self.model,
+                                        "prompt": prompt,
+                                  },
+                                  timeout=timeout,
+                                )
 
             if resp.status_code >= 400:
                 raise ProviderRequestError(

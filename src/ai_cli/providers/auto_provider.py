@@ -1,6 +1,7 @@
 """AutoProvider: fallback wrapper that tries providers in sequence."""
 from __future__ import annotations
 
+import os
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.registry import PROVIDER_MAP
 
@@ -45,26 +46,24 @@ class AutoProvider:
 
         for provider_name in self.fallback_order:
             provider_cls = PROVIDER_MAP.get(provider_name)
-
             if provider_cls is None:
                 errors.append(f"{provider_name}: not found")
+                continue
+
+            env_name = f"{provider_name.upper()}_API_KEY"
+
+            if provider_name != "echo" and not os.getenv(env_name):
+                errors.append(f"{provider_name}: skipped (missing {env_name})")
                 continue
 
             try:
                 provider = provider_cls()
                 return provider.send(prompt)
-            except ValueError as exc:
-                # Provider is not configured (missing API key etc.)
-                errors.append(f"{provider_name}: skipped ({exc})")
-                continue
-            except ProviderRequestError as exc:
-                # Provider exists but request failed
+            except Exception as exc:
                 errors.append(f"{provider_name}: {exc}")
-                continue
-
         raise ProviderRequestError(
-            f"Auto fallback exhausted. Errors: {'; '.join(errors)}"
-        )
+                f"Auto fallback exhausted. Errors: {'; '.join(errors)}"
+            )
 
     def ask(self, prompt: str, **_kwargs) -> str:
         """Chat-compatible interface; delegates to send().

@@ -10,7 +10,7 @@ setup, coding standards, and AI workflow module development.
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/yourusername/ai_cli.git
+   git clone https://github.com/{yourusername}/ai_cli.git
    cd ai_cli
    ```
 

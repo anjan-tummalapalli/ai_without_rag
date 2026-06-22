@@ -92,6 +92,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated list of modules to enable "
         "(e.g. mod1,mod2).",
     )
+    parser.add_argument(
+        "-p",
+        "--provider",
+        default="auto",
+        help="AI provider",
+    )
+
+    parser.add_argument(
+        "-m",
+        "--model",
+        default=None,
+        help="Model name",
+    )
     return parser
 
 
@@ -103,8 +116,9 @@ def _get_ask_callable():
             raise ImportError("ask() not found in ai_cli.core.api")
         return ask
     except Exception as exc:
-        logger.debug("Could not import ask(): %s", exc)
-        raise
+        logger.error("ai request failed: %s", exc)
+        print(f"ERROR: {exc}")
+        return 1
 
 
 def _init_providers_safe() -> None:
