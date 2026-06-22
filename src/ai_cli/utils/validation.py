@@ -3,6 +3,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+try:
+    from ai_cli.rag.vector_store import VectorStore  # type: ignore
+except ModuleNotFoundError:
+    VectorStore = None
 # Local exceptions
 from ai_cli.core.exceptions import ResponseValidationError
 
@@ -11,11 +15,6 @@ VectorStore = None
 MIN_RESPONSE_LENGTH = 5
 
 log = logging.getLogger(__name__)
-
-try:
-    from ai_cli.rag.vector_store import VectorStore
-except ModuleNotFoundError:
-    VectorStore = None
 
 
 @dataclass
