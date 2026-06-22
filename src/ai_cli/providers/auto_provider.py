@@ -53,8 +53,14 @@ class AutoProvider:
             try:
                 provider = provider_cls()
                 return provider.send(prompt)
+            except ValueError as exc:
+                # Provider is not configured (missing API key etc.)
+                errors.append(f"{provider_name}: skipped ({exc})")
+                continue
             except ProviderRequestError as exc:
+                # Provider exists but request failed
                 errors.append(f"{provider_name}: {exc}")
+                continue
 
         raise ProviderRequestError(
             f"Auto fallback exhausted. Errors: {'; '.join(errors)}"
