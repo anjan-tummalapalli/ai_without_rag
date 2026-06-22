@@ -1,7 +1,6 @@
 """AutoProvider: fallback wrapper that tries providers in sequence."""
 from __future__ import annotations
 
-import os
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.registry import PROVIDER_MAP
 
