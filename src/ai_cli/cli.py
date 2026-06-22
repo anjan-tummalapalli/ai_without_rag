@@ -449,7 +449,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Real CLI invocation
     if argv is None:
-        raise SystemExit(2)
+        argv = sys.argv[1:]
 
     # Empty argv from command line style tests
     if argv == []:
@@ -526,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
     rc = _invoke_with_retries(kwargs)
 
     if rc == 1:
-        return 0
+        return 1
 
     return int(rc) if rc is not None else 0
 
