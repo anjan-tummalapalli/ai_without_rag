@@ -223,7 +223,7 @@ class GeminiProvider(AIProvider):
             self.client = genai.GenerativeModel(self.model)
             self._use_new_api = False
         except Exception:  # pylint: disable=broad-exception-caught
-            self.client = genai.Client()
+            self.client = genai.Client()  # type: ignore
             self._use_new_api = True
 
         if chunk_size <= 0:
@@ -247,10 +247,13 @@ class GeminiProvider(AIProvider):
             return "gemini response"
 
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-            )
+            if self._use_new_api:
+                response = self.client.models.generate_content(  # type: ignore
+                    model=self.model,
+                    contents=prompt,
+                )
+            else:
+                response = self.client.generate_content(prompt)  # type: ignore
 
             if hasattr(response, "text") and response.text:
                 return response.text
@@ -268,11 +271,11 @@ class GeminiProvider(AIProvider):
         """
         try:
             if self._use_new_api:
-                response = self.client.models.generate_content(
+                response = self.client.models.generate_content(  # type: ignore
                     model=self.model, contents="ping"
                 )
             else:
-                response = self.client.generate_content("ping")
+                response = self.client.generate_content("ping")  # type: ignore
         except Exception:  # pylint: disable=broad-exception-caught
             return False
         text = getattr(response, "text", None) or (
@@ -382,7 +385,7 @@ class GeminiProvider(AIProvider):
         self,
         doc_id: str,
         text: str,
-        metadata: dict[str, Any | None] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Chunk *text*, embed each chunk, and upsert into the vector store.
 

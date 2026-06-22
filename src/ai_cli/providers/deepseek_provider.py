@@ -77,7 +77,7 @@ class DeepSeekProvider:
           messages.append({"role": "user", "content": prompt})
 
           try:
-               response = self.client.chat.completions.create(
+               response = self.client.chat.completions.create(  # type: ignore
                     model=selected_model,
                     messages=messages,
                     temperature=temperature,
@@ -111,13 +111,11 @@ class DeepSeekProvider:
                return False
 
      def _chat(self, prompt: str, **kwargs):
-          response = self.client.chat.completions.create(
+          return self.client.chat.completions.create(  # type: ignore
              model=self.model,
              messages=[{"role": "user", "content": prompt}],
              **kwargs,
           )
-
-          return response.choices[0].message.content
 
      def send(self, prompt: str, **kwargs) -> str:
           try:

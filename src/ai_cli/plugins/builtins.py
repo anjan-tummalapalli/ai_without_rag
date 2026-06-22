@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from ai_cli.core.exceptions import (
     ProviderConfigurationError,
@@ -25,8 +26,9 @@ class OpenAIProvider(AIProvider):
             model=model,
             provider_meta=PROVIDERS["openai"],
         )
+        self.timeout = 60.0
 
-    def _send_impl(self, prompt: str) -> str:
+    def send(self, prompt: str, **kwargs) -> str:
         try:
             import importlib
             OpenAI = importlib.import_module("openai").OpenAI
@@ -47,15 +49,6 @@ class OpenAIProvider(AIProvider):
             )
         except Exception as exc:
             raise ProviderRequestError(f"OpenAI request failed: {exc}") from exc
-
-        usage = getattr(response, "usage", None)
-        if usage:
-            self.metrics.total_prompt_tokens += getattr(
-                usage, "prompt_tokens", 0
-            )
-            self.metrics.total_completion_tokens += getattr(
-                usage, "completion_tokens", 0
-            )
 
         try:
             content = response.choices[0].message.content
@@ -79,8 +72,10 @@ class OpenAICompatibleProvider(AIProvider):
             model=model,
             provider_meta=PROVIDERS[provider_name],
         )
+        self.provider_name = provider_name
+        self.timeout = 60.0
 
-    def _get_openai_client(self):
+    def _get_openai_client(self) -> Any:
         try:
             import importlib
             OpenAI = importlib.import_module("openai").OpenAI
@@ -93,7 +88,7 @@ class OpenAICompatibleProvider(AIProvider):
 
         return OpenAI(api_key=api_key, base_url=self.api_base_url, timeout=self.timeout)
 
-    def _send_impl(self, prompt: str) -> str:
+    def send(self, prompt: str, **kwargs: Any) -> str:
         client = self._get_openai_client()
         try:
             response = client.chat.completions.create(
@@ -105,11 +100,6 @@ class OpenAICompatibleProvider(AIProvider):
         except Exception as exc:
             raise ProviderRequestError(f"{self.provider_name} request failed: {exc}") from exc
 
-        usage = getattr(response, "usage", None)
-        if usage:
-            self.metrics.total_prompt_tokens += getattr(usage, "prompt_tokens", 0)
-            self.metrics.total_completion_tokens += getattr(usage, "completion_tokens", 0)
-
         try:
             content = response.choices[0].message.content
         except Exception as exc:
@@ -117,7 +107,6 @@ class OpenAICompatibleProvider(AIProvider):
         if not content or not isinstance(content, str):
             raise ResponseValidationError("Empty response")
         return content.strip()
-
 
 
 class PerplexityProvider(OpenAICompatibleProvider):
@@ -193,8 +182,9 @@ class CohereProvider(AIProvider):
             model=model,
             provider_meta=PROVIDERS["cohere"],
         )
+        self.timeout = 60.0
 
-    def _send_impl(self, prompt: str) -> str:
+    def send(self, prompt: str, **kwargs) -> str:
         try:
             import importlib
             cohere = importlib.import_module("cohere")
@@ -223,16 +213,6 @@ class CohereProvider(AIProvider):
 
         if not content or not isinstance(content, str):
             raise ResponseValidationError("Empty response")
-
-        # Try to update token metrics if available (best-effort)
-        try:
-            token_count = getattr(response, "token_count", None) or (
-                (getattr(response, "meta", {}) or {}).get("token_count")
-            )
-            if token_count is not None:
-                self.metrics.total_prompt_tokens += int(token_count)
-        except Exception as exc:
-            logger.debug("Token metric update failed: %s", exc, exc_info=True)
 
         return content.strip()
 

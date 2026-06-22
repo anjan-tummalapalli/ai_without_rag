@@ -7,4 +7,4 @@ class ProviderRequest:
     provider: str
     model: str | None = None
     api_key: str | None = None
-    kwargs: dict[str, Any] = None
+    kwargs: dict[str, Any] | None = None

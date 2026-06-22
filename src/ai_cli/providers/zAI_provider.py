@@ -79,7 +79,7 @@ class ZAIProvider(AIProvider):
                 self.base_url,
                 json=payload,
                 headers=headers,
-                timeout=getattr(self, "timeout", None),
+                timeout=getattr(self, "timeout", 30) or 30,
             )
         except requests.RequestException as exc:
             raise ProviderRequestError(f"network error: {exc}") from exc
@@ -148,7 +148,7 @@ class ZAIProvider(AIProvider):
                     "model": self.model,
                     "prompt": prompt
                 },
-                timeout=getattr(self, "timeout", None),
+                timeout=getattr(self, "timeout", 30) or 30,
             )
 
             if resp.status_code >= 400:

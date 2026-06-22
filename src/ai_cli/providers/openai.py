@@ -1,9 +1,9 @@
-from ai_cli.providers.base import ChatProvider
+from ai_cli.providers.base import BaseProvider
 from ai_cli.providers.decorators import chat_provider
 
 
 @chat_provider("openai")
-class OpenAIProvider(ChatProvider):
+class OpenAIProvider(BaseProvider):
     def __init__(self, api_key=None, model=None):
         self.api_key = api_key
         self.model = model

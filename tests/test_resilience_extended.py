@@ -51,8 +51,11 @@ def test_execute_primary_success():
     assert result == "success"
 
 def test_execute_fallback_on_failure():
+    def failing_primary():
+        raise ZeroDivisionError()
+        
     result = execute_with_fallback(
-        lambda: 1 / 0,
+        failing_primary,
         fallback_fn=lambda: "fallback",
     )
 
@@ -70,7 +73,9 @@ def test_rate_limiter():
 
 def test_circuit_breaker_opens():
     cb = CircuitBreaker(threshold=1)
-    wrapped = cb.wrap(lambda: 1/0)
+    def failing_func():
+        raise ZeroDivisionError()
+    wrapped = cb.wrap(failing_func)
     try:
         wrapped()
     except ZeroDivisionError:
@@ -237,9 +242,9 @@ def test_retry_engine_rejects_async():
 def test_circuit_breaker_failure():
     from ai_cli.core.resilience import CircuitBreaker
     cb = CircuitBreaker(threshold=1)
-    wrapped = cb.wrap(
-        lambda: 1 / 0
-    )
+    def failing_func():
+        raise ZeroDivisionError()
+    wrapped = cb.wrap(failing_func)
 
     with pytest.raises(ZeroDivisionError):
         wrapped()

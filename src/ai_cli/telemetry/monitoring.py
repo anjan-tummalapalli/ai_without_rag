@@ -56,7 +56,7 @@ PROMETHEUS_ENABLED = (
         os.getenv("PROMETHEUS_ENABLED", "1")
         not in ("0", "false", "False")
 )
-PROMETHEUS_HOST = os.getenv("PROMETHEUS_HOST", "0.0.0.0")
+PROMETHEUS_HOST = os.getenv("PROMETHEUS_HOST", "127.0.0.1")
 PROMETHEUS_PORT = int(os.getenv("PROMETHEUS_PORT", "8000"))
 OTEL_ENABLED = (
         os.getenv("OTEL_ENABLED", "1") not in ("0", "false", "False")
@@ -118,8 +118,8 @@ def _find_existing_metric(metric_name: str) -> Any | None:
                         names = getattr(collector, "_names", None)
                         if names and metric_name in names:
                                 return collector
-        except Exception:
-                pass
+        except Exception as exc:
+                logger.debug("Error inspecting metrics collectors", exc_info=exc)
         return None
 
 
@@ -190,7 +190,7 @@ class Tracer:
                 self._enabled = False
                 self._provider = None
                 self._tracer = None
-                if trace is not None and SDKTracerProvider is not None:
+                if trace is not None and SDKTracerProvider is not None and SimpleSpanProcessor is not None and ConsoleSpanExporter is not None:
                         try:
                                 provider = SDKTracerProvider()
                                 trace.set_tracer_provider(provider)
@@ -311,10 +311,11 @@ class Metrics:
                 except TypeError:
                         # Some older versions expect only port
                         try:
-                                start_http_server(port)
-                                logger.info(
-                                        "Prometheus metrics server started on port %s", port
-                                )
+                                if start_http_server:
+                                        start_http_server(port)
+                                        logger.info(
+                                                "Prometheus metrics server started on port %s", port
+                                        )
                         except Exception:
                                 logger.exception("Failed to start monitoring server"
                                                                  " (fallback)")
@@ -347,7 +348,7 @@ class Metrics:
                 if not provider:
                         provider = "unknown"
                 try:
-                        self.latency.labels(provider=provider).set(float(seconds))
+                        self.latency.labels(provider=provider).set(seconds)
                 except Exception:
                         logger.debug("Failed to record latency metric", exc_info=True)
 
@@ -363,7 +364,7 @@ class Metrics:
                 if count <= 0:
                         return
                 try:
-                        self.chunks.labels(provider=provider, model=model).inc(int(count))
+                        self.chunks.labels(provider=provider, model=model).inc(count)
                 except Exception:
                         logger.debug("Failed to record chunks metric", exc_info=True)
 
@@ -382,7 +383,7 @@ class Metrics:
                         if seconds is not None:
                                 self.embedding_latency.labels(
                                         provider=provider, model=model
-                                ).set(float(seconds))
+                                ).set(seconds)
                 except Exception:
                         logger.debug("Failed to record embedding metrics", exc_info=True)
 
@@ -405,11 +406,11 @@ class Metrics:
                         if hits:
                                 self.vector_query_hits.labels(
                                         provider=provider, model=model
-                                ).inc(int(hits))
+                                ).inc(hits)
                         if seconds is not None:
                                 self.vector_query_latency.labels(
                                         provider=provider, model=model
-                                ).set(float(seconds))
+                                ).set(seconds)
                 except Exception:
                         logger.debug("Failed to record vector query metrics", exc_info=True)
 

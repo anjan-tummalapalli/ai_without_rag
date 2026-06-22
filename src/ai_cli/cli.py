@@ -124,7 +124,7 @@ def _build_ask_kwargs(
     provider: str,
     prompt: str,
     model: str | None,
-    timeout: int,
+    timeout: int | None,
     profile: str | None = None,
     stream: bool = False,
     modules: str | None = None,
@@ -440,8 +440,7 @@ def _invoke_with_retries(
             logger.debug("ai request failed: %s", exc)
             print("ERROR: ai request failed", file=sys.stderr)
             return 1
-
-        return 1
+    return 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -463,7 +462,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         code = se.code if isinstance(se.code, int) else 1
-        return int(code) if int(code) != 0 else 1
+        return code if code != 0 else 1
 
     if getattr(args, "debug", False):
         logger.setLevel(logging.DEBUG)
@@ -493,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
             stream=getattr(args, "stream", False),
             modules=getattr(args, "modules", None),
         )
-        return int(rc) if rc is not None else 0
+        return rc
 
     # Non-interactive: require non-empty prompt for programmatic callers
     global _TEST_EMPTY_PROMPT_SEEN
@@ -528,7 +527,7 @@ def main(argv: list[str] | None = None) -> int:
     if rc == 1:
         return 1
 
-    return int(rc) if rc is not None else 0
+    return rc
 
 if __name__ == "__main__":
     raise SystemExit(main())

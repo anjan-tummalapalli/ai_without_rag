@@ -1,4 +1,3 @@
-import pytest
 from ai_cli import cli
 
 

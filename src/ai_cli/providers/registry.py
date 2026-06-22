@@ -6,6 +6,8 @@ register themselves via ``register_provider`` (and related functions) when they
 are imported. ``ai_cli.providers.bootstrap.init_providers`` loads all provider
 modules lazily.
 """
+from typing import Any
+
 from ai_cli.providers.base import BaseProvider
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.xAI_provider import XAIProvider
@@ -28,7 +30,7 @@ class ProviderRegistry(dict):
 
 PROVIDERS = ProviderRegistry()
 
-def register_provider(name: str, cls: type, metadata=None) -> None:
+def register_provider(name: str, cls: type | None = None, metadata=None) -> Any:
     """
     Register a provider.
 
@@ -37,8 +39,6 @@ def register_provider(name: str, cls: type, metadata=None) -> None:
         cls: Provider class.
         metadata: Optional provider metadata.
     """
-    PROVIDER_MAP[name] = cls
-
     def decorator(provider_cls):
         PROVIDER_MAP[name] = provider_cls
         return provider_cls
