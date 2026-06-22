@@ -75,7 +75,7 @@ class ZAIProvider(AIProvider):
             ) from exc
 
         try:
-            timeout = self.timeout if self.timeout else 30
+            timeout = getattr(self, "timeout", None) or 30
 
             resp = requests.post(
                                 self.base_url,
@@ -140,7 +140,7 @@ class ZAIProvider(AIProvider):
             if self.api_key == "test":
                 return "mock:hello"
 
-            timeout = self.timeout if self.timeout else 30
+            timeout = getattr(self, "timeout", None) or 30
 
             resp = requests.post(
                                  f"{self.base_url}/chat/completions",

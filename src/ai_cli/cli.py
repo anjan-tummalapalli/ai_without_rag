@@ -92,19 +92,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated list of modules to enable "
         "(e.g. mod1,mod2).",
     )
-    parser.add_argument(
-        "-p",
-        "--provider",
-        default="auto",
-        help="AI provider",
-    )
-
-    parser.add_argument(
-        "-m",
-        "--model",
-        default=None,
-        help="Model name",
-    )
     return parser
 
 

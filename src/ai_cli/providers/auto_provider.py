@@ -31,39 +31,40 @@ class AutoProvider:
         ]
 
     def send(self, prompt: str) -> str:
-        """Try each provider in fallback_order and return the first success.
+        """Try each provider in fallback_order and return the first success."""
 
-        Args:
-            prompt: User input to send to the AI provider.
-
-        Returns:
-            Model response string from the first successful provider.
-
-        Raises:
-            ProviderRequestError: When all providers in fallback_order fail.
-        """
         errors: list[str] = []
 
         for provider_name in self.fallback_order:
             provider_cls = PROVIDER_MAP.get(provider_name)
+
             if provider_cls is None:
                 errors.append(f"{provider_name}: not found")
                 continue
 
-            env_name = f"{provider_name.upper()}_API_KEY"
-
-            if provider_name != "echo" and not os.getenv(env_name):
-                errors.append(f"{provider_name}: skipped (missing {env_name})")
-                continue
-
             try:
                 provider = provider_cls()
+
                 return provider.send(prompt)
-            except Exception as exc:
+
+            except ValueError as exc:
+                # Missing API keys/config should skip this provider
+                # but allow mock/test providers to work.
+                message = str(exc)
+
+                if "API_KEY" in message or "api key" in message.lower():
+                    errors.append(f"{provider_name}: skipped ({message})")
+                    continue
+
                 errors.append(f"{provider_name}: {exc}")
+                continue
+
+            except ProviderRequestError as exc:
+                errors.append(f"{provider_name}: {exc}")
+
         raise ProviderRequestError(
-                f"Auto fallback exhausted. Errors: {'; '.join(errors)}"
-            )
+            f"Auto fallback exhausted. Errors: {'; '.join(errors)}"
+        )
 
     def ask(self, prompt: str, **_kwargs) -> str:
         """Chat-compatible interface; delegates to send().
