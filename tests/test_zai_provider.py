@@ -139,6 +139,7 @@ def test_zai_provider_http_error(mock_post):
             provider.send("Hello")
 
 def test_zai_success():
+
     provider = ZAIProvider(
         api_key="fake"
     )
