@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from ai_cli.providers.base import EchoProvider
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
@@ -100,3 +102,27 @@ def test_xai_provider(openai_mock, monkeypatch):
 
     p = XAIProvider()
     assert p.send("hello") == "xai response"
+
+def test_cohere_api_failure(monkeypatch):
+    provider = CohereProvider(
+        api_key="fake"
+    )
+
+    monkeypatch.setattr(
+        provider,
+        "_client",
+        None,
+        raising=False
+    )
+
+    with pytest.raises(Exception, match="Cohere connection failed"):
+        provider.chat("hello")
+
+def test_deepseek_timeout():
+
+    provider = DeepSeekProvider(
+        api_key="fake"
+    )
+
+    with pytest.raises(Exception, match="DeepSeek connection failed"):
+        provider.chat("hello")

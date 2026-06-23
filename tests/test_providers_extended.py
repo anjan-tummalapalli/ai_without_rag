@@ -11,6 +11,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ai_cli.providers.cohere_provider import CohereProvider
+from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli.providers.zAI_provider import ZAIProvider
+
 # ─────────────────────────────────────────────
 # providers/base.py
 # ─────────────────────────────────────────────
@@ -664,6 +668,22 @@ class TestCohereProviderStandalone:
         # Verify the prompt was augmented
         call_args = p._chat.call_args[0][0]
         assert "ctx" in call_args
+    
+    def test_cohere_api_failure(monkeypatch):
+        provider = CohereProvider(
+            api_key="fake"
+        )
+
+        monkeypatch.setattr(
+            provider.client.chat,
+            "create",
+            MagicMock(
+                side_effect=Exception("fail")
+            )
+        )
+
+        with pytest.raises(Exception, match="Cohere connection failed"):
+            provider.chat("hello")
 
 
 # ─────────────────────────────────────────────
@@ -707,3 +727,43 @@ class TestPerplexityProvider:
         p.client.chat.completions.create.return_value = MagicMock(choices=[mock_choice])
         result = p.send("hello")
         assert result == ""
+
+# ─────────────────────────────────────────────
+# providers/deepseek_provider.py
+# ─────────────────────────────────────────────
+def test_deepseek_timeout():
+
+    provider = DeepSeekProvider(
+        api_key="x"
+    )
+
+    provider.client = MagicMock(
+        side_effect=TimeoutError()
+    )
+
+    with pytest.raises(Exception, match="DeepSeek connection failed"):
+        provider.chat("hello")
+
+
+# ─────────────────────────────────────────────
+# providers/zAI_provider.py
+# ─────────────────────────────────────────────
+def test_zai_success(monkeypatch):
+
+    provider = ZAIProvider(
+        api_key="x"
+    )
+
+    provider.client.chat.completions.create.return_value = (
+        MagicMock(
+            choices=[
+                MagicMock(
+                    message=MagicMock(
+                        content="hello"
+                    )
+                )
+            ]
+        )
+    )
+
+    assert provider.chat("hi") == "hello"

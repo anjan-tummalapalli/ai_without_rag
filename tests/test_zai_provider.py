@@ -137,3 +137,10 @@ def test_zai_provider_http_error(mock_post):
     with _provider_env(api_key="test-key") as provider:
         with pytest.raises(ProviderRequestError, match="z.AI error 500"):
             provider.send("Hello")
+
+def test_zai_success():
+    provider = ZAIProvider(
+        api_key="fake"
+    )
+
+    assert provider is not None

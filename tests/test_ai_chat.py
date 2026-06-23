@@ -6,8 +6,51 @@ import heapq
 import math
 from collections.abc import Iterable
 
-from ai_cli.ai_chat import chunk_text
+import pytest
 
+from ai_cli.ai_chat import (
+    _last_sentence_end,
+    _last_whitespace,
+    _next_start,
+    chunk_text,
+)
+
+
+def test_last_sentence_end_found():
+    text = "Hello world. Next"
+    assert _last_sentence_end(text) == 11
+
+def test_last_sentence_end_missing():
+    text = "Hello world"
+    assert _last_sentence_end(text) == -1
+
+def test_last_whitespace_found():
+    text = "hello world"
+    assert _last_whitespace(text) == 5
+
+def test_last_whitespace_missing():
+    text = "helloworld"
+    assert _last_whitespace(text) == -1
+
+def test_next_start():
+    assert _next_start(
+        end=10,
+        chunk_overlap=3,
+        prev_start=0
+    ) == 7
+
+def test_chunk_text_empty():
+    assert chunk_text("") == []
+
+def test_chunk_text_basic():
+    result = chunk_text(
+        "This is a simple sentence. Another sentence here.",
+        chunk_size=20,
+        chunk_overlap=5,
+    )
+
+    assert len(result) > 0
+    assert isinstance(result[0], str)
 
 def test_ai_chat_chunking():
     result = chunk_text(
@@ -109,3 +152,109 @@ def build_store_from_text(doc_id_prefix: str, text: str, chunk_size: int = 500, 
         for i, c in enumerate(chunks):
                 store.add(f"{doc_id_prefix}-{i}", c)
         return store
+
+
+def test_last_whitespace_tabs():
+    # Covers line 42-43:
+    # for match in _WHITESPACE_RE.finditer(window)
+    result = _last_whitespace("hello\tworld")
+
+    assert result == 5
+
+
+def test_chunk_text_invalid_chunk_size():
+    with pytest.raises(ValueError):
+        chunk_text(
+            "hello world",
+            chunk_size=0,
+        )
+
+
+def test_chunk_text_invalid_overlap():
+    with pytest.raises(ValueError):
+        chunk_text(
+            "hello world",
+            chunk_size=5,
+            chunk_overlap=5,
+        )
+
+
+def test_chunk_text_whitespace_only():
+    assert chunk_text("     ") == []
+
+
+def test_chunk_text_sentence_boundary():
+    result = chunk_text(
+        "Hello world. Next sentence continues here",
+        chunk_size=20,
+        chunk_overlap=5,
+        prefer_sentence_boundary=True,
+    )
+
+    assert len(result) >= 1
+
+
+def test_chunk_text_without_word_split():
+    result = chunk_text(
+        "abcdefghij klmnop",
+        chunk_size=10,
+        chunk_overlap=2,
+        split_on_word=False,
+    )
+
+    assert len(result) >= 1
+
+
+def test_chunk_text_word_split():
+    result = chunk_text(
+        "abcdefghij klmnop",
+        chunk_size=10,
+        chunk_overlap=2,
+        split_on_word=True,
+    )
+
+    assert len(result) >= 1
+
+def test_chunk_text_exact_length_break():
+
+    text = "hello"
+
+    result = chunk_text(
+        text,
+        chunk_size=100,
+        chunk_overlap=10,
+    )
+
+    assert result == ["hello"]
+
+def test_chunk_text_multiple_chunks_progress():
+
+    text = "one two three four five six seven eight nine"
+
+    result = chunk_text(
+        text,
+        chunk_size=10,
+        chunk_overlap=2,
+        split_on_word=False,
+    )
+
+    assert len(result) > 1
+
+def test_chunk_text_empty_after_strip_exit():
+    result = chunk_text(
+        None,
+        chunk_size=10,
+        chunk_overlap=2,
+    )
+
+    assert result == []
+
+def test_chunk_text_empty_chunk_after_strip():
+
+    result = chunk_text(
+        "   ",
+        chunk_size=5,
+        chunk_overlap=1,
+    )
+
+    assert result == []
