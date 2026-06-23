@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from unittest.mock import MagicMock
 
 import requests
-from openai import OpenAI
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider, ProviderMetadata
-
-from unittest.mock import MagicMock
 
 ZAI_DEFAULT_BASE = "https://api.z.ai/v1/generate"
 

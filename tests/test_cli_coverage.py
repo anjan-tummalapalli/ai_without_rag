@@ -1,6 +1,7 @@
 import pytest
 
 from ai_cli import cli
+from ai_cli.ai_chat import chunk_text
 from ai_cli.cli import (
     _decode_chunk,
     _safe_resolve_path,
@@ -148,3 +149,10 @@ def test_interactive_exit(monkeypatch):
 
 def test_safe_resolve_path_none():
     assert cli._safe_resolve_path(None) is None
+
+def test_chunk_validation():
+    with pytest.raises(ValueError):
+        chunk_text("abc", chunk_size=0)
+
+    with pytest.raises(ValueError):
+        chunk_text("abc", overlap=-1)

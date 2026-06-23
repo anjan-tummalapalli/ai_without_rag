@@ -11,6 +11,7 @@ from ai_cli.providers.gemini_provider import GeminiProvider
 from ai_cli.providers.openai_provider import OpenAIProvider
 from ai_cli.providers.perplexity_provider import PerplexityProvider
 from ai_cli.providers.xAI_provider import XAIProvider
+from ai_cli.providers.zAI_provider import ZAIProvider
 
 
 def _setup_openai_mock(openai_mock, chat_text="response"):
@@ -123,3 +124,101 @@ def test_deepseek_timeout():
 
     with pytest.raises(Exception, match="DeepSeek connection failed"):
         provider.chat("hello")
+
+def test_deepseek_health_check(monkeypatch):
+    p = DeepSeekProvider(api_key="x")
+    p.chat = lambda *a, **k: "ok"
+
+    assert p.health_check() is True
+
+
+def test_deepseek_embeddings(monkeypatch):
+    p = DeepSeekProvider(api_key="x")
+
+    p.client.embeddings.create.return_value = type(
+        "R",
+        (),
+        {
+            "data": [
+                type("D", (), {"embedding": [0.1, 0.2]})()
+            ]
+        }
+    )()
+
+    result = p.embeddings(["hello"])
+
+    assert result == [[0.1, 0.2]]
+
+
+def test_deepseek_chat_response():
+    p = DeepSeekProvider(api_key="x")
+
+    p.client.chat.completions.create.return_value = type(
+        "R",
+        (),
+        {
+            "choices": [
+                type(
+                    "C",
+                    (),
+                    {
+                        "message": type(
+                            "M",
+                            (),
+                            {"content": "hello"}
+                        )()
+                    }
+                )()
+            ]
+        }
+    )()
+
+    assert p.chat("hi") == "hello"
+
+def test_zai_success():
+    p = ZAIProvider()
+
+    p.client.chat.completions.create.return_value = type(
+        "R",
+        (),
+        {
+            "choices": [
+                type(
+                    "C",
+                    (),
+                    {
+                        "message": type(
+                            "M",
+                            (),
+                            {"content": "hello"}
+                        )()
+                    }
+                )()
+            ]
+        }
+    )()
+
+    assert p.chat("hi") == "hello"
+
+def test_zai_error():
+    p = ZAIProvider()
+
+    p.client.chat.completions.create.side_effect = Exception("fail")
+
+    with pytest.raises(Exception, match="ZAI connection failed"):
+        p.chat("hi")
+
+def test_cohere_clear_index():
+    p = CohereProvider(api_key="test")
+
+    p._documents.append("x")
+    p._vectors.append([1])
+
+    p.clear_index()
+
+    assert p._documents == []
+
+def test_cohere_retrieve_empty():
+    p = CohereProvider(api_key="test")
+
+    assert p.retrieve("hello") == []
