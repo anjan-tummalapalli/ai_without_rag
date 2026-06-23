@@ -16,7 +16,10 @@ def test_cli_empty_prompt_exit():
 def test_cli_valid_prompt(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr("ai_cli.cli.ask", lambda *a, **k: "ok")
+    monkeypatch.setattr(
+        "ai_cli.cli._invoke_with_retries",
+        lambda *a, **k: 0,
+    )
 
     result = cli.main(["--prompt", "hello"])
     assert result in (0, None)

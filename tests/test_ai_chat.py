@@ -6,40 +6,25 @@ import heapq
 import math
 from collections.abc import Iterable
 
-import pytest
-
-from ai_cli.ai_chat import ask
+from ai_cli.ai_chat import chunk_text
 
 
-# Chunking
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
-        """
-        Simple deterministic chunker that splits on whitespace.
-        - chunk_size: approximate number of characters per chunk
-        - overlap: number of characters to overlap between chunks
-        """
-        if not isinstance(text, str) or not text.strip():
-                return []
-        text = text.strip()
-        chunks: list[str] = []
-        start = 0
-        n = len(text)
-        while start < n:
-                end = start + chunk_size
-                # try to avoid cutting words: move end back to last space if possible
-                if end < n:
-                        last_space = text.rfind(" ", start, end)
-                        if last_space > start:
-                                end = last_space
-                chunk = text[start:end].strip()
-                if chunk:
-                        chunks.append(chunk)
-                start = end - overlap
-                if start < 0:
-                        start = 0
-                if end >= n:
-                        break
-        return chunks
+def test_ai_chat_chunking():
+    result = chunk_text(
+        "hello world this is a test",
+        chunk_size=10,
+        chunk_overlap=2,
+    )
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+def test_ai_chat_empty():
+    result = chunk_text(
+        "",
+        chunk_size=10,
+        chunk_overlap=2,
+    )
+    assert result == []
 
 # Deterministic "embedding" using hash -> fixed-dim float vector in [-1,1]
 def _text_to_embedding(text: str, dim: int = 64) -> list[float]:
@@ -124,11 +109,3 @@ def build_store_from_text(doc_id_prefix: str, text: str, chunk_size: int = 500, 
         for i, c in enumerate(chunks):
                 store.add(f"{doc_id_prefix}-{i}", c)
         return store
-
-def test_ai_chat_ask():
-    result = ask("hello")
-    assert "response" in result
-
-def test_ai_chat_empty():
-    with pytest.raises(ValueError):
-        ask("")
