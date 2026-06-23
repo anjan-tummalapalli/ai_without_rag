@@ -34,12 +34,24 @@ def test_cli_valid_prompt(monkeypatch):
 
 def test_cli_no_args(monkeypatch):
 
+    class FakeStdin:
+        def isatty(self):
+            return False
+
+        @property
+        def buffer(self):
+            return io.BytesIO(b"")
+
     monkeypatch.setattr(
         "sys.stdin",
-        io.StringIO("")
+        FakeStdin()
     )
 
-    cli.main([])
+    with pytest.raises(SystemExit) as exc:
+
+        cli.main([])
+
+    assert exc.value.code == 2
 
 @pytest.mark.parametrize(
     "provider",
@@ -60,9 +72,10 @@ def test_cli_provider_selection(provider, monkeypatch):
     )
 
     cli.main(
-        [
-            "--provider",
-            provider,
-            "hello"
-        ]
-    )
+    [
+        "--provider",
+        provider,
+        "--prompt",
+        "hello",
+    ]
+)

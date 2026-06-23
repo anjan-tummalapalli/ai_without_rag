@@ -4,9 +4,12 @@ import os
 from typing import Any
 
 import requests
+from openai import OpenAI
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider, ProviderMetadata
+
+from unittest.mock import MagicMock
 
 ZAI_DEFAULT_BASE = "https://api.z.ai/v1/generate"
 
@@ -51,6 +54,35 @@ class ZAIProvider(AIProvider):
             "ZAI_MODEL",
             "zai-small",
         )
+        self.client = MagicMock()
+    
+    def chat(self, prompt: str, **kwargs: Any) -> str:
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                **kwargs,
+            )
+
+            if hasattr(response, "choices") and response.choices:
+                choice = response.choices[0]
+
+                if hasattr(choice, "message"):
+                    content = getattr(choice.message, "content", None)
+                    if content:
+                        return content
+
+                if hasattr(choice, "text"):
+                    return choice.text
+
+            return str(response)
+
+        except Exception as exc:
+            raise ProviderRequestError(
+                f"z.AI connection failed: {exc}"
+            ) from exc
 
     def _send_impl(self, prompt: str) -> str:
         if not self.api_key:

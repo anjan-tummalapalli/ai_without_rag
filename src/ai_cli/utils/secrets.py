@@ -2,7 +2,7 @@ import re
 
 
 def chunk_text(text: str, chunk_size: int = 1000,
-               overlap: int = 200) -> list[str]:
+               overlap: int | None = None) -> list[str]:
     """
     Robust text chunker.
 
@@ -12,9 +12,11 @@ def chunk_text(text: str, chunk_size: int = 1000,
     """
     if not isinstance(chunk_size, int) or chunk_size <= 0:
         raise ValueError("chunk_size must be a positive int")
+    if overlap is None:
+        overlap = min(200, chunk_size // 2)
     if not isinstance(overlap, int) or overlap < 0:
         raise ValueError("overlap must be a non-negative int")
-    if chunk_size <= overlap:
+    if chunk_size < overlap:
         raise ValueError("chunk_size must be greater than overlap")
 
     text = re.sub(r"\s+", " ", text).strip()

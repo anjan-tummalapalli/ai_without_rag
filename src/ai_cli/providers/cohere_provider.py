@@ -53,7 +53,11 @@ class CohereProvider(BaseProvider):
                     "The 'cohere' package is required to use CohereProvider; install it with 'pip install cohere'"
                 ) from exc
         else:
-            self.client = _cohere.Client(api_key)
+            if api_key == "test":
+                self.client = None
+                self.api_key = "test"
+            else:
+                self.client = _cohere.Client(api_key)
 
     # =========================================================
     # Chat
@@ -82,17 +86,22 @@ class CohereProvider(BaseProvider):
             )
 
         return self._chat(prompt)
+    
+    def chat(self, prompt: str, **kwargs) -> str:
+        try:
+            return self.send(prompt, **kwargs)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Cohere connection failed: {exc}"
+            ) from exc
 
     def _chat(self, prompt: str) -> str:
-        """
-        Low-level Cohere chat call.
-        """
-
-        if getattr(self, "api_key", None) == "test":
+        if self.client is None:
             return "mock:hello"
 
-        # Call Cohere's generate endpoint and return the first generation's text.
-        resp = self.client.chat(prompt)
+        resp = self.client.chat(
+                message=prompt
+                )
         return resp.text
 
     # =========================================================

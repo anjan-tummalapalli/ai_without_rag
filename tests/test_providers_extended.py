@@ -669,14 +669,14 @@ class TestCohereProviderStandalone:
         call_args = p._chat.call_args[0][0]
         assert "ctx" in call_args
     
-    def test_cohere_api_failure(monkeypatch):
+    def test_cohere_api_failure(self, monkeypatch):
         provider = CohereProvider(
             api_key="fake"
         )
 
         monkeypatch.setattr(
-            provider.client.chat,
-            "create",
+            provider.client,
+            "chat",
             MagicMock(
                 side_effect=Exception("fail")
             )

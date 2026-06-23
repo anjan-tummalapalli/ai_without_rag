@@ -138,3 +138,31 @@ class DeepSeekProvider:
           except Exception:
                # TESTS EXPECT NO REAL API FAILURE TO PROPAGATE
                return "mock:hello"
+     
+     def chat(self, prompt: str, **kwargs) -> str:
+          try:
+               response = self.client(
+                    model=self.model,
+                    messages=[
+                         {"role": "user", "content": prompt}
+                    ],
+                    **kwargs,
+               )
+
+               if hasattr(response, "choices") and response.choices:
+                    choice = response.choices[0]
+
+                    if hasattr(choice, "message"):
+                         content = getattr(choice.message, "content", None)
+                         if content:
+                              return content
+
+                    if hasattr(choice, "text"):
+                         return choice.text
+
+               return str(response)
+
+          except Exception as exc:
+               raise RuntimeError(
+                    f"DeepSeek connection failed: {exc}"
+               ) from exc
