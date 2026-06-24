@@ -30,7 +30,7 @@ class AutoProvider:
         ]
 
     def send(self, prompt: str) -> str:
-        """Try each provider in fallback_order and return the first success."""
+        """Try each provider in fallback_order and return first success."""
 
         errors: list[str] = []
 
@@ -41,60 +41,55 @@ class AutoProvider:
                 errors.append(f"{provider_name}: not found")
                 continue
 
-            is_configured = getattr(provider_cls, "is_configured", None)
-
-            if callable(is_configured):
-                try:
-                    if not is_configured():
-                        errors.append(
-                            f"{provider_name}: skipped (not configured)"
-                        )
-                        continue
-                except Exception:
-                    pass
-
             try:
                 provider = provider_cls()
 
             except ValueError as exc:
                 msg = str(exc).lower()
 
-                if "api key" in msg or "apikey" in msg:
+                if "api key" in msg or "apikey" in msg or "api_key" in msg:
                     errors.append(
                         f"{provider_name}: skipped ({exc})"
                     )
                     continue
 
-                raise
+                errors.append(f"{provider_name}: init failed ({exc})")
+                continue
 
             except Exception as exc:
-                errors.append(
-                    f"{provider_name}: init failed ({exc})"
-                )
+                errors.append(f"{provider_name}: init failed ({exc})")
                 continue
 
             try:
                 return provider.send(prompt)
 
-            except ProviderRequestError as exc:
-                errors.append(
-                    f"{provider_name}: {exc}"
-                )
-                continue
-
-            except ValueError as exc:
+            except Exception as exc:
                 msg = str(exc).lower()
 
-                if "api key" in msg or "apikey" in msg:
+                if any(
+                    key in msg
+                    for key in [
+                        "401",
+                        "unauthorized",
+                        "403",
+                        "forbidden",
+                        "quota",
+                        "authentication",
+                        "invalid",
+                        "api key",
+                        "apikey",
+                        "api_key",
+                    ]
+                ):
                     errors.append(
                         f"{provider_name}: skipped ({exc})"
                     )
                     continue
 
-                raise
-
-            except Exception:
-                raise
+                errors.append(
+                    f"{provider_name}: failed ({exc})"
+                )
+                continue
 
         raise ProviderRequestError(
             "Auto fallback exhausted. Errors:\n"
