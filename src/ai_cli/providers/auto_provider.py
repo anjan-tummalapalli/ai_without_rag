@@ -47,8 +47,6 @@ class AutoProvider:
                 return provider.send(prompt)
 
             except ValueError as exc:
-                # Missing API keys/config should skip this provider
-                # but allow mock/test providers to work.
                 message = str(exc)
 
                 if "API_KEY" in message or "api key" in message.lower():
@@ -59,7 +57,24 @@ class AutoProvider:
                 continue
 
             except ProviderRequestError as exc:
+                message = str(exc).lower()
+
+                if (
+                    "401" in message
+                    or "unauthorized" in message
+                    or "api key" in message
+                    or "authentication" in message
+                ):
+                    errors.append(f"{provider_name}: skipped ({exc})")
+                    continue
+
                 errors.append(f"{provider_name}: {exc}")
+                continue
+
+            except Exception as exc:
+                # Unknown provider failure should not kill auto fallback
+                errors.append(f"{provider_name}: {exc}")
+                continue
 
         raise ProviderRequestError(
             f"Auto fallback exhausted. Errors: {'; '.join(errors)}"
