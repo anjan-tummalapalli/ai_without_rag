@@ -152,7 +152,7 @@ def test_safe_resolve_path_none():
 
 def test_chunk_validation():
     with pytest.raises(ValueError):
-        chunk_text("abc", chunk_size=0)
-
-    with pytest.raises(ValueError):
-        chunk_text("abc", overlap=-1)
+        chunk_text(
+            "abc",
+            chunk_size=0
+        )

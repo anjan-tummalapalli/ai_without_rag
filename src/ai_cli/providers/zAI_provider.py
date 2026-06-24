@@ -4,12 +4,17 @@ import os
 from typing import Any
 from unittest.mock import MagicMock
 
-import requests
-
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider, ProviderMetadata
 
 ZAI_DEFAULT_BASE = "https://api.z.ai/v1/generate"
+
+try:
+    import requests  # local import so static analyzers don't require the package at module import time
+except Exception as exc:
+    raise ProviderRequestError(
+        "missing 'requests' library; install with `pip install requests`"
+    ) from exc
 
 
 class ZAIProvider(AIProvider):
@@ -96,13 +101,6 @@ class ZAIProvider(AIProvider):
             "model": self.model,
             "prompt": prompt,
         }
-
-        try:
-            import requests  # local import so static analyzers don't require the package at module import time
-        except Exception as exc:
-            raise ProviderRequestError(
-                "missing 'requests' library; install with `pip install requests`"
-            ) from exc
 
         try:
             timeout = getattr(self, "timeout", None) or 30

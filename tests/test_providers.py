@@ -125,9 +125,11 @@ def test_deepseek_timeout():
     with pytest.raises(Exception, match="DeepSeek connection failed"):
         provider.chat("hello")
 
-def test_deepseek_health_check(monkeypatch):
+def test_deepseek_health_check():
+
     p = DeepSeekProvider(api_key="x")
-    p.chat = lambda *a, **k: "ok"
+
+    p.ask = lambda *a, **k: "ok"
 
     assert p.health_check() is True
 
