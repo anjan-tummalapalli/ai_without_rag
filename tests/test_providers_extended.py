@@ -13,6 +13,7 @@ import pytest
 
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli.providers.xAI_provider import XAIProvider
 from ai_cli.providers.zAI_provider import ZAIProvider
 
 # ─────────────────────────────────────────────
@@ -744,6 +745,74 @@ def test_deepseek_timeout():
     with pytest.raises(Exception, match="DeepSeek connection failed"):
         provider.chat("hello")
 
+def test_deepseek_missing_key():
+    with pytest.raises(ValueError):
+        DeepSeekProvider(api_key="")
+
+def test_deepseek_health_check_failure(monkeypatch):
+    from ai_cli.providers.deepseek_provider import DeepSeekProvider
+
+    p = DeepSeekProvider(api_key="x")
+    monkeypatch.setattr(
+        p,
+        "ask",
+        lambda *a, **k: (_ for _ in ()).throw(Exception("fail"))
+    )
+    assert p.health_check() is False
+
+def test_deepseek_send_fallback():
+    from ai_cli.providers.deepseek_provider import DeepSeekProvider
+
+    p = DeepSeekProvider(api_key="x")
+
+    p._chat = lambda *a, **k: "hello"
+
+    assert p.send("x") == "hello"
+
+def test_deepseek_send_dict_message():
+    from ai_cli.providers.deepseek_provider import DeepSeekProvider
+
+    p = DeepSeekProvider(api_key="x")
+
+    response = type(
+        "R",
+        (),
+        {
+            "choices": [
+                type(
+                    "C",
+                    (),
+                    {
+                        "message": type(
+                            "M",
+                            (),
+                            {
+                                "content": "hello"
+                            }
+                        )()
+                    }
+                )()
+            ]
+        }
+    )()
+
+    p._chat = lambda *a, **k: response
+
+    assert p.send("x") == "hello"
+
+def test_deepseek_health_failure(monkeypatch):
+    p = DeepSeekProvider(api_key="x")
+
+    monkeypatch.setattr(
+        p,
+        "ask",
+        lambda *a, **k: (_ for _ in ()).throw(
+            Exception("bad")
+        )
+    )
+
+    assert p.health_check() is False
+
 
 # ─────────────────────────────────────────────
 # providers/zAI_provider.py
@@ -767,3 +836,53 @@ def test_zai_success(monkeypatch):
     )
 
     assert provider.chat("hi") == "hello"
+
+def test_zai_chat_success():
+    from unittest.mock import MagicMock
+
+    from ai_cli.providers.zAI_provider import ZAIProvider
+
+    p = ZAIProvider()
+
+    p.client.chat.completions.create = MagicMock(
+        return_value=type(
+            "R",
+            (),
+            {
+                "choices":[
+                    type(
+                        "C",
+                        (),
+                        {
+                            "message": type(
+                                "M",
+                                (),
+                                {"content":"hello"}
+                            )()
+                        }
+                    )()
+                ]
+            }
+        )()
+    )
+
+    assert p.chat("hi") == "hello"
+
+# ─────────────────────────────────────────────
+# providers/xAI_provider.py
+# ─────────────────────────────────────────────
+def test_xai_health_failure(monkeypatch):
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+
+    mock_client.chat.completions.create.side_effect = Exception("bad")
+
+    monkeypatch.setattr(
+        "ai_cli.providers.xAI_provider.OpenAI",
+        lambda *a, **k: mock_client
+    )
+
+    p = XAIProvider(api_key="x")
+
+    assert p.health_check() is False

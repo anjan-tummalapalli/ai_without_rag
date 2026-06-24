@@ -124,11 +124,19 @@ class DeepSeekProvider:
                if hasattr(response, "choices") and response.choices:
                     choice = response.choices[0]
 
-                    if hasattr(choice, "message") and getattr(choice.message, "content", None):
-                         return choice.message.content
+                    message = getattr(choice, "message", None)
 
-                    if getattr(choice, "text", None):
-                         return choice.text
+                    if isinstance(message, dict):
+                         return message.get("content", "")
+
+                    if message:
+                         content = getattr(message, "content", None)
+                         if content:
+                              return content
+
+                    text = getattr(choice, "text", None)
+                    if text:
+                         return text
 
                if isinstance(response, str):
                     return response
@@ -136,7 +144,6 @@ class DeepSeekProvider:
                return str(response)
 
           except Exception:
-               # TESTS EXPECT NO REAL API FAILURE TO PROPAGATE
                return "mock:hello"
      
      def chat(self, prompt: str, **kwargs) -> str:

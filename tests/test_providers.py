@@ -135,9 +135,9 @@ def test_deepseek_health_check():
 
 
 def test_deepseek_embeddings(monkeypatch):
-    p = DeepSeekProvider(api_key="x")
+    mock_client = MagicMock()
 
-    p.client.embeddings.create.return_value = type(
+    mock_client.embeddings.create.return_value = type(
         "R",
         (),
         {
@@ -147,15 +147,21 @@ def test_deepseek_embeddings(monkeypatch):
         }
     )()
 
+    monkeypatch.setattr(
+        "ai_cli.providers.deepseek_provider.OpenAI",
+        lambda *args, **kwargs: mock_client,
+    )
+
+    p = DeepSeekProvider(api_key="x")
+
     result = p.embeddings(["hello"])
 
     assert result == [[0.1, 0.2]]
 
 
-def test_deepseek_chat_response():
-    p = DeepSeekProvider(api_key="x")
-
-    p.client.chat.completions.create.return_value = type(
+def test_deepseek_chat_response(monkeypatch):
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = type(
         "R",
         (),
         {
@@ -175,7 +181,14 @@ def test_deepseek_chat_response():
         }
     )()
 
-    assert p.chat("hi") == "hello"
+    monkeypatch.setattr(
+        "ai_cli.providers.deepseek_provider.OpenAI",
+        lambda *args, **kwargs: mock_client,
+    )
+
+    p = DeepSeekProvider(api_key="x")
+    result = p.ask("hello")
+    assert result == "hello"
 
 def test_zai_success():
     p = ZAIProvider()
@@ -207,7 +220,7 @@ def test_zai_error():
 
     p.client.chat.completions.create.side_effect = Exception("fail")
 
-    with pytest.raises(Exception, match="ZAI connection failed"):
+    with pytest.raises(Exception, match="z\\.AI connection failed"):
         p.chat("hi")
 
 def test_cohere_clear_index():
