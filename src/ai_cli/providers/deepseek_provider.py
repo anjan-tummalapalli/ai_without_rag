@@ -36,25 +36,18 @@ class DeepSeekProvider:
      BASE_URL = "https://api.deepseek.com"
 
      def __init__(
-          self,
-          model: str | None = None,
-          api_key: str | None = None,
-          embed_model: str | None = None,
+         self,
+         model: str | None = None,
+         api_key: str | None = None,
+         embed_model: str | None = None,
      ):
-          self.api_key = os.getenv("DEEPSEEK_API_KEY")
-          self.client = None
-          if self.api_key:
-              self.client = OpenAI(
-                                   api_key=self.api_key,
-                                   base_url=self.base_url,
-                                  )
-          self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
 
+          self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
           self.model = (
-                        model
-                        or os.getenv("DEEPSEEK_MODEL")
-                        or self.DEFAULT_MODEL
-                       )
+              model
+              or os.getenv("DEEPSEEK_MODEL")
+              or self.DEFAULT_MODEL
+          )
 
           self.embed_model = (
                               embed_model
@@ -62,14 +55,17 @@ class DeepSeekProvider:
                               or self.DEFAULT_EMBED_MODEL
                              )
 
-          if self.api_key:
-              self.client = OpenAI(
-                                   api_key=self.api_key,
-                                   base_url=self.BASE_URL,
-                                  )
-          else:
-              self.client = None
-              
+          if not self.api_key:
+              raise ValueError("DEEPSEEK_API_KEY not set")
+
+          self.client = OpenAI(
+                               api_key=self.api_key,
+                               base_url=self.BASE_URL,
+                              )
+
+     def health_check(self) -> bool:
+         return bool(self.api_key and self.client)       
+     
      def ask(
           self,
           prompt: str,
