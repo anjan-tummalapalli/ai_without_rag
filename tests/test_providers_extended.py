@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ai_cli.providers import auto_provider
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
 from ai_cli.providers.xAI_provider import XAIProvider
@@ -886,3 +887,128 @@ def test_xai_health_failure(monkeypatch):
     p = XAIProvider(api_key="x")
 
     assert p.health_check() is False
+
+def test_auto_provider_skips_api_key(monkeypatch):
+    from ai_cli.providers.auto_provider import AutoProvider
+
+    class BadProvider:
+        def __init__(self):
+            raise ValueError("API_KEY missing")
+
+    class GoodProvider:
+        def send(self, prompt):
+            return "success"
+
+    monkeypatch.setattr(
+        auto_provider,
+        "PROVIDER_MAP",
+        {
+            "bad": BadProvider,
+            "good": GoodProvider,
+        },
+    )
+
+    provider = AutoProvider(
+        fallback_order=["bad", "good"]
+    )
+
+    assert provider.send("hello") == "success"
+
+def test_auto_provider_request_failure(monkeypatch):
+
+    from ai_cli.providers import registry
+    from ai_cli.providers.auto_provider import AutoProvider
+
+
+    class FailProvider:
+        def send(self, prompt):
+            raise Exception("401 unauthorized")
+
+
+    class GoodProvider:
+        def send(self, prompt):
+            return "ok"
+
+
+    monkeypatch.setattr(
+        registry,
+        "PROVIDER_MAP",
+        {
+            "fail": FailProvider,
+            "good": GoodProvider,
+        }
+    )
+
+    p = AutoProvider(
+        fallback_order=["fail", "good"]
+    )
+
+    assert p.send("x") == "ok"
+
+def test_auto_provider_request_failure_runtime_error(monkeypatch):
+    from ai_cli.providers.auto_provider import AutoProvider
+
+    class FailProvider:
+        def send(self, prompt):
+            raise Exception("401 unauthorized")
+
+    class GoodProvider:
+        def send(self, prompt):
+            return "ok"
+
+    monkeypatch.setattr(
+        auto_provider,
+        "PROVIDER_MAP",
+        {
+            "fail": FailProvider,
+            "good": GoodProvider,
+        },
+    )
+
+    provider = AutoProvider(
+        fallback_order=["fail", "good"]
+    )
+
+    assert provider.send("hello") == "ok"
+
+def test_auto_provider_init_failure(monkeypatch):
+    from ai_cli.providers import auto_provider
+    from ai_cli.providers.auto_provider import AutoProvider
+
+
+    class Bad:
+        def __init__(self):
+            raise ValueError("API_KEY missing")
+
+
+    monkeypatch.setattr(
+        auto_provider,
+        "PROVIDER_MAP",
+        {"bad": Bad},
+    )
+
+    p = AutoProvider(fallback_order=["bad"])
+
+    with pytest.raises(Exception):
+        p.send("x")
+
+def test_auto_provider_exhausted(monkeypatch):
+    from ai_cli.providers import auto_provider
+    from ai_cli.providers.auto_provider import AutoProvider
+
+
+    class Bad:
+        def send(self, prompt):
+            raise RuntimeError("boom")
+
+
+    monkeypatch.setattr(
+        auto_provider,
+        "PROVIDER_MAP",
+        {"bad": Bad},
+    )
+
+    p = AutoProvider(fallback_order=["bad"])
+
+    with pytest.raises(Exception):
+        p.send("x")

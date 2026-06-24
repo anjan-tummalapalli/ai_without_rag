@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 from ai_cli.core.exceptions import ProviderRequestError
-from ai_cli.providers.registry import PROVIDER_MAP
+from ai_cli.providers import registry
+
+# compatibility alias for tests/plugins that monkeypatch this module
+
+PROVIDER_MAP = registry.PROVIDER_MAP
 
 
 class AutoProvider:
@@ -25,8 +29,10 @@ class AutoProvider:
             "zai",
             "echo",
         ]
+        active_map = PROVIDER_MAP
+
         self.fallback_order = fallback_order or [
-            name for name in default_order if name in PROVIDER_MAP
+            name for name in default_order if name in active_map
         ]
 
     def send(self, prompt: str) -> str:
@@ -35,11 +41,15 @@ class AutoProvider:
         errors: list[str] = []
 
         for provider_name in self.fallback_order:
-            provider_cls = PROVIDER_MAP.get(provider_name)
+            for provider_name in self.fallback_order:
+                provider_cls = PROVIDER_MAP.get(provider_name)
 
-            if provider_cls is None:
-                errors.append(f"{provider_name}: not found")
-                continue
+                if provider_cls is None:
+                    provider_cls = registry.PROVIDER_MAP.get(provider_name)
+
+                if provider_cls is None:
+                    errors.append(f"{provider_name}: not found")
+                    continue
 
             try:
                 provider = provider_cls()

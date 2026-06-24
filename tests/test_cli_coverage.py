@@ -432,3 +432,145 @@ def test_decode_chunk():
 
     assert _decode_chunk(b"hello") == "hello"
     assert _decode_chunk("x") == "x"
+
+def test_interactive_help_exit(monkeypatch):
+    from ai_cli import cli
+
+    inputs = iter([
+        "/help",
+        "/exit",
+    ])
+
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+    assert (
+        cli.run_interactive(
+            provider="echo",
+            model=None,
+            timeout=60,
+        )
+        == 0
+    )
+
+def test_cli_rag_prompt(monkeypatch):
+    from ai_cli import cli
+
+    monkeypatch.setattr(
+        cli,
+        "ask",
+        lambda **kwargs: "ok"
+    )
+
+    assert cli.main([
+        "--prompt",
+        "hello",
+        "--rag"
+    ]) == 0
+
+def test_interactive_commands(monkeypatch):
+    from ai_cli import cli
+
+    commands = iter([
+        "/switch gemini",
+        "/model test-model",
+        "/profile dev",
+        "/stream",
+        "/exit",
+    ])
+
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda _: next(commands)
+    )
+
+    assert cli.run_interactive(
+        provider="echo",
+        model=None,
+        timeout=60,
+    ) == 0
+
+def test_read_stdin_prompt_bytes(monkeypatch):
+    import io
+
+    from ai_cli import cli
+
+    class FakeStdin:
+        buffer = io.BytesIO(b"hello from stdin")
+
+    monkeypatch.setattr(cli, "sys", type("X", (), {"stdin": FakeStdin()})())
+
+    assert cli._read_stdin_prompt() == "hello from stdin"
+
+def test_timeout_negative(monkeypatch):
+    from ai_cli import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["-q", "hello", "--timeout", "-1"])
+
+def test_cli_unknown_provider(monkeypatch, caplog):
+    from ai_cli import cli
+
+    cli.main([
+        "--provider",
+        "does-not-exist",
+        "-q",
+        "hello",
+    ])
+
+    assert "build_provider" in caplog.text
+
+def test_auto_provider_init_failure(monkeypatch):
+    from ai_cli.providers import auto_provider
+    from ai_cli.providers.auto_provider import AutoProvider
+
+    class Bad:
+        def __init__(self):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        auto_provider,
+        "PROVIDER_MAP",
+        {"bad": Bad},
+    )
+
+    p = AutoProvider(
+        fallback_order=["bad"]
+    )
+
+    with pytest.raises(Exception):
+        p.send("x")
+
+def test_deepseek_health_check_without_key(monkeypatch):
+    from ai_cli.providers.deepseek_provider import DeepSeekProvider
+
+    monkeypatch.delenv(
+        "DEEPSEEK_API_KEY",
+        raising=False,
+    )
+
+    provider = DeepSeekProvider()
+
+    assert provider.health_check() is False
+
+def test_prompt_truncation_in_main(monkeypatch):
+    from ai_cli import cli
+
+    monkeypatch.setattr(
+        cli,
+        "_MAX_PROMPT_BYTES",
+        10,
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        cli,
+        "ask",
+        lambda **kwargs: "ok",
+    )
+
+    result = cli.main([
+        "-q",
+        "x" * 100,
+    ])
+
+    assert result == 0
