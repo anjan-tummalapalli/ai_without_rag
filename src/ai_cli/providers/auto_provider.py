@@ -41,44 +41,66 @@ class AutoProvider:
                 errors.append(f"{provider_name}: not found")
                 continue
 
+            is_configured = getattr(provider_cls, "is_configured", None)
+
+            if callable(is_configured):
+                try:
+                    if not is_configured():
+                        errors.append(
+                            f"{provider_name}: skipped (not configured)"
+                        )
+                        continue
+                except Exception:
+                    pass
+
             try:
                 provider = provider_cls()
 
-                return provider.send(prompt)
-
             except ValueError as exc:
-                message = str(exc)
+                msg = str(exc).lower()
 
-                if "API_KEY" in message or "api key" in message.lower():
-                    errors.append(f"{provider_name}: skipped ({message})")
+                if "api key" in msg or "apikey" in msg:
+                    errors.append(
+                        f"{provider_name}: skipped ({exc})"
+                    )
                     continue
 
-                errors.append(f"{provider_name}: {exc}")
-                continue
-
-            except ProviderRequestError as exc:
-                message = str(exc).lower()
-
-                if (
-                    "401" in message
-                    or "unauthorized" in message
-                    or "api key" in message
-                    or "authentication" in message
-                ):
-                    errors.append(f"{provider_name}: skipped ({exc})")
-                    continue
-
-                errors.append(f"{provider_name}: {exc}")
-                continue
+                raise
 
             except Exception as exc:
-                # Unknown provider failure should not kill auto fallback
-                errors.append(f"{provider_name}: {exc}")
+                errors.append(
+                    f"{provider_name}: init failed ({exc})"
+                )
                 continue
 
+            try:
+                return provider.send(prompt)
+
+            except ProviderRequestError as exc:
+                errors.append(
+                    f"{provider_name}: {exc}"
+                )
+                continue
+
+            except ValueError as exc:
+                msg = str(exc).lower()
+
+                if "api key" in msg or "apikey" in msg:
+                    errors.append(
+                        f"{provider_name}: skipped ({exc})"
+                    )
+                    continue
+
+                raise
+
+            except Exception:
+                raise
+
         raise ProviderRequestError(
-            f"Auto fallback exhausted. Errors: {'; '.join(errors)}"
+            "Auto fallback exhausted. Errors:\n"
+            + "\n".join(errors)
         )
+
 
     def ask(self, prompt: str, **_kwargs) -> str:
         """Chat-compatible interface; delegates to send().
