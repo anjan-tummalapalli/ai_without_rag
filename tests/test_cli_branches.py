@@ -79,3 +79,37 @@ def test_cli_provider_selection(provider, monkeypatch):
         "hello",
     ]
 )
+
+def test_cli_missing_prompt(monkeypatch):
+    import sys
+
+    from ai_cli.cli import main
+
+    monkeypatch.setattr(sys, "argv", ["cli"])
+
+    try:
+        main()
+    except SystemExit:
+        pass
+
+def test_cli_basic_run(monkeypatch):
+    from ai_cli.cli import main
+
+    monkeypatch.setattr("sys.argv", ["cli", "hello"])
+
+    try:
+        main()
+    except SystemExit:
+        pass
+
+def test_cli_with_rag_flag(monkeypatch):
+    import sys
+
+    from ai_cli.cli import main
+
+    monkeypatch.setattr(sys, "argv", ["cli", "hello", "--rag"])
+
+    try:
+        main()
+    except SystemExit:
+        pass

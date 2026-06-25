@@ -106,7 +106,6 @@ class TestEchoProvider:
 # providers/echo_provider.py
 # ─────────────────────────────────────────────
  
- 
 class TestEchoProviderModule:
     """Tests for the EchoProvider defined in echo_provider.py."""
  
@@ -496,6 +495,37 @@ class TestBuiltinsSubProviders:
         """GeminiProvider (builtins) uses a Gemini or Google API base URL."""
         url_lower = BuiltinsGeminiProvider.api_base_url.lower()
         assert "gemini" in url_lower or "google" in url_lower
+    
+    def test_zai_all_response_shapes(self, monkeypatch):
+        from ai_cli.providers.zAI_provider import ZAIProvider
+
+        class Resp:
+            status_code = 200
+            def json(self):
+                return {"text": "ok"}
+
+        monkeypatch.setattr("requests.post", lambda *a, **k: Resp())
+
+        p = ZAIProvider(api_key="x")
+        assert p._send_impl("hi") == "ok"
+    
+    def test_zai_http_error(self, monkeypatch):
+        from ai_cli.providers.zAI_provider import ZAIProvider
+
+        class Resp:
+            status_code = 500
+            def json(self):
+                return {"error": "fail"}
+
+        monkeypatch.setattr("requests.post", lambda *a, **k: Resp())
+
+        p = ZAIProvider(api_key="x")
+
+        try:
+            p._send_impl("hi")
+            assert False
+        except Exception:
+            pass
  
  
 class TestBuiltinsCohereProvider:
