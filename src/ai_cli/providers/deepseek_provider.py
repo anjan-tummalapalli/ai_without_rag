@@ -36,6 +36,9 @@ class DeepSeekProvider:
      BASE_URL = "https://api.deepseek.com"
 
      def __init__(self, api_key=None):
+          if api_key == "":
+               raise ValueError("DEEPSEEK_API_KEY not set")
+
           self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
 
           self.client = None
@@ -43,7 +46,7 @@ class DeepSeekProvider:
           if self.api_key:
                self.client = OpenAI(
                     api_key=self.api_key,
-                    base_url=self.base_url,
+                    base_url=self.BASE_URL,
                )
 
      def health_check(self):
@@ -51,11 +54,8 @@ class DeepSeekProvider:
                return False
 
           try:
-               self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                         {"role": "user", "content": "ping"}
-                    ],
+               self.ask(
+                    "ping",
                     max_tokens=1,
                )
                return True
@@ -73,7 +73,7 @@ class DeepSeekProvider:
           timeout: float | None = None,
           **kwargs: Any,
      ) -> str:
-          selected_model = model or self.model
+          selected_model = model or self.DEFAULT_MODEL
 
           messages: list[dict[str, str]] = []
           if system_prompt:
@@ -100,7 +100,7 @@ class DeepSeekProvider:
 
           Returns a list of float vectors corresponding to each input text.
           """
-          selected = model or self.embed_model
+          selected = model or self.DEFAULT_EMBED_MODEL
           try:
                response = self.client.embeddings.create(model=selected, input=texts)
                return [item.embedding for item in response.data]
@@ -109,7 +109,7 @@ class DeepSeekProvider:
 
      def _chat(self, prompt: str, **kwargs):
           return self.client.chat.completions.create(  # type: ignore
-             model=self.model,
+             model=self.DEFAULT_MODEL,
              messages=[{"role": "user", "content": prompt}],
              **kwargs,
           )
@@ -146,7 +146,7 @@ class DeepSeekProvider:
      def chat(self, prompt: str, **kwargs) -> str:
           try:
                response = self.client(
-                    model=self.model,
+                    model=self.DEFAULT_MODEL,
                     messages=[
                          {"role": "user", "content": prompt}
                     ],
