@@ -1,3 +1,4 @@
+import asyncio
 import io
 from unittest.mock import MagicMock
 
@@ -7,10 +8,12 @@ from ai_cli import cli
 from ai_cli.ai_chat import chunk_text
 from ai_cli.cli import (
     _decode_chunk,
+    _drain_async_result,
     _safe_resolve_path,
     _sanitize_log_value,
     build_parser,
 )
+from ai_cli.core.exceptions import ProviderRequestError
 
 
 def test_cli_build_parser():
@@ -537,8 +540,9 @@ def test_auto_provider_init_failure(monkeypatch):
         fallback_order=["bad"]
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(ProviderRequestError) as exc:
         p.send("x")
+        assert "fallback exhausted" in str(exc.value)
 
 def test_deepseek_health_check_without_key(monkeypatch):
     from ai_cli.providers.deepseek_provider import DeepSeekProvider
@@ -574,3 +578,270 @@ def test_prompt_truncation_in_main(monkeypatch):
     ])
 
     assert result == 0
+
+def test_safe_resolve_path_null_byte():
+
+    assert _safe_resolve_path("abc\x00def") is None
+
+def test_safe_resolve_path_traversal():
+
+    assert _safe_resolve_path("../secret") is None
+
+def test_decode_chunk_json_object():
+
+    assert _decode_chunk({"a": 1}) == '{"a": 1}'
+
+def test_drain_async_result_string():
+
+    async def run():
+
+        return await _drain_async_result("hello")
+
+    assert asyncio.run(run()) == 0
+
+def test_decode_chunk_unserializable():
+    from ai_cli.cli import _decode_chunk
+
+    class Bad:
+        pass
+
+    assert "Bad" in _decode_chunk(Bad())
+
+
+def test_drain_async_result_iterable():
+    import asyncio
+
+    from ai_cli.cli import _drain_async_result
+
+    async def run():
+        return await _drain_async_result(
+            ["a", "b"]
+        )
+
+    assert asyncio.run(run()) == 0
+
+
+def test_drain_async_result_bytes():
+    import asyncio
+
+    from ai_cli.cli import _drain_async_result
+
+    async def run():
+        return await _drain_async_result(
+            b"hello"
+        )
+
+    assert asyncio.run(run()) == 0
+
+def test_load_rag_docs_raw_text():
+    from ai_cli.cli import _load_rag_docs
+
+    pipeline = _load_rag_docs(
+        ["hello world"],
+        rag_chunk_size=100,
+        rag_chunk_overlap=10,
+    )
+
+    assert pipeline is not None
+
+
+def test_load_rag_docs_missing_file():
+    from ai_cli.cli import _load_rag_docs
+
+    pipeline = _load_rag_docs(
+        ["/tmp/does_not_exist_file.txt"],
+        rag_chunk_size=100,
+        rag_chunk_overlap=10,
+    )
+
+    assert pipeline is not None
+
+def test_deepseek_send_text_response():
+    from ai_cli.providers.deepseek_provider import DeepSeekProvider
+
+    p = DeepSeekProvider(api_key="x")
+
+    class Response:
+        choices = []
+
+    p._chat = lambda *a, **k: Response()
+
+    assert p.send("hello")
+
+
+def test_deepseek_chat_success():
+    from unittest.mock import MagicMock
+
+    from ai_cli.providers.deepseek_provider import DeepSeekProvider
+
+    p = DeepSeekProvider(api_key="x")
+
+    p.client = MagicMock()
+
+    p.client.return_value = MagicMock(
+        choices=[
+            MagicMock(
+                message=MagicMock(
+                    content="ok"
+                )
+            )
+        ]
+    )
+
+    assert p.chat("hello") == "ok"
+
+def test_safe_resolve_path_invalid_null():
+    from ai_cli.cli import _safe_resolve_path
+
+    assert _safe_resolve_path("abc\x00def") is None
+
+
+def test_safe_resolve_path_parent_traversal():
+    from ai_cli.cli import _safe_resolve_path
+
+    assert _safe_resolve_path("../secret.txt") is None
+
+def test_build_ask_kwargs_signature_failure(monkeypatch):
+    from ai_cli.cli import _build_ask_kwargs
+
+    class Broken:
+        def __call__(self):
+            pass
+
+    monkeypatch.setattr(
+        "ai_cli.cli.inspect.signature",
+        lambda x: (_ for _ in ()).throw(TypeError())
+    )
+
+    result = _build_ask_kwargs(
+        provider="openai",
+        prompt="hello",
+        timeout=10,
+        model="m",
+        profile="p",
+        stream=True,
+        modules=["x"],
+    )
+
+    assert result["prompt"] == "hello"
+    assert result["provider"] == "openai"
+
+def test_read_stdin_prompt_empty(monkeypatch):
+    from ai_cli.cli import _read_stdin_prompt
+
+    class FakeBuffer:
+        def read(self, n):
+            return b""
+
+    class FakeStdin:
+        buffer = FakeBuffer()
+
+    monkeypatch.setattr(
+        "ai_cli.cli.sys.stdin",
+        FakeStdin()
+    )
+
+    assert _read_stdin_prompt() == ""
+
+def test_load_rag_docs_reads_file(tmp_path):
+    from ai_cli.cli import _load_rag_docs
+
+    f = tmp_path / "doc.txt"
+    f.write_text("hello rag")
+
+    pipeline = _load_rag_docs(
+        [str(f)],
+        rag_chunk_size=50,
+        rag_chunk_overlap=5,
+    )
+
+    assert pipeline is not None
+
+
+def test_load_rag_docs_bad_file(monkeypatch):
+    from ai_cli.cli import _load_rag_docs
+
+    class BadOpen:
+        def __enter__(self):
+            raise OSError("read failed")
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(
+        "builtins.open",
+        lambda *a, **k: BadOpen()
+    )
+
+    pipeline = _load_rag_docs(
+        ["missing.txt"],
+        rag_chunk_size=50,
+        rag_chunk_overlap=5,
+    )
+
+    assert pipeline is not None
+
+def test_safe_resolve_normal_path(tmp_path):
+    from ai_cli.cli import _safe_resolve_path
+
+    p = tmp_path / "a.txt"
+    p.write_text("x")
+
+    result = _safe_resolve_path(str(p))
+
+    assert result is not None
+
+
+def test_decode_chunk_object():
+    from ai_cli.cli import _decode_chunk
+
+    class Obj:
+        pass
+
+    assert "Obj" in _decode_chunk(Obj())
+
+def test_decode_chunk_bytes_and_objects():
+    from ai_cli.cli import _decode_chunk
+
+    assert _decode_chunk(b"hello") == "hello"
+    assert _decode_chunk("abc") == "abc"
+
+    class Bad:
+        def __str__(self):
+            return "bad-object"
+
+    assert _decode_chunk(Bad()) == '"bad-object"'
+
+@pytest.mark.asyncio
+async def test_drain_async_result_simple():
+    from ai_cli.cli import _drain_async_result
+
+    result = await _drain_async_result("hello")
+
+    assert result == 0
+
+@pytest.mark.asyncio
+async def test_drain_async_result_error():
+    from ai_cli.cli import _drain_async_result
+
+    class Bad:
+        def __await__(self):
+            raise RuntimeError("boom")
+
+    result = await _drain_async_result(Bad())
+
+    assert result == 1
+
+
+def test_safe_resolve_path_null():
+    from ai_cli.cli import _safe_resolve_path
+
+    assert _safe_resolve_path("abc\x00def") is None
+
+class FakeBuffer:
+    def read(self, size):
+        return b""
+
+
+class Fake:
+    buffer = FakeBuffer()
