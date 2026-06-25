@@ -43,6 +43,11 @@ class DeepSeekProvider:
      ):
 
           self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+          if self.api_key:
+               self.client = OpenAI(
+                   api_key=self.api_key,
+                   base_url=self.BASE_URL,
+               )
           self.model = (
               model
               or os.getenv("DEEPSEEK_MODEL")
@@ -109,13 +114,6 @@ class DeepSeekProvider:
                return [item.embedding for item in response.data]
           except Exception as exc:
                raise RuntimeError(f"DeepSeek embedding request failed: {exc}") from exc
-
-     def health_check(self) -> bool:
-          try:
-               self.ask(prompt="Hello", max_tokens=5)
-               return True
-          except Exception:
-               return False
 
      def _chat(self, prompt: str, **kwargs):
           return self.client.chat.completions.create(  # type: ignore
