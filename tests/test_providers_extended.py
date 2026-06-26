@@ -565,10 +565,11 @@ class TestBuiltinsSubProviders:
         assert result == "ok"
  
     def test_zai_http_error(self):
-        p = self._make_provider()
-        # your existing mock setup...
+        p = ZAIProvider(api_key="x")
+
         with pytest.raises(ProviderRequestError) as exc:
             p._send_impl("hi")
+
         assert "z.AI error 500" in str(exc.value)
  
  
