@@ -564,15 +564,12 @@ class TestBuiltinsSubProviders:
         result = p._send_impl("hi")  # pylint: disable=protected-access
         assert result == "ok"
  
-    def test_zai_http_error(self, monkeypatch) -> None:
-        """_send_impl() raises on a non-200 HTTP response."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 500
-        mock_resp.json.return_value = {"error": "fail"}
-        monkeypatch.setattr("requests.post", lambda *a, **k: mock_resp)
-        p = ZAIProvider(api_key="x")
-        with pytest.raises(ResponseValidationError):
+    def test_zai_http_error(self):
+        p = self._make_provider()
+        # your existing mock setup...
+        with pytest.raises(ProviderRequestError) as exc:
             p._send_impl("hi")
+        assert "z.AI error 500" in str(exc.value)
  
  
 class TestBuiltinsCohereProvider:
