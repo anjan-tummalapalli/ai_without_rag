@@ -204,3 +204,6 @@ class ZAIProvider(AIProvider):
             raise ProviderRequestError(
                 "network error"
             ) from exc
+    
+    def is_ready(self) -> bool:
+        return bool(os.getenv("ZAI_API_KEY"))

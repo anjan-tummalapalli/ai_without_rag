@@ -537,6 +537,9 @@ class GeminiProvider(AIProvider):
             return "gemini response"
 
         return self._send_impl(prompt)
+    
+    def is_ready(self) -> bool:
+        return bool(os.getenv("GEMINI_API_KEY"))
 
 # Keep __all__ minimal to avoid importing optional provider modules at package import time.
 # Heavy providers (openai, cohere, xAI, etc.) are loaded lazily by loader/bootstrap.

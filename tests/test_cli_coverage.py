@@ -523,15 +523,16 @@ def test_cli_unknown_provider(monkeypatch, caplog):
     assert "build_provider" in caplog.text
 
 def test_auto_provider_init_failure(monkeypatch):
-    from ai_cli.providers import auto_provider
+    from ai_cli.providers import registry
     from ai_cli.providers.auto_provider import AutoProvider
 
     class Bad:
         def __init__(self):
             raise RuntimeError("boom")
 
+    # Patch the registry's PROVIDER_MAP so AutoProvider picks it up
     monkeypatch.setattr(
-        auto_provider,
+        registry,
         "PROVIDER_MAP",
         {"bad": Bad},
     )
@@ -542,7 +543,7 @@ def test_auto_provider_init_failure(monkeypatch):
 
     with pytest.raises(ProviderRequestError) as exc:
         p.send("x")
-        assert "fallback exhausted" in str(exc.value)
+    assert "fallback exhausted" in str(exc.value).lower()
 
 def test_deepseek_health_check_without_key(monkeypatch):
     from ai_cli.providers.deepseek_provider import DeepSeekProvider

@@ -37,6 +37,7 @@ class OpenAIProvider(BaseProvider):
                 "'pip install openai'."
             )
         self.client = OpenAI(api_key=self.api_key)
+        self.model = model or "gpt-4o-mini"
 
     def _send_impl(self, prompt: str) -> str:
         self._ensure_key()
@@ -83,6 +84,9 @@ class OpenAIProvider(BaseProvider):
     def _ensure_key(self):
         if not self.api_key and not os.getenv("OPENAI_API_KEY"):
             raise ProviderRequestError("OPENAI_API_KEY is required for OpenAIProvider")
+    
+    def is_ready(self) -> bool:
+        return bool(os.getenv("OPENAI_API_KEY"))
 
 register_provider("openai", OpenAIProvider)
 register_chat_provider("openai", OpenAIProvider)
