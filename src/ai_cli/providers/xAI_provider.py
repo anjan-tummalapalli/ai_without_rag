@@ -72,13 +72,15 @@ class XAIProvider(AIProvider):
         api_key: str | None = None,
         **kwargs: Any,
     ) -> None:
+        resolved_key = api_key or os.getenv("XAI_API_KEY")
         super().__init__(
             *args,
             provider_name="xai",
             model=model or "grok-2-latest",
-            api_key=api_key,
+            api_key=resolved_key,
             **kwargs,
         )
+        self.api_key = resolved_key
         if OpenAI is None:
             missing_openai_msg = (
                 "openai package is required. Install with "
@@ -118,7 +120,7 @@ class XAIProvider(AIProvider):
             if message is None or message.content is None:
                 return "[No response from xAI]"
             return message.content.strip()
-        except OpenAIError as exc:
+        except Exception as exc:
             raise ProviderRequestError(f"xAI request failed: {exc}") from exc
  
     def _send_impl(self, prompt: str) -> str:
@@ -144,7 +146,7 @@ class XAIProvider(AIProvider):
                 max_tokens=5,
             )
             return bool(response.choices)
-        except OpenAIError:
+        except Exception:
             return False
  
     def send(self, prompt: str, **kwargs: Any) -> str:
@@ -166,7 +168,7 @@ class XAIProvider(AIProvider):
                 return "[Error: unable to get response]"
             return content
  
-        except OpenAIError as exc:
+        except Exception as exc:
             raise ProviderRequestError(f"xAI request failed: {exc}") from exc
  
     def is_ready(self) -> bool:

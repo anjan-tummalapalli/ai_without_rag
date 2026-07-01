@@ -1,10 +1,9 @@
-from ai_cli import cli
-from ai_cli.cli import run_interactive
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
 
-from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli import cli
+from ai_cli.cli import run_interactive
 from ai_cli.core.resilience import RetryEngine
 
 
