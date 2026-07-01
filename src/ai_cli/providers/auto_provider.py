@@ -5,7 +5,6 @@ from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers import registry
 
 # compatibility alias for tests/plugins that monkeypatch this module
-
 PROVIDER_MAP = registry.PROVIDER_MAP
 
 
@@ -29,73 +28,49 @@ class AutoProvider:
             "zai",
             "echo",
         ]
-        active_map = PROVIDER_MAP
 
-        self.fallback_order = fallback_order or [
-            name for name in default_order if name in active_map
-        ]
+        registry.ensure_initialized()
+
+        if fallback_order is not None:
+            self.fallback_order = fallback_order
+        else:
+            self.fallback_order = [
+                name
+                for name in default_order
+                if name in registry.PROVIDER_MAP
+            ]
 
     def send(self, prompt: str) -> str:
-        """Try each provider in fallback_order and return first success."""
+        """Try each provider in fallback_order."""
 
         errors: list[str] = []
 
         for provider_name in self.fallback_order:
-            for provider_name in self.fallback_order:
-                provider_cls = PROVIDER_MAP.get(provider_name)
 
-                if provider_cls is None:
-                    provider_cls = registry.PROVIDER_MAP.get(provider_name)
+            provider_cls = PROVIDER_MAP.get(provider_name)
 
-                if provider_cls is None:
-                    errors.append(f"{provider_name}: not found")
-                    continue
+            if provider_cls is None:
+                provider_cls = registry.PROVIDER_MAP.get(provider_name)
+
+            if provider_cls is None:
+                errors.append(
+                    f"{provider_name}: not found"
+                )
+                continue
 
             try:
                 provider = provider_cls()
 
-            except ValueError as exc:
-                msg = str(exc).lower()
-
-                if "api key" in msg or "apikey" in msg or "api_key" in msg:
-                    errors.append(
-                        f"{provider_name}: skipped ({exc})"
-                    )
-                    continue
-
-                errors.append(f"{provider_name}: init failed ({exc})")
-                continue
-
             except Exception as exc:
-                errors.append(f"{provider_name}: init failed ({exc})")
+                errors.append(
+                    f"{provider_name}: init failed ({exc})"
+                )
                 continue
 
             try:
                 return provider.send(prompt)
 
             except Exception as exc:
-                msg = str(exc).lower()
-
-                if any(
-                    key in msg
-                    for key in [
-                        "401",
-                        "unauthorized",
-                        "403",
-                        "forbidden",
-                        "quota",
-                        "authentication",
-                        "invalid",
-                        "api key",
-                        "apikey",
-                        "api_key",
-                    ]
-                ):
-                    errors.append(
-                        f"{provider_name}: skipped ({exc})"
-                    )
-                    continue
-
                 errors.append(
                     f"{provider_name}: failed ({exc})"
                 )
@@ -108,13 +83,4 @@ class AutoProvider:
 
 
     def ask(self, prompt: str, **_kwargs) -> str:
-        """Chat-compatible interface; delegates to send().
-
-        Args:
-            prompt: User input to send.
-            **_kwargs: Ignored; present for provider contract compatibility.
-
-        Returns:
-            Model response string.
-        """
         return self.send(prompt)
