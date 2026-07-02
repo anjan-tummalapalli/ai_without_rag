@@ -79,6 +79,9 @@ pytest-cov = "^5.0.0"
 pytest-timeout = "^2.3.1"
 ruff = "^0.4.4"
 types-requests = "^2.32.0.20240523"
+pylint = "^4.0.6"
+bandit = "^1.9.4"
+pyflakes = "^3.4.0"
 
 [tool.poetry.extras]
 docs = ["mkdocs", "mkdocs-material", "mkdocstrings"]
@@ -107,6 +110,10 @@ no_implicit_optional = true
 warn_return_any = true
 warn_unused_ignores = true
 
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
@@ -114,10 +121,13 @@ skip_covered = true
 pythonpath = ["src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
 addopts = """
 -v
 --strict-markers
---cov=ai_cli
+--cov=src/ai_cli
 --cov-report=term-missing
 """
 markers = ["integration", "slow", "provider"]

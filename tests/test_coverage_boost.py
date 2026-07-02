@@ -12,9 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# ============================================================
-# 1. core/exceptions.py  (52% → target >85%)
-# ============================================================
 from ai_cli.core.exceptions import (
     AIProviderError,
     ChunkingError,
@@ -27,6 +24,16 @@ from ai_cli.core.exceptions import (
     VectorDBError,
     capture_exception_info,
 )
+from ai_cli.core.prompt_corrector import (
+    Chunk,
+    PromptCorrector,
+    TextChunker,
+    correct_prompt,
+    prompt_corrector,
+)
+from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli.providers.xAI_provider import InMemoryVectorStore, XAIProvider
+from ai_cli.providers.zAI_provider import ZAIProvider
 
 
 class TestAIProviderError:
@@ -183,13 +190,6 @@ class TestSubclassInstantiation:
 # ============================================================
 # 2. core/prompt_corrector.py  (59% → target >85%)
 # ============================================================
-from ai_cli.core.prompt_corrector import (
-    Chunk,
-    PromptCorrector,
-    TextChunker,
-    correct_prompt,
-    prompt_corrector,
-)
 
 
 class TestTextChunker:
@@ -296,7 +296,6 @@ class TestPromptCorrectorFunctions:
 # ============================================================
 # 3. providers/xAI_provider.py  (49% → target >75%)
 # ============================================================
-from ai_cli.providers.xAI_provider import InMemoryVectorStore, XAIProvider
 
 
 class TestXAIProviderCoverage:
@@ -439,7 +438,6 @@ class TestXAIProviderCoverage:
 # ============================================================
 # 4. providers/zAI_provider.py  (57% → target >75%)
 # ============================================================
-from ai_cli.providers.zAI_provider import ZAIProvider
 
 
 class TestZAIProviderCoverage:
@@ -653,7 +651,6 @@ class TestZAIProviderCoverage:
 # ============================================================
 # 5. providers/deepseek_provider.py  (62% → target >80%)
 # ============================================================
-from ai_cli.providers.deepseek_provider import DeepSeekProvider
 
 
 class TestDeepSeekProviderCoverage:

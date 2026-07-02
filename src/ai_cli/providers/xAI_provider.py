@@ -28,8 +28,6 @@ import logging
 import os
 from typing import Any
  
-from openai.types.chat import ChatCompletionMessageParam
- 
 try:
     from openai import OpenAI, OpenAIError
 except ImportError:
@@ -38,6 +36,8 @@ except ImportError:
     class OpenAIError(Exception):  # type: ignore[no-redef]
         """Fallback used when the openai package is not installed."""
  
+from openai.types.chat import ChatCompletionMessageParam
+
 from ai_cli.core.exceptions import ProviderRequestError
  
 from .base import AIProvider
