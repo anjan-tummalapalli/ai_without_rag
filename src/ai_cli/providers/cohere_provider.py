@@ -22,7 +22,7 @@ class CohereProvider(BaseProvider):
     - chunk → embed → store lifecycle
     - cosine similarity retrieval
     """
-    def __init__(self, *, rag_enabled: bool = False, **kwargs):
+    def __init__(self, *, rag_enabled: bool = False, **kwargs: Any):
         # ----------------------------
         # In-memory vector store
         # ----------------------------
@@ -63,7 +63,7 @@ class CohereProvider(BaseProvider):
     # Chat
     # =========================================================
 
-    def send(self, prompt: str, **kwargs) -> str:
+    def send(self, prompt: str, **kwargs: Any) -> str:
         """
         Chat with optional RAG context injection.
         """
@@ -87,7 +87,7 @@ class CohereProvider(BaseProvider):
 
         return self._chat(prompt)
     
-    def chat(self, prompt: str, **kwargs) -> str:
+    def chat(self, prompt: str, **kwargs: Any) -> str:
         try:
             return self.send(prompt, **kwargs)
         except Exception as exc:

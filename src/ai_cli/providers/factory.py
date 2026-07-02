@@ -1,3 +1,5 @@
+from typing import Any
+
 from ai_cli.providers.config import resolve_api_key
 from ai_cli.providers.loader import load_all_providers
 from ai_cli.providers.resolver import resolve_provider_name
@@ -5,7 +7,7 @@ from ai_cli.providers.resolver import resolve_provider_name
 _PROVIDERS = load_all_providers()
 
 
-def build_provider(request):
+def build_provider(request: Any) -> Any:
     provider_name = resolve_provider_name(request.provider)
 
     if provider_name not in _PROVIDERS:

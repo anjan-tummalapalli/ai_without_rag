@@ -1,3 +1,5 @@
+from typing import Any
+
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers import registry
 
@@ -5,7 +7,7 @@ from ai_cli.providers import registry
 class AutoProvider:
     """Fallback provider that tries registered providers in order."""
 
-    def __init__(self, fallback_order=None, **_kwargs):
+    def __init__(self, fallback_order=None, **_kwargs: Any):
         registry.ensure_initialized()
 
         default_order = [
@@ -69,5 +71,5 @@ class AutoProvider:
             "Auto fallback exhausted. Errors:\n" + "\n".join(errors)
         )
 
-    def ask(self, prompt: str, **_kwargs):
+    def ask(self, prompt: str, **_kwargs: Any) -> str:
         return self.send(prompt)

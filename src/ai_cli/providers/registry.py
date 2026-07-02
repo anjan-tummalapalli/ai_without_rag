@@ -67,7 +67,7 @@ def register_chat_provider(name: str, cls: type) -> None:
     PROVIDER_MAP[name] = cls
 
 
-def get_chat_provider(name: str, **kwargs):
+def get_chat_provider(name: str, **kwargs: Any) -> BaseProvider:
     """Retrieve an instantiated chat provider.
 
     The provider class must have been registered via ``register_chat_provider``.
@@ -96,7 +96,7 @@ def ensure_initialized():
     init_providers()
 
 
-def build_provider(name: str, **kwargs):
+def build_provider(name: str, **kwargs: Any) -> BaseProvider:
     """Factory for a generic provider.
 
     ``ensure_initialized`` should be called beforehand (via ``ensure_initialized``

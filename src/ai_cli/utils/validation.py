@@ -7,11 +7,11 @@ try:
     from ai_cli.rag.vector_store import VectorStore  # type: ignore
 except ModuleNotFoundError:
     VectorStore = None
+
 # Local exceptions
 from ai_cli.core.exceptions import ResponseValidationError
 
 VectorStore = None
-
 MIN_RESPONSE_LENGTH = 5
 
 log = logging.getLogger(__name__)
@@ -25,7 +25,6 @@ class HallucinationResult:
     passed: True when risk is below threshold (default threshold: 0.5)
     reasons: human-readable labels for triggers
     """
-
     score: float
     passed: bool
     reasons: list[str] = field(default_factory=list)
@@ -43,7 +42,6 @@ class HallucinationDetector:
         - matches to suspicious phrases
         - presence of placeholder tokens like "TODO"
     """
-
     SUSPICIOUS_PATTERNS = [
         r"100% accurate",
         r"guaranteed",

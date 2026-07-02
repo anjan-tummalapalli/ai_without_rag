@@ -185,7 +185,6 @@ else:
 
 class Tracer:
         """Small wrapper for OpenTelemetry tracing. No-op if not available."""
-
         def __init__(self, service_name: str = "ai_gateway"):
                 self._enabled = False
                 self._provider = None
@@ -426,7 +425,6 @@ class ModelQualityMetrics:
         """Collect simple quality metrics for a model and provider. Extended
         for RAG.
         """
-
         provider: str
         model: str
         requests: int = 0

@@ -28,7 +28,7 @@ class OpenAIProvider(AIProvider):
         )
         self.timeout = 60.0
 
-    def send(self, prompt: str, **kwargs) -> str:
+    def send(self, prompt: str, **kwargs: Any) -> str:
         try:
             import importlib
             OpenAI = importlib.import_module("openai").OpenAI

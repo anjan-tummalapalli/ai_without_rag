@@ -1,7 +1,8 @@
-class ChatService:
+from typing import Any
 
-    def __init__(self, provider):
+class ChatService:
+    def __init__(self, provider: Any):
         self.provider = provider
 
-    def ask(self, prompt):
+    def ask(self, prompt: str) -> str:
         return self.provider.ask(prompt)

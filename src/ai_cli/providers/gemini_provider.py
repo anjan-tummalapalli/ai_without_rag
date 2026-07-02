@@ -191,7 +191,7 @@ class GeminiProvider(AIProvider):
         vector_db_client: Any | None = None,
         chunk_size: int = 500,
         chunk_overlap: int = 50,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialise GeminiProvider.
 
@@ -532,7 +532,7 @@ class GeminiProvider(AIProvider):
 
         return self._send_impl(combined)
     
-    def send(self, prompt: str, **kwargs) -> str:
+    def send(self, prompt: str, **kwargs: Any) -> str:
         if getattr(self, "_mock", False):
             return "gemini response"
 

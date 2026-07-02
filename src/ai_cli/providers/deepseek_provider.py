@@ -107,14 +107,14 @@ class DeepSeekProvider:
           except Exception as exc:
                raise RuntimeError(f"DeepSeek embedding request failed: {exc}") from exc
 
-     def _chat(self, prompt: str, **kwargs):
+     def _chat(self, prompt: str, **kwargs: Any) -> Any:
           return self.client.chat.completions.create(  # type: ignore
              model=self.DEFAULT_MODEL,
              messages=[{"role": "user", "content": prompt}],
              **kwargs,
           )
 
-     def send(self, prompt: str, **kwargs) -> str:
+     def send(self, prompt: str, **kwargs: Any) -> str:
           try:
                response = self._chat(prompt, **kwargs)
 
@@ -143,7 +143,7 @@ class DeepSeekProvider:
           except Exception:
                return "mock:hello"
      
-     def chat(self, prompt: str, **kwargs) -> str:
+     def chat(self, prompt: str, **kwargs: Any) -> str:
           try:
                response = self.client(
                     model=self.DEFAULT_MODEL,

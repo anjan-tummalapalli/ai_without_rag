@@ -1,10 +1,13 @@
 # ai_cli/rag.py
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import heapq
 import math
 from collections.abc import Iterable
+from pydoc import cli
+from unittest.mock import patch
 
 import pytest
 
@@ -258,3 +261,73 @@ def test_chunk_text_empty_chunk_after_strip():
     )
 
     assert result == []
+
+def test_build_kwargs_modules():
+    kwargs = cli._build_ask_kwargs(
+        provider="auto",
+        prompt="hi",
+        timeout=10,
+        modules=" aws , kubernetes , python ,, "
+    )
+
+    assert kwargs["modules"] == [
+        "aws",
+        "kubernetes",
+        "python",
+    ]
+
+@patch("ai_cli.cli.inspect.signature")
+def test_build_kwargs_signature_failure(mock_sig):
+    mock_sig.side_effect = TypeError
+
+    kwargs = cli._build_ask_kwargs(
+        provider="openai",
+        prompt="hello",
+        model="gpt",
+        timeout=20,
+        profile="prod",
+        stream=True,
+        modules="aws,k8s",
+    )
+
+    assert kwargs["provider"] == "openai"
+    assert kwargs["model"] == "gpt"
+    assert kwargs["profile"] == "prod"
+    assert kwargs["stream"] is True
+    assert kwargs["modules"] == ["aws","k8s"]
+
+@patch("ai_cli.cli.json.dumps")
+def test_decode_chunk_json_failure(mock_dump):
+    mock_dump.side_effect = TypeError
+
+    class Bad:
+        def __str__(self):
+            return "BAD"
+
+    assert cli._decode_chunk(Bad()) == "BAD"
+
+class AsyncGen:
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if hasattr(self, "done"):
+            raise StopAsyncIteration
+        self.done = True
+        return "hello"
+
+async def boom():
+    raise KeyboardInterrupt()
+
+assert asyncio.run(cli._drain_async_result(boom())) == 130
+
+async def coro():
+    return "hello"
+
+assert cli._handle_sync_result(coro()) == 0
+
+@patch("builtins.print")
+def test_handle_sync_runtime_error(mock_print):
+    mock_print.side_effect = RuntimeError("boom")
+
+    assert cli._handle_sync_result("abc") == 1

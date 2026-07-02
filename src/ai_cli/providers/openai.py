@@ -1,3 +1,5 @@
+from typing import Any
+
 from ai_cli.providers.base import BaseProvider
 from ai_cli.providers.decorators import chat_provider
 
@@ -8,5 +10,5 @@ class OpenAIProvider(BaseProvider):
         self.api_key = api_key
         self.model = model
 
-    def ask(self, prompt: str, **kwargs):
+    def ask(self, prompt: str, **kwargs: Any) -> str:
         return f"OpenAI response: {prompt}"

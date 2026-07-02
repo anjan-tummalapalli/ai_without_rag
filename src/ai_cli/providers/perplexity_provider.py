@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 from openai import OpenAI
 
@@ -10,7 +11,7 @@ class PerplexityProvider(BaseProvider):
         self,
         model: str = "sonar",
         api_key: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model

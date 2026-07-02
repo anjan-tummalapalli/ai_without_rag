@@ -160,7 +160,7 @@ class ZAIProvider(AIProvider):
         except Exception as exc:
             raise ProviderRequestError("unable to coerce z.AI response to string") from exc
     
-    def send(self, prompt: str, **kwargs) -> str:
+    def send(self, prompt: str, **kwargs: Any) -> str:
         if not self.api_key:
             raise ProviderRequestError("z.AI API key not configured")
 

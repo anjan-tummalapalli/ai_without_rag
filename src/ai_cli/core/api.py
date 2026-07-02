@@ -1,7 +1,15 @@
+from typing import Any
+
 from ai_cli.providers.registry import build_provider, ensure_initialized
 
 
-def ask(prompt, provider, model=None, _provider=None, **kwargs):
+def ask(
+        prompt: str,
+        provider: str,
+        model: str = None,
+        _provider: Any = None,
+        **kwargs: Any
+        ) -> str:
     ensure_initialized()
 
     ai_provider = _provider or build_provider(

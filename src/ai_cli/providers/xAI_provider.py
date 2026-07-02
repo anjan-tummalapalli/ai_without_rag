@@ -23,11 +23,17 @@ response = provider.send("Explain Kubernetes operators")
 """
  
 from __future__ import annotations
- 
+
 import logging
 import os
 from typing import Any
- 
+
+from openai.types.chat import ChatCompletionMessageParam
+
+from ai_cli.core.exceptions import ProviderRequestError
+
+from .base import AIProvider
+
 try:
     from openai import OpenAI, OpenAIError
 except ImportError:
@@ -35,14 +41,11 @@ except ImportError:
  
     class OpenAIError(Exception):  # type: ignore[no-redef]
         """Fallback used when the openai package is not installed."""
- 
-from openai.types.chat import ChatCompletionMessageParam
+        pass
 
-from ai_cli.core.exceptions import ProviderRequestError
- 
-from .base import AIProvider
- 
- 
+logger = logging.getLogger(__name__)
+
+
 class InMemoryVectorStore:  # pylint: disable=too-few-public-methods
     """Compatibility placeholder for exported vector store alias.
  
@@ -50,10 +53,7 @@ class InMemoryVectorStore:  # pylint: disable=too-few-public-methods
     `InMemoryVectorStore` remains importable from this module for
     backward-compatible re-exports; it carries no behavior of its own.
     """
- 
- 
-logger = logging.getLogger(__name__)
- 
+    pass
  
 class XAIProvider(AIProvider):
     """
