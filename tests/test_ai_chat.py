@@ -7,15 +7,16 @@ import heapq
 import math
 from collections.abc import Iterable
 from unittest.mock import patch
+
 import pytest
 
+import ai_cli.cli as cli
 from ai_cli.ai_chat import (
     _last_sentence_end,
     _last_whitespace,
     _next_start,
     chunk_text,
 )
-import ai_cli.cli as cli
 
 print("### LOADED test_ai_chat.py ###")
 

@@ -424,3 +424,39 @@ async def test_circuit_breaker_async_wrap_threshold():
     assert await ok() == "ok"
 
 
+@pytest.mark.asyncio
+async def test_circuit_breaker_async_wrap_records_failure():
+    cb = CircuitBreaker(failure_threshold=5)
+
+    @cb.wrap
+    async def failing():
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError):
+        await failing()
+
+    assert cb.failure_count == 1
+
+
+@pytest.mark.asyncio
+async def test_async_retry_engine_decorator_all_attempts_fail():
+    retry = AsyncRetryEngine(max_attempts=3)
+
+    attempts = {"count": 0}
+
+    @retry.decorator()
+    async def always_fail():
+        attempts["count"] += 1
+        raise RuntimeError("failed")
+
+    with pytest.raises(RuntimeError, match="failed"):
+        await always_fail()
+
+    assert attempts["count"] == 3
+
+
+def test_execute_with_fallback_returns_none_without_fallback():
+    def primary():
+        raise RuntimeError("boom")
+
+    assert execute_with_fallback(primary) is None
