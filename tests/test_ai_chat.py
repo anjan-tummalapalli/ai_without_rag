@@ -6,9 +6,7 @@ import hashlib
 import heapq
 import math
 from collections.abc import Iterable
-from pydoc import cli
 from unittest.mock import patch
-
 import pytest
 
 from ai_cli.ai_chat import (
@@ -17,6 +15,9 @@ from ai_cli.ai_chat import (
     _next_start,
     chunk_text,
 )
+import ai_cli.cli as cli
+
+print("### LOADED test_ai_chat.py ###")
 
 
 def test_last_sentence_end_found():
@@ -266,6 +267,7 @@ def test_build_kwargs_modules():
     kwargs = cli._build_ask_kwargs(
         provider="auto",
         prompt="hi",
+        model=None,
         timeout=10,
         modules=" aws , kubernetes , python ,, "
     )
@@ -326,8 +328,8 @@ async def coro():
 
 assert cli._handle_sync_result(coro()) == 0
 
-@patch("builtins.print")
-def test_handle_sync_runtime_error(mock_print):
-    mock_print.side_effect = RuntimeError("boom")
+@patch("ai_cli.cli._decode_chunk")
+def test_handle_sync_runtime_error(mock_decode):
+    mock_decode.side_effect = RuntimeError("boom")
 
     assert cli._handle_sync_result("abc") == 1
