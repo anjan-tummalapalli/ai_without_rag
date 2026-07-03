@@ -16,13 +16,13 @@ def load_all_providers():
     from ai_cli.providers.zAI_provider import ZAIProvider
 
     return {
-        "auto": AutoProvider,
-        "echo": EchoProvider,
-        "openai": OpenAIProvider,
-        "gemini": GeminiProvider,
-        "cohere": CohereProvider,
-        "perplexity": PerplexityProvider,
-        "deepseek": DeepSeekProvider,
-        "xai": XAIProvider,
-        "zai": ZAIProvider,
-    }
+            "openai": OpenAIProvider,
+            "gemini": GeminiProvider,
+            "deepseek": DeepSeekProvider,
+            "perplexity": PerplexityProvider,
+            "xai": XAIProvider,
+            "cohere": CohereProvider,
+            "zai": ZAIProvider,
+            "echo": EchoProvider,
+            "auto": AutoProvider,
+           }
