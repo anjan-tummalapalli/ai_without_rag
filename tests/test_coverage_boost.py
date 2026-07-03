@@ -834,7 +834,7 @@ class TestStubModules:
         assert P2 is not None
 
     def test_openai_module(self):
-        from ai_cli.providers.openai import OpenAIProvider
+        from ai_cli.providers.openai_provider import OpenAIProvider
         p = OpenAIProvider(api_key="test")
         result = p.ask("hello")
         assert "OpenAI response" in result

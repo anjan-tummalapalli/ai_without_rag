@@ -1,9 +1,7 @@
 import pytest
 
-from ai_cli.providers.registry import PROVIDER_MAP, build_provider
-
 from ai_cli.core.exceptions import ResponseValidationError
-
+from ai_cli.providers.registry import PROVIDER_MAP, build_provider
 from ai_cli.utils.validation import (
     HallucinationDetector,
     HallucinationResult,

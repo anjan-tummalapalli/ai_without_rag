@@ -11,13 +11,14 @@ class AutoProvider:
         registry.ensure_initialized()
 
         default_order = [
-            "echo",
-            "zai",
-            "cohere",
+            "openai",
             "gemini",
+            "deepseek",
             "perplexity",
             "xai",
-            "openai",
+            "cohere",
+            "zai",
+            "echo",
         ]
 
         available = set(registry.PROVIDER_MAP.keys())

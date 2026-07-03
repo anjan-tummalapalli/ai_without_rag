@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+from ai_cli.core.exceptions import ResponseValidationError
 from ai_cli.providers.registry import (
     CHAT_PROVIDERS,
     PROVIDER_MAP,
@@ -12,8 +13,6 @@ from ai_cli.providers.registry import (
     register_chat_provider,
     register_provider,
 )
-
-from ai_cli.core.exceptions import ResponseValidationError
 from ai_cli.utils.validation import (
     HallucinationDetector,
     ResponseValidator,
