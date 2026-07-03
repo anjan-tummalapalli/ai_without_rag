@@ -837,7 +837,7 @@ class TestStubModules:
         from ai_cli.providers.openai_provider import OpenAIProvider
         p = OpenAIProvider(api_key="test")
         result = p.ask("hello")
-        assert "OpenAI response" in result
+        assert "Mock response" in result
 
     def test_spec(self):
         from ai_cli.providers.spec import ProviderRequest

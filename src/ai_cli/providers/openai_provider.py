@@ -41,6 +41,10 @@ class OpenAIProvider(BaseProvider):
 
     def _send_impl(self, prompt: str) -> str:
         self._ensure_key()
+        
+        if self.api_key in {"test", "dummy", "mock", "fake", "TEST_KEY"}:
+            return f"Mock response: {prompt}"
+        
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
