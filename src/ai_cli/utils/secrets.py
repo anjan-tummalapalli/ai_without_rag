@@ -19,6 +19,9 @@ def chunk_text(text: str, chunk_size: int = 1000,
     if chunk_size < overlap:
         raise ValueError("chunk_size must be greater than overlap")
 
+    if text is None:
+        return []
+
     text = re.sub(r"\s+", " ", text).strip()
     n = len(text)
     if n == 0:

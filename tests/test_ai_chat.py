@@ -40,7 +40,7 @@ def test_last_whitespace_missing():
 def test_next_start():
     assert _next_start(
         end=10,
-        overlap=3,
+        chunk_overlap=3,
         prev_start=0
     ) == 7
 
@@ -51,7 +51,7 @@ def test_chunk_text_basic():
     result = chunk_text(
         "This is a simple sentence. Another sentence here.",
         chunk_size=20,
-        overlap=5,
+        chunk_overlap=5,
     )
 
     assert len(result) > 0
@@ -61,7 +61,7 @@ def test_ai_chat_chunking():
     result = chunk_text(
         "hello world this is a test",
         chunk_size=10,
-        overlap=2,
+        chunk_overlap=2,
     )
     assert isinstance(result, list)
     assert len(result) > 0
@@ -70,7 +70,7 @@ def test_ai_chat_empty():
     result = chunk_text(
         "",
         chunk_size=10,
-        overlap=2,
+        chunk_overlap=2,
     )
     assert result == []
 
@@ -243,7 +243,7 @@ def test_chunk_text_multiple_chunks_progress():
 
 def test_chunk_text_empty_after_strip_exit():
     result = chunk_text(
-        None,
+        "",
         chunk_size=10,
         overlap=2,
     )
