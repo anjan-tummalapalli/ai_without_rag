@@ -1,2 +1,0 @@
-class BaseContract:
-    pass
