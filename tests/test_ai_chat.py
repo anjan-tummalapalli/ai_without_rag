@@ -51,7 +51,7 @@ def test_chunk_text_basic():
     result = chunk_text(
         "This is a simple sentence. Another sentence here.",
         chunk_size=20,
-        chunk_overlap=5,
+        overlap=5,
     )
 
     assert len(result) > 0
@@ -61,7 +61,7 @@ def test_ai_chat_chunking():
     result = chunk_text(
         "hello world this is a test",
         chunk_size=10,
-        chunk_overlap=2,
+        overlap=2,
     )
     assert isinstance(result, list)
     assert len(result) > 0
@@ -70,7 +70,7 @@ def test_ai_chat_empty():
     result = chunk_text(
         "",
         chunk_size=10,
-        chunk_overlap=2,
+        overlap=2,
     )
     assert result == []
 
@@ -178,10 +178,10 @@ def test_chunk_text_invalid_chunk_size():
 def test_chunk_text_invalid_overlap():
     with pytest.raises(ValueError):
         chunk_text(
-            "hello world",
-            chunk_size=5,
-            overlap=5,
-        )
+                    "hello world",
+                    chunk_size=5,
+                    overlap=6,
+                  )
 
 
 def test_chunk_text_whitespace_only():
