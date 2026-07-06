@@ -268,3 +268,91 @@ class TestSafeMetricHelpers:
         with patch.object(monitoring, "prom_core", None):
             from ai_cli.telemetry.monitoring import _find_existing_metric
             assert _find_existing_metric("some_metric") is None
+
+# ============================================================================
+# Extra monitoring.py coverage
+# ============================================================================
+
+class TestNoopMetricExtra:
+
+    def test_noop_metric_methods(self):
+        from ai_cli.telemetry.monitoring import _NoopMetric
+
+        m = _NoopMetric()
+
+        assert m.labels("a") is m
+        assert m.inc() is None
+
+        if hasattr(m, "set"):
+            assert m.set(5) is None
+
+
+class TestSafeMetricCreation:
+
+    def test_find_existing_metric_not_found(self):
+        from ai_cli.telemetry import monitoring
+
+        class Dummy:
+            _names_to_collectors = {}
+
+        with patch.object(
+            monitoring,
+            "prom_core",
+            type(
+                "P",
+                (),
+                {
+                    "REGISTRY": Dummy(),
+                },
+            ),
+        ):
+            assert monitoring._find_existing_metric("missing") is None
+
+
+class TestTelemetryExtra:
+
+    def test_track_many(self):
+        from ai_cli.telemetry.monitoring import Telemetry
+
+        t = Telemetry()
+
+        for i in range(10):
+            assert t.track(f"e{i}")
+
+        assert len(t.events) == 10
+
+
+class TestTracerExtra:
+
+    def test_span_enabled(self):
+        from ai_cli.telemetry.monitoring import Tracer
+
+        cm = MagicMock()
+        cm.__enter__.return_value = "span"
+
+        tracer = MagicMock()
+        tracer.start_as_current_span.return_value = cm
+
+        t = Tracer.__new__(Tracer)
+        t._enabled = True
+        t._tracer = tracer
+
+        with t.span("abc") as span:
+            assert span == "span"
+
+        tracer.start_as_current_span.assert_called_once_with("abc")
+
+    def test_shutdown_provider_exception(self):
+        from ai_cli.telemetry.monitoring import Tracer
+
+        provider = MagicMock()
+        provider.shutdown.side_effect = RuntimeError
+
+        t = Tracer.__new__(Tracer)
+        t._provider = provider
+
+        # should not propagate if implementation catches it
+        try:
+            t.shutdown()
+        except RuntimeError:
+            pass

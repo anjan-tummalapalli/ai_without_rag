@@ -846,3 +846,205 @@ class FakeBuffer:
 
 class Fake:
     buffer = FakeBuffer()
+
+
+@pytest.mark.asyncio
+async def test_drain_async_result_async_iterable(capsys):
+    from ai_cli.cli import _drain_async_result
+
+    class AIter:
+        def __aiter__(self):
+            async def gen():
+                yield "a"
+                yield b"b"
+            return gen()
+
+    rc = await _drain_async_result(AIter())
+    assert rc == 0
+    assert "ab" in capsys.readouterr().out
+
+
+@pytest.mark.asyncio
+async def test_drain_async_result_sync_iterable(capsys):
+    from ai_cli.cli import _drain_async_result
+
+    rc = await _drain_async_result(iter(["x", "y"]))
+    assert rc == 0
+    assert "xy" in capsys.readouterr().out
+
+
+@pytest.mark.asyncio
+async def test_drain_async_keyboardinterrupt(capsys):
+
+    from ai_cli.cli import _drain_async_result
+
+    class BadAwait:
+        def __await__(self):
+            raise KeyboardInterrupt()
+
+    rc = await _drain_async_result(BadAwait())
+    assert rc == 130
+    assert "Interrupted" in capsys.readouterr().err
+
+
+def test_handle_sync_result_iterable(capsys):
+    from ai_cli.cli import _handle_sync_result
+
+    assert _handle_sync_result(iter(["a", "b"])) == 0
+    assert "ab" in capsys.readouterr().out
+
+
+def test_handle_sync_result_dict(capsys):
+    from ai_cli.cli import _handle_sync_result
+
+    assert _handle_sync_result({"a": 1}) == 0
+    assert '"a"' in capsys.readouterr().out
+
+
+def test_handle_sync_result_keyboardinterrupt(monkeypatch):
+    from ai_cli import cli
+
+    class BadIter:
+        def __iter__(self):
+            raise KeyboardInterrupt()
+
+    assert cli._handle_sync_result(BadIter()) == 130
+
+
+def test_handle_sync_result_runtimeerror(monkeypatch):
+    from ai_cli import cli
+
+    class BadIter:
+        def __iter__(self):
+            raise RuntimeError("boom")
+
+    assert cli._handle_sync_result(BadIter()) == 1
+
+
+def test_invoke_with_retries_invalid():
+    from ai_cli.cli import _invoke_with_retries
+
+    with pytest.raises(ValueError):
+        _invoke_with_retries({}, max_retries=0)
+
+
+def test_invoke_with_retries_timeout(monkeypatch):
+    from ai_cli import cli
+
+    monkeypatch.setattr(cli, "ask", MagicMock(side_effect=TimeoutError("x")))
+    monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
+
+    assert (
+        cli._invoke_with_retries(
+            {"prompt": "hi"},
+            max_retries=2,
+        )
+        == 124
+    )
+
+
+def test_invoke_with_retries_connection(monkeypatch):
+    from ai_cli import cli
+
+    monkeypatch.setattr(
+        cli,
+        "ask",
+        MagicMock(side_effect=ConnectionError("x")),
+    )
+    monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
+
+    assert (
+        cli._invoke_with_retries(
+            {"prompt": "hi"},
+            max_retries=2,
+        )
+        == 1
+    )
+
+
+def test_invoke_with_retries_keyboard(monkeypatch):
+    from ai_cli import cli
+
+    monkeypatch.setattr(
+        cli,
+        "ask",
+        MagicMock(side_effect=KeyboardInterrupt),
+    )
+
+    assert cli._invoke_with_retries({"prompt": "x"}) == 130
+
+
+def test_invoke_with_retries_runtime(monkeypatch):
+    from ai_cli import cli
+
+    monkeypatch.setattr(
+        cli,
+        "ask",
+        MagicMock(side_effect=RuntimeError("bad")),
+    )
+
+    assert cli._invoke_with_retries({"prompt": "x"}) == 1
+
+
+def test_read_stdin_prompt_truncated(monkeypatch, capsys):
+    from ai_cli import cli
+
+    class Buffer:
+        def __init__(self):
+            self.calls = 0
+
+        def read(self, *_):
+            self.calls += 1
+            if self.calls == 1:
+                return b"hello"
+            return b"x"
+
+    monkeypatch.setattr(
+        cli.sys,
+        "stdin",
+        type("S", (), {"buffer": Buffer()})(),
+    )
+
+    assert cli._read_stdin_prompt() == "hello"
+    assert "truncating" in capsys.readouterr().err.lower()
+
+
+def test_run_interactive_help_exit(monkeypatch):
+    from ai_cli import cli
+
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda *_: next(iter(["/help", "/exit"])),
+    )
+
+    class Dummy:
+        def retrieve_context(self, *a, **k):
+            return ""
+
+    seq = iter(["/help", "/exit"])
+    monkeypatch.setattr("builtins.input", lambda *_: next(seq))
+
+    assert cli.run_interactive(
+        provider="openai",
+        model=None,
+        timeout=1,
+        rag=Dummy(),
+    ) == 0
+
+
+def test_run_interactive_search(monkeypatch):
+    from ai_cli import cli
+
+    seq = iter(["/search abc", "/exit"])
+    monkeypatch.setattr("builtins.input", lambda *_: next(seq))
+
+    class Dummy:
+        def retrieve_context(self, *a, **k):
+            return "ctx"
+
+    assert cli.run_interactive(
+        provider="openai",
+        model=None,
+        timeout=1,
+        rag=Dummy(),
+    ) == 0

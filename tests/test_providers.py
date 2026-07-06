@@ -12,7 +12,30 @@ from ai_cli.providers.openai_provider import OpenAIProvider
 from ai_cli.providers.perplexity_provider import PerplexityProvider
 from ai_cli.providers.xAI_provider import XAIProvider
 from ai_cli.providers.zAI_provider import ZAIProvider
+from ai_cli.providers.openai import OpenAIProvider as SimpleOpenAIProvider
 
+
+def test_simple_openai_provider_init():
+    """Covers __init__()."""
+    provider = SimpleOpenAIProvider(
+        api_key="test-key",
+        model="gpt-test",
+    )
+
+    assert provider.api_key == "test-key"
+    assert provider.model == "gpt-test"
+
+def test_simple_openai_provider_ask():
+    """Covers ask()."""
+    provider = SimpleOpenAIProvider(
+        api_key="abc",
+        model="gpt-test",
+    )
+
+    response = provider.ask(
+        "Hello OpenAI"
+    )
+    assert response == "OpenAI response: Hello OpenAI"
 
 def _setup_openai_mock(openai_mock, chat_text="response"):
     client = MagicMock()

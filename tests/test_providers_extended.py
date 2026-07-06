@@ -57,6 +57,7 @@ from ai_cli.providers.registry import (
 )
 from ai_cli.providers.zAI_provider import ZAIProvider
 
+
 # --------------------------------------------
 # providers/base.py
 # --------------------------------------------
@@ -889,7 +890,175 @@ class TestCohereProviderStandalone:
         # pylint: disable=protected-access
         call_args = p._chat.call_args[0][0]
         assert "ctx" in call_args
+    
+    def test_cohere_requires_api_key(self, monkeypatch):
+        """Cover missing COHERE_API_KEY validation."""
+        monkeypatch.delenv("COHERE_API_KEY", raising=False)
+        with pytest.raises(ValueError):
+            CohereProvider(api_key=None)
+    
+    def test_cohere_import_failure(self, monkeypatch):
+        """Import failure should raise RuntimeError."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "cohere":
+                raise ImportError("missing")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        with pytest.raises(RuntimeError):
+            CohereProvider(api_key="real-key")
+    
+    def test_cohere_chat_wraps_exception(self):
+        provider = CohereProvider(api_key="test")
+        provider.send = MagicMock(side_effect=RuntimeError("boom"))
+        with pytest.raises(RuntimeError, match="Cohere connection failed"):
+            provider.chat("hello")
+    
+    def test_cohere_chat_client_response(self):
+        provider = CohereProvider(api_key="test")
+        provider.client = MagicMock()
+        provider.client.chat.return_value.text = "success"
+        assert provider._chat("hello") == "success"
+        provider.client.chat.assert_called_once()
+    
+    def test_embed_empty_returns_empty(self):
+        provider = CohereProvider(api_key="test")
+        assert provider._embed([]) == []
+    
+    def test_embed_success(self):
+        provider = CohereProvider(api_key="test")
+        provider.client = MagicMock()
+        provider.client.embed.return_value.embeddings = [
+            [0.1, 0.2],
+            [0.3, 0.4],
+        ]
+        result = provider._embed(["a", "b"])
+        assert len(result) == 2
+        provider.client.embed.assert_called_once()
+    
+    def test_send_without_rag_calls_chat(self):
+        provider = CohereProvider(
+            api_key="test",
+            rag_enabled=False,
+        )
+        provider._chat = MagicMock(return_value="answer")
+        assert provider.send("hello") == "answer"
+        provider._chat.assert_called_once_with("hello")
+    
+    def test_send_with_rag_context(self):
+        provider = CohereProvider(
+            api_key="test",
+            rag_enabled=True,
+        )
+
+        provider.retrieve = MagicMock(
+            return_value=[
+                {"text": "document one"},
+                {"text": "document two"},
+            ]
+        )
+
+        provider._chat = MagicMock(return_value="rag-answer")
+        result = provider.send("What is AI?")
+        assert result == "rag-answer"
+        prompt = provider._chat.call_args.args[0]
+        assert "document one" in prompt
+        assert "document two" in prompt
+        assert "Question:" in prompt
  
+    def test_chat_returns_mock_when_client_none(self):
+        provider = CohereProvider(api_key="test")
+        provider.client = None
+        assert provider._chat("hello") == "mock:hello"
+    
+    def test_cohere_upsert_documents_without_metadata(self):
+        p = CohereProvider(
+            api_key="test",
+            rag_enabled=True,
+        )
+
+        p._chunk_text = lambda text: [text + "_1", text + "_2"]
+        p._embed = lambda texts: [[1.0] for _ in texts]
+
+        p.upsert_documents(
+            ["doc1", "doc2"],
+            metadatas=None,
+        )
+
+        assert len(p._documents) == 4
+        assert len(p._vectors) == 4
+        assert len(p._metadata) == 4
+
+        assert p._metadata[0]["doc_index"] == 0
+        assert p._metadata[2]["doc_index"] == 1
+    
+    def test_cohere_upsert_embedding_mismatch(self):
+        p = CohereProvider(
+            api_key="test",
+            rag_enabled=True,
+        )
+
+        p._chunk_text = lambda text: ["a", "b"]
+        p._embed = lambda texts: [[1.0]]
+
+        with pytest.raises(RuntimeError):
+            p.upsert_documents(["hello"])
+    
+    def test_cohere_retrieve_scores_sorted(self):
+        p = CohereProvider(
+            api_key="test",
+            rag_enabled=True,
+        )
+
+        p._documents = ["one", "two"]
+        p._metadata = [{}, {}]
+        p._vectors = [
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ]
+
+        p._embed = lambda texts: [[1.0, 0.0]]
+
+        results = p.retrieve(
+            "query",
+            top_k=2,
+        )
+
+        assert results[0]["text"] == "one"
+        assert len(results) == 2
+    
+    def test_query_documents_rag_enabled(self):
+        p = CohereProvider(
+            api_key="test",
+            rag_enabled=True,
+        )
+        expected = [{"text": "hello"}]
+        p.retrieve = lambda query, top_k=5: expected
+        assert p.query_documents("abc") == expected
+    
+    def test_cohere_import_failure_test_key(self, monkeypatch):
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "cohere":
+                raise ImportError()
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(
+            builtins,
+            "__import__",
+            fake_import,
+        )
+
+        p = CohereProvider(api_key="test")
+
+        assert p.client is None
  
 # --------------------------------------------
 # providers/perplexity_provider.py
