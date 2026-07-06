@@ -15,8 +15,8 @@ from ai_cli.ai_chat import (
     _last_sentence_end,
     _last_whitespace,
     _next_start,
-    chunk_text,
 )
+from ai_cli.utils.secrets import chunk_text
 
 print("### LOADED test_ai_chat.py ###")
 
@@ -40,7 +40,7 @@ def test_last_whitespace_missing():
 def test_next_start():
     assert _next_start(
         end=10,
-        chunk_overlap=3,
+        overlap=3,
         prev_start=0
     ) == 7
 
@@ -51,7 +51,7 @@ def test_chunk_text_basic():
     result = chunk_text(
         "This is a simple sentence. Another sentence here.",
         chunk_size=20,
-        chunk_overlap=5,
+        overlap=5,
     )
 
     assert len(result) > 0
@@ -61,7 +61,7 @@ def test_ai_chat_chunking():
     result = chunk_text(
         "hello world this is a test",
         chunk_size=10,
-        chunk_overlap=2,
+        overlap=2,
     )
     assert isinstance(result, list)
     assert len(result) > 0
@@ -70,7 +70,7 @@ def test_ai_chat_empty():
     result = chunk_text(
         "",
         chunk_size=10,
-        chunk_overlap=2,
+        overlap=2,
     )
     assert result == []
 
@@ -180,7 +180,7 @@ def test_chunk_text_invalid_overlap():
         chunk_text(
             "hello world",
             chunk_size=5,
-            chunk_overlap=5,
+            overlap=5,
         )
 
 
@@ -192,8 +192,7 @@ def test_chunk_text_sentence_boundary():
     result = chunk_text(
         "Hello world. Next sentence continues here",
         chunk_size=20,
-        chunk_overlap=5,
-        prefer_sentence_boundary=True,
+        overlap=5,
     )
 
     assert len(result) >= 1
@@ -203,8 +202,7 @@ def test_chunk_text_without_word_split():
     result = chunk_text(
         "abcdefghij klmnop",
         chunk_size=10,
-        chunk_overlap=2,
-        split_on_word=False,
+        overlap=2,
     )
 
     assert len(result) >= 1
@@ -214,8 +212,7 @@ def test_chunk_text_word_split():
     result = chunk_text(
         "abcdefghij klmnop",
         chunk_size=10,
-        chunk_overlap=2,
-        split_on_word=True,
+        overlap=2,
     )
 
     assert len(result) >= 1
@@ -227,7 +224,7 @@ def test_chunk_text_exact_length_break():
     result = chunk_text(
         text,
         chunk_size=100,
-        chunk_overlap=10,
+        overlap=10,
     )
 
     assert result == ["hello"]
@@ -239,8 +236,7 @@ def test_chunk_text_multiple_chunks_progress():
     result = chunk_text(
         text,
         chunk_size=10,
-        chunk_overlap=2,
-        split_on_word=False,
+        overlap=2,
     )
 
     assert len(result) > 1
@@ -249,7 +245,7 @@ def test_chunk_text_empty_after_strip_exit():
     result = chunk_text(
         None,
         chunk_size=10,
-        chunk_overlap=2,
+        overlap=2,
     )
 
     assert result == []
@@ -259,7 +255,7 @@ def test_chunk_text_empty_chunk_after_strip():
     result = chunk_text(
         "   ",
         chunk_size=5,
-        chunk_overlap=1,
+        overlap=1,
     )
 
     assert result == []
@@ -334,3 +330,36 @@ def test_handle_sync_runtime_error(mock_decode):
     mock_decode.side_effect = RuntimeError("boom")
 
     assert cli._handle_sync_result("abc") == 1
+
+
+def test_chunk_text_invalid_chunk_size_type():
+    with pytest.raises(ValueError, match="chunk_size"):
+        chunk_text("hello", chunk_size="100")  # type: ignore[arg-type]
+
+
+def test_chunk_text_invalid_overlap_type():
+    with pytest.raises(ValueError, match="overlap"):
+        chunk_text("hello", overlap="10")  # type: ignore[arg-type]
+
+
+def test_chunk_text_chunk_size_less_than_overlap():
+    with pytest.raises(ValueError, match="greater than overlap"):
+        chunk_text("hello world", chunk_size=10, overlap=11)
+
+
+def test_chunk_text_empty_string():
+    assert chunk_text("") == []
+
+
+def test_chunk_text_shorter_than_chunk_size():
+    assert chunk_text("hello world", chunk_size=100) == ["hello world"]
+
+def test_chunk_text_zero_overlap_forward_progress():
+    text = "A" * 25
+    chunks = chunk_text(text, chunk_size=10, overlap=0)
+
+    assert chunks == [
+        "AAAAAAAAAA",
+        "AAAAAAAAAA",
+        "AAAAA",
+    ]

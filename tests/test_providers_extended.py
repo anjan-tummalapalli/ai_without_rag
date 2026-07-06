@@ -10,6 +10,12 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from ai_cli.core.exceptions import (
+    ProviderConfigurationError,
+    ProviderRequestError,
+    ResponseValidationError,
+)
 from ai_cli.plugins.builtins import (
     CohereProvider as BuiltinsCohereProvider,
 )
@@ -33,12 +39,6 @@ from ai_cli.plugins.builtins import (
 from ai_cli.plugins.builtins import (
     XAIProvider as BuiltinsXAI,
 )
-
-from ai_cli.core.exceptions import (
-    ProviderConfigurationError,
-    ProviderRequestError,
-    ResponseValidationError,
-)
 from ai_cli.providers.auto_provider import AutoProvider
 from ai_cli.providers.base import BaseProvider, EchoProvider
 from ai_cli.providers.cohere_provider import CohereProvider
@@ -56,7 +56,6 @@ from ai_cli.providers.registry import (
     register_provider,
 )
 from ai_cli.providers.zAI_provider import ZAIProvider
-
 
 # --------------------------------------------
 # providers/base.py

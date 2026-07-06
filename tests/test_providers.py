@@ -8,11 +8,11 @@ from ai_cli.providers.base import EchoProvider
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
 from ai_cli.providers.gemini_provider import GeminiProvider
+from ai_cli.providers.openai import OpenAIProvider as SimpleOpenAIProvider
 from ai_cli.providers.openai_provider import OpenAIProvider
 from ai_cli.providers.perplexity_provider import PerplexityProvider
 from ai_cli.providers.xAI_provider import XAIProvider
 from ai_cli.providers.zAI_provider import ZAIProvider
-from ai_cli.providers.openai import OpenAIProvider as SimpleOpenAIProvider
 
 
 def test_simple_openai_provider_init():
