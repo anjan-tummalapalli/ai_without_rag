@@ -19,9 +19,7 @@ class RAGPipeline:
         if doc_ids:
             self.doc_ids.extend(doc_ids)
         else:
-            self.doc_ids.extend(
-                str(i) for i in range(len(self.documents))
-            )
+            self.doc_ids.extend(str(i) for i in range(len(self.documents)))
 
     def retrieve_context(
         self,
@@ -32,8 +30,7 @@ class RAGPipeline:
             return ""
 
         matches = [
-            doc for doc in self.documents
-            if query.lower() in doc.lower()
+            doc for doc in self.documents if query.lower() in doc.lower()
         ]
 
         if not matches:

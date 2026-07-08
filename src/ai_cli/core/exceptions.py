@@ -53,7 +53,9 @@ class AIProviderError(Exception):
             "code": self.code,
             "retryable": self.retryable,
             "details": self.details,
-            "cause": repr(self.__cause__) if getattr(self, "__cause__", None) else None,
+            "cause": repr(self.__cause__)
+            if getattr(self, "__cause__", None)
+            else None,
         }
 
     def to_json(self) -> str:
@@ -72,11 +74,13 @@ class AIProviderError(Exception):
 # Generic validation / configuration errors
 class PromptValidationError(AIProviderError):
     """Raised when prompt validation fails."""
+
     pass
 
 
 class ProviderConfigurationError(AIProviderError):
     """Raised when provider configuration is invalid."""
+
     pass
 
 
@@ -110,6 +114,7 @@ class ProviderRequestError(AIProviderError):
 
 class ResponseValidationError(AIProviderError):
     """Raised when AI response validation fails."""
+
     pass
 
 
@@ -120,7 +125,9 @@ class ChunkingError(AIProviderError):
     details example: {"text_length": 12345, "chunk_size": 1024, "chunk_index": 5}
     """
 
-    def __init__(self, message: str, *, chunk_index: int | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self, message: str, *, chunk_index: int | None = None, **kwargs: Any
+    ) -> None:
         details = kwargs.pop("details", {}) or {}
         if chunk_index is not None:
             details["chunk_index"] = chunk_index
@@ -133,7 +140,9 @@ class EmbeddingError(AIProviderError):
     details example: {"model": "text-embedding-3", "input_tokens": 512}
     """
 
-    def __init__(self, message: str, *, model: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self, message: str, *, model: str | None = None, **kwargs: Any
+    ) -> None:
         details = kwargs.pop("details", {}) or {}
         if model:
             details["model"] = model
@@ -146,7 +155,9 @@ class VectorDBError(AIProviderError):
     details example: {"operation": "upsert", "db": "faiss", "index_name": "docs_v1"}
     """
 
-    def __init__(self, message: str, *, operation: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self, message: str, *, operation: str | None = None, **kwargs: Any
+    ) -> None:
         details = kwargs.pop("details", {}) or {}
         if operation:
             details["operation"] = operation

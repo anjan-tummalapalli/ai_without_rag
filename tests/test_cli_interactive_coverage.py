@@ -31,9 +31,7 @@ def test_rag_retrieve_empty():
 def test_rag_upsert_and_search():
     rag = RAGPipeline()
 
-    rag.upsert_documents(
-        ["hello world document"]
-    )
+    rag.upsert_documents(["hello world document"])
 
     result = rag.retrieve_context("hello")
 

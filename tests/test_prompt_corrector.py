@@ -8,15 +8,8 @@ def test_prompt_corrector_basic():
     assert isinstance(out, str)
     assert "hello" in out
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "",
-        "   ",
-        None,
-        "hello world"
-    ]
-)
+
+@pytest.mark.parametrize("text", ["", "   ", None, "hello world"])
 def test_prompt_corrector_inputs(text):
     result = correct_prompt(text)
     if text is None:

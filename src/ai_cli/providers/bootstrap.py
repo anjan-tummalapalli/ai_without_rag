@@ -4,12 +4,12 @@ from ai_cli.providers.registry import (
     register_provider,
 )
 
-_initialized = False
+_initialized = False  # pylint: disable=invalid-name
 
 
 def init_providers() -> None:
     """Load and register all providers once per process."""
-    global _initialized
+    global _initialized  # pylint: disable=global-statement
     if _initialized:
         return
     for name, cls in load_all_providers().items():

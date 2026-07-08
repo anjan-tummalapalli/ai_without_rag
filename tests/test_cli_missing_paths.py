@@ -8,9 +8,7 @@ from ai_cli.core.resilience import RetryEngine
 
 
 def test_retry_engine_exception_retry():
-    engine = RetryEngine(
-        max_attempts=2
-    )
+    engine = RetryEngine(max_attempts=2)
 
     calls = []
 
@@ -25,10 +23,7 @@ def test_retry_engine_exception_retry():
 
 
 def test_retry_engine_retry_on_tuple_break():
-    engine = RetryEngine(
-        max_attempts=3,
-        retry_on=(ValueError,)
-    )
+    engine = RetryEngine(max_attempts=3, retry_on=(ValueError,))
 
     calls = []
 
@@ -44,10 +39,7 @@ def test_retry_engine_retry_on_tuple_break():
 
 
 def test_retry_engine_retry_filter_break():
-    engine = RetryEngine(
-        max_attempts=3,
-        retry_on=lambda exc: False
-    )
+    engine = RetryEngine(max_attempts=3, retry_on=lambda exc: False)
 
     calls = []
 
@@ -62,14 +54,9 @@ def test_retry_engine_retry_filter_break():
 
 
 def test_retry_engine_base_delay():
-    engine = RetryEngine(
-        max_attempts=2,
-        base_delay=0.01
-    )
+    engine = RetryEngine(max_attempts=2, base_delay=0.01)
 
-    with patch(
-        "ai_cli.core.resilience.time.sleep"
-    ) as sleep:
+    with patch("ai_cli.core.resilience.time.sleep") as sleep:
 
         def fail():
             raise RuntimeError("boom")
@@ -81,12 +68,14 @@ def test_retry_engine_base_delay():
 
 
 def test_interactive_profile_and_stream():
-    inputs = iter([
-        "/profile test",
-        "/stream",
-        "/profile",
-        "exit",
-    ])
+    inputs = iter(
+        [
+            "/profile test",
+            "/stream",
+            "/profile",
+            "exit",
+        ]
+    )
 
     with patch("builtins.input", side_effect=inputs):
         run_interactive(
@@ -95,19 +84,19 @@ def test_interactive_profile_and_stream():
             timeout=60,
         )
 
+
 def test_interactive_index_text():
 
     pipeline = MagicMock()
 
-    inputs = iter([
-        "/index hello world",
-        "exit",
-    ])
+    inputs = iter(
+        [
+            "/index hello world",
+            "exit",
+        ]
+    )
 
-    with patch(
-        "builtins.input",
-        side_effect=inputs
-    ):
+    with patch("builtins.input", side_effect=inputs):
         run_interactive(
             provider="deepseek",
             model=None,
@@ -117,28 +106,26 @@ def test_interactive_index_text():
 
     pipeline.upsert_documents.assert_called()
 
+
 def test_cli_stdin_empty(monkeypatch):
 
-    monkeypatch.setattr(
-        "sys.stdin.isatty",
-        lambda: False
-    )
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
-    monkeypatch.setattr(
-        "sys.stdin.buffer.read",
-        lambda x: b""
-    )
+    monkeypatch.setattr("sys.stdin.buffer.read", lambda x: b"")
 
     with pytest.raises(SystemExit):
         cli.main([])
 
+
 def test_interactive_profile_stream():
-    inputs = iter([
-        "/profile test-profile",
-        "/stream",
-        "/profile",
-        "exit",
-    ])
+    inputs = iter(
+        [
+            "/profile test-profile",
+            "/stream",
+            "/profile",
+            "exit",
+        ]
+    )
 
     with patch("builtins.input", side_effect=inputs):
         run_interactive(
@@ -147,20 +134,20 @@ def test_interactive_profile_stream():
             timeout=60,
         )
 
+
 def test_interactive_search():
     pipeline = MagicMock()
     pipeline.retrieve_context.return_value = "k8s context"
 
-    inputs = iter([
-        "/search kubernetes",
-        "/search",
-        "exit",
-    ])
+    inputs = iter(
+        [
+            "/search kubernetes",
+            "/search",
+            "exit",
+        ]
+    )
 
-    with patch(
-        "builtins.input",
-        side_effect=inputs
-    ):
+    with patch("builtins.input", side_effect=inputs):
         run_interactive(
             provider="deepseek",
             model=None,
@@ -170,18 +157,18 @@ def test_interactive_search():
 
     pipeline.retrieve_context.assert_called()
 
+
 def test_interactive_index_raw_text():
     pipeline = MagicMock()
 
-    inputs = iter([
-        "/index hello kubernetes",
-        "exit",
-    ])
+    inputs = iter(
+        [
+            "/index hello kubernetes",
+            "exit",
+        ]
+    )
 
-    with patch(
-        "builtins.input",
-        side_effect=inputs
-    ):
+    with patch("builtins.input", side_effect=inputs):
         run_interactive(
             provider="deepseek",
             model=None,

@@ -10,17 +10,7 @@ def p():
     mock_client = MagicMock()
 
     mock_client.embeddings.create.return_value = type(
-        "R",
-        (),
-        {
-            "data": [
-                type(
-                    "D",
-                    (),
-                    {"embedding": [0.1, 0.2]}
-                )()
-            ]
-        }
+        "R", (), {"data": [type("D", (), {"embedding": [0.1, 0.2]})()]}
     )()
 
     mock_client.chat.completions.create.return_value = type(
@@ -31,16 +21,10 @@ def p():
                 type(
                     "C",
                     (),
-                    {
-                        "message": type(
-                            "M",
-                            (),
-                            {"content": "test response"}
-                        )()
-                    }
+                    {"message": type("M", (), {"content": "test response"})()},
                 )()
             ]
-        }
+        },
     )()
 
     with patch(

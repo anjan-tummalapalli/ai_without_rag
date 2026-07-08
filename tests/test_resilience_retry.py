@@ -10,10 +10,7 @@ def test_retry_success():
 
 def test_retry_failure():
 
-    engine = RetryEngine(
-        max_attempts=2,
-        base_delay=0
-    )
+    engine = RetryEngine(max_attempts=2, base_delay=0)
 
     def fail():
         raise ValueError("bad")

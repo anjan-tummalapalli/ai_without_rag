@@ -1,6 +1,7 @@
 """
 OpenAI ChatGPT provider implementation for ai_cli.
 """
+
 from __future__ import annotations
 
 import os
@@ -9,7 +10,7 @@ from typing import Any
 try:
     from openai import OpenAI  # type: ignore[import-not-found]
 except Exception:  # pragma: no cover - optional dependency
-    OpenAI = None  # type: ignore
+    OpenAI = None  # type: ignore  # pylint: disable=invalid-name
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import BaseProvider
@@ -24,7 +25,6 @@ class OpenAIProvider(BaseProvider):
         self,
         model: str | None = None,
         api_key: str | None = None,
-        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(model=model, **kwargs)
@@ -41,10 +41,10 @@ class OpenAIProvider(BaseProvider):
 
     def _send_impl(self, prompt: str) -> str:
         self._ensure_key()
-        
+
         if self.api_key in {"test", "dummy", "mock", "fake", "TEST_KEY"}:
             return f"Mock response: {prompt}"
-        
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -84,13 +84,16 @@ class OpenAIProvider(BaseProvider):
 
     def ask(self, prompt: str, **kwargs: Any) -> str:
         return self.send(prompt, **kwargs)
-    
+
     def _ensure_key(self):
         if not self.api_key and not os.getenv("OPENAI_API_KEY"):
-            raise ProviderRequestError("OPENAI_API_KEY is required for OpenAIProvider")
-    
+            raise ProviderRequestError(
+                "OPENAI_API_KEY is required for OpenAIProvider"
+            )
+
     def is_ready(self) -> bool:
         return bool(os.getenv("OPENAI_API_KEY"))
+
 
 register_provider("openai", OpenAIProvider)
 register_chat_provider("openai", OpenAIProvider)

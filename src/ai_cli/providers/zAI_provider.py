@@ -1,8 +1,16 @@
+"""
+z.AI provider implementation for ai_cli.
+"""
+
+# pylint: disable=invalid-name
+# Module name intentionally matches the vendor's brand casing ("zAI"),
+# consistent with how it's imported throughout the codebase and tests.
+# Renaming would be a breaking change to the public import path.
+
 from __future__ import annotations
 
 import os
 from typing import Any
-from unittest.mock import MagicMock
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider, ProviderMetadata
@@ -26,9 +34,7 @@ class ZAIProvider(AIProvider):
     - Attempts to extract textual response from common keys in the returned JSON.
     """
 
-    DEFAULT_META = ProviderMetadata(
-        name="z.ai"   
-    )
+    DEFAULT_META = ProviderMetadata(name="z.ai")
 
     def __init__(
         self,
@@ -39,11 +45,11 @@ class ZAIProvider(AIProvider):
     ) -> None:
         meta = provider_meta or self.DEFAULT_META
         super().__init__(
-                            provider_name=provider_name,
-                            model=model or getattr(meta, "default_model", None),
-                            provider_meta=meta,
-                            **kwargs,
-                        )
+            provider_name=provider_name,
+            model=model or getattr(meta, "default_model", None),
+            provider_meta=meta,
+            **kwargs,
+        )
         self.provider_name = provider_name
         self.api_key = os.environ.get(
             "ZAI_API_KEY",
@@ -57,39 +63,22 @@ class ZAIProvider(AIProvider):
             "ZAI_MODEL",
             "zai-small",
         )
-        self.client = MagicMock()
-    
+
     def chat(self, prompt: str, **kwargs: Any) -> str:
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                **kwargs,
-            )
+        """Send *prompt* to z.AI and return the text response.
 
-            if hasattr(response, "choices") and response.choices:
-                choice = response.choices[0]
-
-                if hasattr(choice, "message"):
-                    content = getattr(choice.message, "content", None)
-                    if content:
-                        return content
-
-                if hasattr(choice, "text"):
-                    return choice.text
-
-            return str(response)
-
-        except Exception as exc:
-            raise ProviderRequestError(
-                f"z.AI connection failed: {exc}"
-            ) from exc
+        Delegates to :meth:`send`, which performs the real HTTP call.
+        (Previously this method talked to a placeholder mock client and
+        never reached the network, so it always returned a fake response
+        instead of a real one.)
+        """
+        return self.send(prompt, **kwargs)
 
     def _send_impl(self, prompt: str) -> str:
         if not self.api_key:
-            raise ProviderRequestError("z.AI API key not configured (ZAI_API_KEY)")
+            raise ProviderRequestError(
+                "z.AI API key not configured (ZAI_API_KEY)"
+            )
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -106,10 +95,10 @@ class ZAIProvider(AIProvider):
             timeout = getattr(self, "timeout", None) or 30
 
             resp = requests.post(
-                                self.base_url,
-                                json=payload,
-                                headers=headers,
-                                timeout=timeout,
+                self.base_url,
+                json=payload,
+                headers=headers,
+                timeout=timeout,
             )
         except requests.RequestException as exc:
             raise ProviderRequestError(f"network error: {exc}") from exc
@@ -144,10 +133,16 @@ class ZAIProvider(AIProvider):
                 first = choices[0]
                 # try common keys
                 for k in ("text", "message", "content", "output"):
-                    if isinstance(first, dict) and k in first and isinstance(first[k], str):
+                    if (
+                        isinstance(first, dict)
+                        and k in first
+                        and isinstance(first[k], str)
+                    ):
                         return first[k]
                 # nested message.content
-                message = first.get("message") if isinstance(first, dict) else None
+                message = (
+                    first.get("message") if isinstance(first, dict) else None
+                )
                 if isinstance(message, dict):
                     content = message.get("content")
                     if isinstance(content, str):
@@ -156,10 +151,13 @@ class ZAIProvider(AIProvider):
         # As a last resort, return the full JSON as string
         try:
             import json
+
             return json.dumps(data, ensure_ascii=False)
         except Exception as exc:
-            raise ProviderRequestError("unable to coerce z.AI response to string") from exc
-    
+            raise ProviderRequestError(
+                "unable to coerce z.AI response to string"
+            ) from exc
+
     def send(self, prompt: str, **kwargs: Any) -> str:
         if not self.api_key:
             raise ProviderRequestError("z.AI API key not configured")
@@ -171,22 +169,20 @@ class ZAIProvider(AIProvider):
             timeout = getattr(self, "timeout", None) or 30
 
             resp = requests.post(
-                                 f"{self.base_url}/chat/completions",
-                                  headers={
-                                           "Authorization": f"Bearer {self.api_key}",
-                                           "Content-Type": "application/json",
-                                  },
-                                  json={
-                                        "model": self.model,
-                                        "prompt": prompt,
-                                  },
-                                  timeout=timeout,
-                                )
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                },
+                timeout=timeout,
+            )
 
             if resp.status_code >= 400:
-                raise ProviderRequestError(
-                    f"z.AI error {resp.status_code}"
-                )
+                raise ProviderRequestError(f"z.AI error {resp.status_code}")
 
             data = resp.json()
 
@@ -201,9 +197,7 @@ class ZAIProvider(AIProvider):
             )
 
         except requests.RequestException as exc:
-            raise ProviderRequestError(
-                "network error"
-            ) from exc
-    
+            raise ProviderRequestError("network error") from exc
+
     def is_ready(self) -> bool:
         return bool(os.getenv("ZAI_API_KEY"))

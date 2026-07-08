@@ -1,28 +1,25 @@
-# Core & LLM providers (keep or remove providers you don't use)
-openai
-google-generativeai
-anthropic
-perplexity
-xai
-mistralai
-groq
-deepseek
-together
-cohere
-fireworks
-gitpython
-zai  # z.ai SDK (verify PyPI package name if different, e.g. z-ai)
+# Runtime dependencies for ai_cli.
+#
+# Provider SDKs actually used by src/ai_cli/providers/*:
+#   - openai:      used directly for OpenAI, and as the OpenAI-compatible
+#                   client (custom base_url) for DeepSeek, Perplexity,
+#                   xAI, and z.AI — none of those vendors' own SDKs are
+#                   used, so they are intentionally NOT listed here.
+#   - cohere:      lazily imported by providers/cohere_provider.py
+#   - google-genai: lazily imported by providers/gemini_provider.py
+#                   (modern SDK; also falls back to the legacy
+#                   google-generativeai package if that's what's
+#                   installed instead)
+#   - requests:    lazily imported by providers/zAI_provider.py
+openai>=2.44.0
+cohere>=7.0.5
+google-genai>=2.10.0
+requests>=2.34.0
 
-# Utilities & RAG
-python-dotenv
-pytest
-language-tool-python
-sentence-transformers
-faiss-cpu
-numpy
-pypdf
-markdown
-tiktoken
-
-# Optional but recommended
-chromadb
+# Telemetry (src/ai_cli/telemetry/monitoring.py) — both are optional at
+# runtime (the module degrades gracefully if either is missing), but are
+# needed for real metrics/tracing output.
+prometheus-client>=0.25.0
+opentelemetry-api>=1.43.0
+opentelemetry-sdk>=1.43.0
+opentelemetry-exporter-otlp>=1.43.0

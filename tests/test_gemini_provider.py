@@ -11,7 +11,6 @@ from ai_cli.providers.gemini_provider import (
 
 
 class TestGeminiCoverageBoost:
-
     def _provider(self):
         p = GeminiProvider.__new__(GeminiProvider)
         p.model = "gemini"
@@ -31,9 +30,7 @@ class TestGeminiCoverageBoost:
 
     def test_cosine_zero_norm(self):
         assert (
-            InMemoryVectorDB._cosine_similarity_with_norms(
-                [1], 0.0, [1], 1.0
-            )
+            InMemoryVectorDB._cosine_similarity_with_norms([1], 0.0, [1], 1.0)
             == 0.0
         )
 
@@ -108,37 +105,15 @@ class TestGeminiCoverageBoost:
     def test_embeddings_api_missing(self, monkeypatch):
         p = self._provider()
 
-        monkeypatch.delattr(genai, "embeddings", raising=False)
-
-        with pytest.raises(ProviderRequestError):
-            p._create_embeddings(["abc"])
-
-    def test_embeddings_no_data(self, monkeypatch):
-
-        class Emb:
-            @staticmethod
-            def create(**kwargs):
-                return {"data": []}
-
-        monkeypatch.setattr(genai, "embeddings", Emb(), raising=False)
-
-        p = self._provider()
+        monkeypatch.delattr(genai, "embed_content", raising=False)
 
         with pytest.raises(ProviderRequestError):
             p._create_embeddings(["abc"])
 
     def test_embeddings_missing_vector(self, monkeypatch):
-
-        class Emb:
-            @staticmethod
-            def create(**kwargs):
-                return {
-                    "data": [
-                        {}
-                    ]
-                }
-
-        monkeypatch.setattr(genai, "embeddings", Emb(), raising=False)
+        monkeypatch.setattr(
+            genai, "embed_content", lambda **kwargs: {}, raising=False
+        )
 
         p = self._provider()
 
@@ -146,13 +121,10 @@ class TestGeminiCoverageBoost:
             p._create_embeddings(["abc"])
 
     def test_embeddings_exception(self, monkeypatch):
+        def _raise(**kwargs):
+            raise RuntimeError("boom")
 
-        class Emb:
-            @staticmethod
-            def create(**kwargs):
-                raise RuntimeError("boom")
-
-        monkeypatch.setattr(genai, "embeddings", Emb(), raising=False)
+        monkeypatch.setattr(genai, "embed_content", _raise, raising=False)
 
         p = self._provider()
 
@@ -271,9 +243,7 @@ class TestGeminiCoverageBoost:
 
     def test_health_dict_response(self):
         p = self._provider()
-        p.client.generate_content.return_value = {
-            "text": "pong"
-        }
+        p.client.generate_content.return_value = {"text": "pong"}
         assert p.health_check() is True
 
     def test_health_empty(self):

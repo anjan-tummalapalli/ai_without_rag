@@ -10,6 +10,7 @@ Optimizations:
 - Minor error handling and small performance/clarity improvements across
   methods.
 """
+
 # pylint: disable=too-few-public-methods  # shim stubs inside except block
 from __future__ import annotations
 
@@ -72,10 +73,12 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
 
 try:
     import google.generativeai as genai  # type: ignore  # Legacy SDK
+
     _GENAI_LEGACY = True
 except ImportError:
     try:
         from google import genai  # type: ignore  # New SDK
+
         _GENAI_LEGACY = False
     except ImportError:
         genai = _GenaiShim()  # type: ignore[assignment]
@@ -96,6 +99,7 @@ class InMemoryVectorDB:
     def __init__(self, api_key=None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self._use_new_api = True
+        self._items: list[dict[str, Any]] = []
 
     def upsert(self, items: list[dict[str, Any]]) -> None:
         """Insert or replace items by id, precomputing each vector's norm.
@@ -216,14 +220,17 @@ class GeminiProvider(AIProvider):
                 "GEMINI_API_KEY environment variable is not set"
             )
 
-        genai.configure(api_key=self.api_key)
-
-        # Detect which SDK generation is available and create the client.
-        try:
+        # Initialize against whichever SDK generation is available.
+        # The legacy `google-generativeai` SDK uses a global
+        # `genai.configure()` + `GenerativeModel(...)`; the modern
+        # `google-genai` SDK takes the API key directly on `Client(...)`
+        # and has no `configure()` function at all.
+        if _GENAI_LEGACY:
+            genai.configure(api_key=self.api_key)
             self.client = genai.GenerativeModel(self.model)
             self._use_new_api = False
-        except Exception:  # pylint: disable=broad-exception-caught
-            self.client = genai.Client()  # type: ignore
+        else:
+            self.client = genai.Client(api_key=self.api_key)  # type: ignore
             self._use_new_api = True
 
         if chunk_size <= 0:
@@ -238,6 +245,7 @@ class GeminiProvider(AIProvider):
 
         # Use a mock flag when running tests; do not return from __init__.
         self._mock = self.api_key == "test"
+
     # -----------------------
     # Core send & health
     # -----------------------
@@ -333,50 +341,80 @@ class GeminiProvider(AIProvider):
 
         Raises:
             ProviderRequestError: On API unavailability, empty data, or
-                missing embedding vectors in the response.        """
+                missing embedding vectors in the response."""
         if not inputs:
             return []
 
-        if not hasattr(genai, "embeddings") or not hasattr(
-            genai.embeddings, "create"
-        ):
-            raise ProviderRequestError(
-                "Embedding API not available in google-generativeai SDK"
-            )
-
-        extra: dict[str, Any] = {}
-        if self.embedding_model:
-            extra["model"] = self.embedding_model
-
+        model = self.embedding_model or "models/text-embedding-004"
         payload = list(inputs)
 
         try:
-            result = genai.embeddings.create(input=payload, **extra)
-            data = getattr(result, "data", None) or (
-                result.get("data") if isinstance(result, dict) else None
-            )
-            if not data:
-                raise ProviderRequestError("Embedding API returned no data")
-
-            vectors: list[list[float]] = []
-            for item in data:
-                emb = (
-                    item.get("embedding")
-                    if isinstance(item, dict)
-                    else getattr(item, "embedding", None)
-                )
-                if emb is None:
-                    raise ProviderRequestError(
-                        "Embedding item missing 'embedding' vector"
-                    )
-                vectors.append(list(emb))
-            return vectors
+            if self._use_new_api:
+                vectors = self._embed_with_new_sdk(model, payload)
+            else:
+                vectors = self._embed_with_legacy_sdk(model, payload)
         except ProviderRequestError:
             raise
         except Exception as exc:
             raise ProviderRequestError(
                 f"Failed to create embeddings: {exc}"
             ) from exc
+
+        if not vectors:
+            raise ProviderRequestError("Embedding API returned no data")
+        return vectors
+
+    def _embed_with_new_sdk(
+        self, model: str, payload: list[str]
+    ) -> list[list[float]]:
+        """Embed *payload* using the modern ``google-genai`` client."""
+        if not hasattr(self.client, "models") or not hasattr(
+            self.client.models, "embed_content"
+        ):
+            raise ProviderRequestError(
+                "Embedding API not available in google-genai SDK"
+            )
+
+        result = self.client.models.embed_content(
+            model=model, contents=payload
+        )
+        embeddings = getattr(result, "embeddings", None)
+        if not embeddings:
+            raise ProviderRequestError("Embedding API returned no data")
+
+        vectors: list[list[float]] = []
+        for item in embeddings:
+            values = getattr(item, "values", None)
+            if values is None:
+                raise ProviderRequestError(
+                    "Embedding item missing 'values' vector"
+                )
+            vectors.append(list(values))
+        return vectors
+
+    def _embed_with_legacy_sdk(
+        self, model: str, payload: list[str]
+    ) -> list[list[float]]:
+        """Embed *payload* using the legacy ``google-generativeai`` SDK."""
+        if not hasattr(genai, "embed_content"):
+            raise ProviderRequestError(
+                "Embedding API not available in google-generativeai SDK"
+            )
+
+        vectors: list[list[float]] = []
+        for text in payload:
+            result = genai.embed_content(model=model, content=text)
+            emb = (
+                result.get("embedding")
+                if isinstance(result, dict)
+                else getattr(result, "embedding", None)
+            )
+            if emb is None:
+                raise ProviderRequestError(
+                    "Embedding item missing 'embedding' vector"
+                )
+            vectors.append(list(emb))
+        return vectors
 
     # -----------------------
     # Indexing and querying
@@ -531,15 +569,16 @@ class GeminiProvider(AIProvider):
             combined = prompt
 
         return self._send_impl(combined)
-    
+
     def send(self, prompt: str, **kwargs: Any) -> str:
         if getattr(self, "_mock", False):
             return "gemini response"
 
         return self._send_impl(prompt)
-    
+
     def is_ready(self) -> bool:
         return bool(os.getenv("GEMINI_API_KEY"))
+
 
 # Keep __all__ minimal to avoid importing optional provider modules at package import time.
 # Heavy providers (openai, cohere, xAI, etc.) are loaded lazily by loader/bootstrap.

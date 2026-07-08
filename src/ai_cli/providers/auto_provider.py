@@ -61,7 +61,10 @@ class AutoProvider:
             except Exception as exc:
                 msg = str(exc).lower()
 
-                if any(k in msg for k in ["401", "403", "quota", "unauthorized", "invalid"]):
+                if any(
+                    k in msg
+                    for k in ["401", "403", "quota", "unauthorized", "invalid"]
+                ):
                     errors.append(f"{provider_name}: skipped ({exc})")
                     continue
 

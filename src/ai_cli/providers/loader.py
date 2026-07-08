@@ -4,6 +4,7 @@ Provider bootstrap loader (deterministic, no side effects).
 
 """
 
+
 def load_all_providers():
     from ai_cli.providers.auto_provider import AutoProvider
     from ai_cli.providers.cohere_provider import CohereProvider
@@ -16,13 +17,13 @@ def load_all_providers():
     from ai_cli.providers.zAI_provider import ZAIProvider
 
     return {
-            "openai": OpenAIProvider,
-            "gemini": GeminiProvider,
-            "deepseek": DeepSeekProvider,
-            "perplexity": PerplexityProvider,
-            "xai": XAIProvider,
-            "cohere": CohereProvider,
-            "zai": ZAIProvider,
-            "echo": EchoProvider,
-            "auto": AutoProvider,
-           }
+        "openai": OpenAIProvider,
+        "gemini": GeminiProvider,
+        "deepseek": DeepSeekProvider,
+        "perplexity": PerplexityProvider,
+        "xai": XAIProvider,
+        "cohere": CohereProvider,
+        "zai": ZAIProvider,
+        "echo": EchoProvider,
+        "auto": AutoProvider,
+    }

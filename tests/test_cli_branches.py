@@ -13,12 +13,15 @@ def test_cli_missing_prompt_exit():
     except SystemExit as e:
         assert e.code == 2
 
+
 def test_cli_empty_prompt_exit():
     from ai_cli import cli
+
     try:
         cli.main(["--prompt", ""])
     except SystemExit as e:
         assert e.code == 2
+
 
 def test_cli_valid_prompt(monkeypatch):
     from ai_cli import cli
@@ -42,16 +45,13 @@ def test_cli_no_args(monkeypatch):
         def buffer(self):
             return io.BytesIO(b"")
 
-    monkeypatch.setattr(
-        "sys.stdin",
-        FakeStdin()
-    )
+    monkeypatch.setattr("sys.stdin", FakeStdin())
 
     with pytest.raises(SystemExit) as exc:
-
         cli.main([])
 
     assert exc.value.code == 2
+
 
 @pytest.mark.parametrize(
     "provider",
@@ -66,19 +66,17 @@ def test_cli_no_args(monkeypatch):
 )
 def test_cli_provider_selection(provider, monkeypatch):
 
-    monkeypatch.setattr(
-        "ai_cli.cli.ask",
-        lambda *a, **k: "ok"
-    )
+    monkeypatch.setattr("ai_cli.cli.ask", lambda *a, **k: "ok")
 
     cli.main(
-    [
-        "--provider",
-        provider,
-        "--prompt",
-        "hello",
-    ]
-)
+        [
+            "--provider",
+            provider,
+            "--prompt",
+            "hello",
+        ]
+    )
+
 
 def test_cli_missing_prompt(monkeypatch):
     import sys
@@ -92,6 +90,7 @@ def test_cli_missing_prompt(monkeypatch):
     except SystemExit:
         pass
 
+
 def test_cli_basic_run(monkeypatch):
     from ai_cli.cli import main
 
@@ -101,6 +100,7 @@ def test_cli_basic_run(monkeypatch):
         main()
     except SystemExit:
         pass
+
 
 def test_cli_with_rag_flag(monkeypatch):
     import sys

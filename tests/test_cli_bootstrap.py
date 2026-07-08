@@ -21,6 +21,7 @@ def test_cli_main_module_runs():
         # CLI often exits after help → expected
         pass
 
+
 def test_cli_parser_structure():
     parser = build_parser()
     assert parser is not None
@@ -30,6 +31,7 @@ def test_cli_parser_structure():
         parser.parse_args(["--help"])
     except SystemExit:
         pass
+
 
 def test_monitoring_smoke():
     assert hasattr(monitoring, "__file__")
@@ -54,6 +56,8 @@ def test_prompt_corrector_basic_execution():
             except Exception:
                 pass
 
+
 def test_import_heavy_modules():
     import importlib
+
     importlib.import_module("ai_cli.__main__")

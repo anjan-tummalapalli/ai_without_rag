@@ -7,6 +7,7 @@ except Exception:
         def __getattr__(self, name):
             def decorator(func):
                 return func
+
             return decorator
 
     class _Raises:
@@ -50,10 +51,11 @@ def test_execute_primary_success():
 
     assert result == "success"
 
+
 def test_execute_fallback_on_failure():
     def failing_primary():
         raise ZeroDivisionError()
-        
+
     result = execute_with_fallback(
         failing_primary,
         fallback_fn=lambda: "fallback",
@@ -61,11 +63,9 @@ def test_execute_fallback_on_failure():
 
     assert result == "fallback"
 
+
 def test_rate_limiter():
-    limiter = RateLimiter(
-        capacity=1,
-        rate_per_second=0
-    )
+    limiter = RateLimiter(capacity=1, rate_per_second=0)
 
     assert limiter.allow()
     assert not limiter.allow()
@@ -73,8 +73,10 @@ def test_rate_limiter():
 
 def test_circuit_breaker_opens():
     cb = CircuitBreaker(threshold=1)
+
     def failing_func():
         raise ZeroDivisionError()
+
     wrapped = cb.wrap(failing_func)
     try:
         wrapped()
@@ -82,6 +84,7 @@ def test_circuit_breaker_opens():
         pass
 
     assert cb.allow() is False
+
 
 def test_cache_memory_operations():
     cache = Cache(max_entries=2)
@@ -95,9 +98,11 @@ def test_cache_memory_operations():
     cache.clear()
     assert cache.get("x") is None
 
+
 def test_retry_engine_success():
     engine = RetryEngine(max_attempts=2)
     assert engine.execute(lambda: "ok") == "ok"
+
 
 def test_retry_engine_retry_then_success(monkeypatch):
     engine = RetryEngine(
@@ -112,15 +117,16 @@ def test_retry_engine_retry_then_success(monkeypatch):
         if calls["count"] == 1:
             raise ValueError("fail")
         return "ok"
+
     assert engine.execute(flaky) == "ok"
 
+
 def test_retry_engine_failure():
-    engine = RetryEngine(
-        max_attempts=1
-    )
+    engine = RetryEngine(max_attempts=1)
 
     with pytest.raises(ValueError):
         engine.execute(lambda: (_ for _ in ()).throw(ValueError()))
+
 
 @pytest.mark.asyncio
 async def test_rate_limiter_acquire_timeout():
@@ -128,10 +134,9 @@ async def test_rate_limiter_acquire_timeout():
         capacity=0,
         rate_per_second=1,
     )
-    result = await limiter.acquire(
-        timeout=0.01
-    )
+    result = await limiter.acquire(timeout=0.01)
     assert result is False
+
 
 def test_circuit_breaker_reopens():
     cb = CircuitBreaker(
@@ -139,14 +144,13 @@ def test_circuit_breaker_reopens():
         timeout=0,
     )
 
-    wrapped = cb.wrap(
-        lambda: (_ for _ in ()).throw(RuntimeError())
-    )
+    wrapped = cb.wrap(lambda: (_ for _ in ()).throw(RuntimeError()))
 
     with pytest.raises(RuntimeError):
         wrapped()
 
     assert cb.allow() is True
+
 
 @pytest.mark.asyncio
 async def test_async_retry_engine_success():
@@ -178,6 +182,8 @@ async def test_async_retry_engine_failure():
 
     with pytest.raises(ValueError):
         await engine.execute(fail)
+
+
 def test_circuit_breaker_success():
     from ai_cli.core.resilience import CircuitBreaker
 
@@ -187,18 +193,18 @@ def test_circuit_breaker_success():
 
     assert wrapped() == "ok"
 
+
 def test_retry_engine_decorator():
     from ai_cli.core.resilience import RetryEngine
 
-    engine = RetryEngine(
-        max_attempts=1
-    )
+    engine = RetryEngine(max_attempts=1)
 
     @engine.decorator()
     def hello():
         return "hello"
 
     assert hello() == "hello"
+
 
 def test_cache_expiry():
     import time
@@ -207,15 +213,12 @@ def test_cache_expiry():
 
     cache = Cache()
 
-    cache.set(
-        "temp",
-        "value",
-        ttl=0.01
-    )
+    cache.set("temp", "value", ttl=0.01)
 
     time.sleep(0.02)
 
     assert cache.get("temp") is None
+
 
 def test_cache_delete_clear():
     from ai_cli.core.resilience import Cache
@@ -229,21 +232,27 @@ def test_cache_delete_clear():
     cache.clear()
     assert cache.get("b") is None
 
+
 def test_retry_engine_rejects_async():
     from ai_cli.core.resilience import RetryEngine
 
     engine = RetryEngine()
+
     async def async_fn():
         return "x"
 
     with pytest.raises(TypeError):
         engine.execute(async_fn)
 
+
 def test_circuit_breaker_failure():
     from ai_cli.core.resilience import CircuitBreaker
+
     cb = CircuitBreaker(threshold=1)
+
     def failing_func():
         raise ZeroDivisionError()
+
     wrapped = cb.wrap(failing_func)
 
     with pytest.raises(ZeroDivisionError):
@@ -252,47 +261,44 @@ def test_circuit_breaker_failure():
     with pytest.raises(RuntimeError):
         wrapped()
 
+
 def test_rate_limiter_refill():
     import time
 
     from ai_cli.core.resilience import RateLimiter
-    limiter = RateLimiter(
-        capacity=1,
-        rate_per_second=100
-    )
+
+    limiter = RateLimiter(capacity=1, rate_per_second=100)
     assert limiter.allow()
     time.sleep(0.02)
     assert limiter.allow()
+
 
 def test_async_retry_decorator_rejects_sync():
     from ai_cli.core.resilience import AsyncRetryEngine, Cache
 
     engine = AsyncRetryEngine()
     with pytest.raises(TypeError):
+
         @engine.decorator()
         def normal():
             return "x"
 
-    cache = Cache(
-        redis_url="redis://invalid-host:9999"
-    )
+    cache = Cache(redis_url="redis://invalid-host:9999")
     cache.set("key", "value")
     assert cache.get("key") == "value"
+
 
 def test_retry_engine_exhausted():
     from ai_cli.core.resilience import RetryEngine
 
-    engine = RetryEngine(
-        max_attempts=2,
-        base_delay=0,
-        jitter=False
-    )
+    engine = RetryEngine(max_attempts=2, base_delay=0, jitter=False)
 
     def fail():
         raise RuntimeError("fail")
 
     with pytest.raises(RuntimeError):
         engine.execute(fail)
+
 
 @pytest.mark.asyncio
 async def test_async_retry_decorator():
@@ -306,25 +312,21 @@ async def test_async_retry_decorator():
     assert await hello() == "ok"
     from ai_cli.core.resilience import CircuitBreaker
 
-    cb = CircuitBreaker(
-        threshold=1,
-        timeout=0
-    )
+    cb = CircuitBreaker(threshold=1, timeout=0)
     cb._record_failure()
     assert cb.allow()
     cb._record_success()
     assert cb.allow()
 
+
 @pytest.mark.asyncio
 async def test_rate_limiter_acquire_success():
     from ai_cli.core.resilience import RateLimiter
 
-    limiter = RateLimiter(
-        capacity=1,
-        rate_per_second=100
-    )
+    limiter = RateLimiter(capacity=1, rate_per_second=100)
 
     assert await limiter.acquire()
+
 
 def test_execute_with_fallback_exception_path():
     from ai_cli.core.resilience import execute_with_fallback
@@ -335,6 +337,7 @@ def test_execute_with_fallback_exception_path():
     )
 
     assert result == "fallback"
+
 
 def test_cache_eviction():
 
@@ -348,6 +351,7 @@ def test_cache_eviction():
     assert cache.get("a") is None
     assert cache.get("b") == 2
 
+
 def test_retry_engine_decorator_executes():
 
     from ai_cli.core.resilience import RetryEngine
@@ -360,21 +364,19 @@ def test_retry_engine_decorator_executes():
 
     assert hello() == "ok"
 
+
 def test_retry_engine_retry_filter():
 
     from ai_cli.core.resilience import RetryEngine
 
-    engine = RetryEngine(
-        max_attempts=2,
-        retry_on=(ValueError,),
-        base_delay=0
-    )
+    engine = RetryEngine(max_attempts=2, retry_on=(ValueError,), base_delay=0)
 
     def fail():
         raise RuntimeError()
 
     with pytest.raises(RuntimeError):
         engine.execute(fail)
+
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_async_wrap():
@@ -389,17 +391,16 @@ async def test_circuit_breaker_async_wrap():
 
     assert await hello() == "ok"
 
+
 def test_rate_limiter_constructor_values():
 
     from ai_cli.core.resilience import RateLimiter
 
-    limiter = RateLimiter(
-        capacity=5,
-        rate_per_second=2
-    )
+    limiter = RateLimiter(capacity=5, rate_per_second=2)
 
     assert limiter.capacity == 5.0
     assert limiter.rate_per_second == 2.0
+
 
 def test_retry_engine_rejects_coroutine():
     async def fn():
@@ -410,7 +411,9 @@ def test_retry_engine_rejects_coroutine():
     with pytest.raises(TypeError):
         engine.execute(fn)
 
+
 # duplicate test_async_retry_decorator_rejects_sync removed to avoid redefinition
+
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_async_wrap_threshold():

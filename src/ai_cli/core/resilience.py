@@ -17,9 +17,7 @@ class RateLimiter:
 
         # important:
         self.period = (
-            period / rate_per_second
-            if rate_per_second > 0
-            else period
+            period / rate_per_second if rate_per_second > 0 else period
         )
 
         self.calls = deque()
@@ -27,10 +25,7 @@ class RateLimiter:
     def allow(self):
         now = time.monotonic()
 
-        while self.calls and (
-            now - self.calls[0]
-            >= self.period
-        ):
+        while self.calls and (now - self.calls[0] >= self.period):
             self.calls.popleft()
 
         if len(self.calls) >= self.capacity:
@@ -60,15 +55,11 @@ class CircuitBreaker:
         **kwargs,
     ):
         self.threshold = (
-            failure_threshold
-            if failure_threshold is not None
-            else threshold
+            failure_threshold if failure_threshold is not None else threshold
         )
 
         self.recovery_timeout = (
-            recovery_timeout
-            if recovery_timeout is not None
-            else timeout
+            recovery_timeout if recovery_timeout is not None else timeout
         )
 
         self.failure_count = 0
@@ -94,6 +85,7 @@ class CircuitBreaker:
 
     def wrap(self, func):
         if inspect.iscoroutinefunction(func):
+
             async def async_wrapper(*args, **kwargs):
                 if not self.allow():
                     raise RuntimeError("Circuit open")
@@ -109,7 +101,6 @@ class CircuitBreaker:
 
             return async_wrapper
 
-
         def wrapper(*args, **kwargs):
             if not self.allow():
                 raise RuntimeError("Circuit open")
@@ -122,8 +113,9 @@ class CircuitBreaker:
             except Exception:
                 self.record_failure()
                 raise
+
         return wrapper
-    
+
     def allow(self):
         if not self.open:
             return True
@@ -155,16 +147,14 @@ class RetryEngine:
 
     def execute(self, func, *args, **kwargs):
         if inspect.iscoroutinefunction(func):
-            raise TypeError(
-                "RetryEngine cannot execute async functions"
-            )
+            raise TypeError("RetryEngine cannot execute async functions")
 
         last = None
 
         for _ in range(self.max_attempts):
             try:
                 return func(*args, **kwargs)
-            
+
             except Exception as exc:
                 last = exc
 
@@ -215,9 +205,7 @@ class AsyncRetryEngine:
         def deco(func):
 
             if not inspect.iscoroutinefunction(func):
-                raise TypeError(
-                    "AsyncRetryEngine requires async function"
-                )
+                raise TypeError("AsyncRetryEngine requires async function")
 
             async def wrapper(*args, **kwargs):
                 last = None
@@ -236,12 +224,10 @@ class AsyncRetryEngine:
 
     def __call__(self, func):
         return self.decorator()(func)
-    
+
     async def execute(self, func, *args, **kwargs):
         if not inspect.iscoroutinefunction(func):
-            raise TypeError(
-                "AsyncRetryEngine requires async function"
-            )
+            raise TypeError("AsyncRetryEngine requires async function")
 
         last = None
 
@@ -261,15 +247,11 @@ class Cache:
         redis_url=None,
         **kwargs,
     ):
-        self.max_entries=max_entries
-        self.data={}
+        self.max_entries = max_entries
+        self.data = {}
 
     def set(self, key, value, ttl=None):
-        expiry = (
-            time.monotonic() + ttl
-            if ttl
-            else None
-        )
+        expiry = time.monotonic() + ttl if ttl else None
 
         if len(self.data) >= self.max_entries:
             oldest = next(iter(self.data))
@@ -296,13 +278,19 @@ class Cache:
         self.data.clear()
 
 
-def execute_with_fallback(
+def execute_with_fallback(  # pylint: disable=keyword-arg-before-vararg
     primary,
     fallback=None,
     fallback_fn=None,
     *args,
     **kwargs,
 ):
+    """Call *primary*, falling back to *fallback*/*fallback_fn* on error.
+
+    ``fallback``/``fallback_fn`` are intentionally positional (callers rely
+    on ``execute_with_fallback(primary, fallback)``); ``*args``/``**kwargs``
+    are forwarded to whichever of the two ends up being called.
+    """
     if fallback is None:
         fallback = fallback_fn
 

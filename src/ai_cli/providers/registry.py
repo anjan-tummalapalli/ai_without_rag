@@ -6,6 +6,7 @@ register themselves via ``register_provider`` (and related functions) when they
 are imported. ``ai_cli.providers.bootstrap.init_providers`` loads all provider
 modules lazily.
 """
+
 from typing import Any
 
 from ai_cli.providers.base import BaseProvider
@@ -14,21 +15,24 @@ from ai_cli.providers.xAI_provider import XAIProvider
 
 # Core mappings populated by provider modules at import time
 PROVIDER_MAP: dict[str, type] = {}
-
-# Legacy name used by plugins/tests
-PROVIDERS = PROVIDER_MAP
 CHAT_PROVIDERS: dict[str, type] = {}
-
-# Backward compatibility alias
-PROVIDERS = PROVIDER_MAP
 DEFAULT_PROVIDER = "openai"
 
-class ProviderRegistry(dict):
+
+class ProviderRegistry(dict):  # pylint: disable=invalid-name
+    """Dict-like view onto ``PROVIDER_MAP`` that always reflects live state.
+
+    Kept as the legacy/backward-compatible ``PROVIDERS`` name expected by
+    plugins and tests, without duplicating (and risking drift from) the
+    real mapping.
+    """
+
     def __getitem__(self, key):
         return PROVIDER_MAP.get(key)
 
 
 PROVIDERS = ProviderRegistry()
+
 
 def register_provider(name: str, cls: type | None = None, metadata=None) -> Any:
     """
@@ -39,6 +43,7 @@ def register_provider(name: str, cls: type | None = None, metadata=None) -> Any:
         cls: Provider class.
         metadata: Optional provider metadata.
     """
+
     def decorator(provider_cls):
         PROVIDER_MAP[name] = provider_cls
         return provider_cls
@@ -57,13 +62,6 @@ def register_chat_provider(name: str, cls: type) -> None:
     can retrieve it.
     """
     CHAT_PROVIDERS[name] = cls
-    PROVIDER_MAP[name] = cls
-
-
-    """Register an embedding provider.
-
-    Embedding providers are also usable as generic providers.
-    """
     PROVIDER_MAP[name] = cls
 
 
@@ -92,7 +90,14 @@ def ensure_initialized():
     initializations. Re‑registering is safe because the mappings are overwritten
     with the same class objects.
     """
-    from ai_cli.providers.bootstrap import init_providers
+    # Deferred import is intentional: it breaks the real circular-import
+    # chain at runtime (registry -> bootstrap -> loader -> providers ->
+    # registry). Pylint's static R0401 check still reports the graph even
+    # though the import never executes at module load time.
+    from ai_cli.providers.bootstrap import (  # pylint: disable=cyclic-import
+        init_providers,
+    )
+
     init_providers()
 
 
@@ -106,6 +111,7 @@ def build_provider(name: str, **kwargs: Any) -> BaseProvider:
     if name not in PROVIDER_MAP:
         raise ValueError(f"Unknown provider: {name}")
     return PROVIDER_MAP[name](**kwargs)
+
 
 provider_all = {
     "BaseProvider": BaseProvider,

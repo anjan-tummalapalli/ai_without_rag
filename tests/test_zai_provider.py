@@ -23,7 +23,9 @@ except Exception:
 
         def __exit__(self, exc_type, exc, tb):
             if exc_type is None:
-                raise AssertionError(f"{self.expected_exception} was not raised")
+                raise AssertionError(
+                    f"{self.expected_exception} was not raised"
+                )
             if not issubclass(exc_type, self.expected_exception):
                 return False
             if self.match is not None and not re.search(self.match, str(exc)):
@@ -62,7 +64,11 @@ from ai_cli.providers.zAI_provider import ZAIProvider
 
 # Helpers to reduce repetition in tests
 @contextlib.contextmanager
-def _provider_env(api_key: str | None = "test-key", base: str | None = None, clear: bool = False):
+def _provider_env(
+    api_key: str | None = "test-key",
+    base: str | None = None,
+    clear: bool = False,
+):
     env = {}
     if api_key is not None:
         env["ZAI_API_KEY"] = api_key
@@ -99,7 +105,9 @@ def test_zai_provider_missing_key():
     # No env and provider.api_key empty -> raises
     with _provider_env(api_key=None, clear=True) as provider:
         provider.api_key = ""  # ensure empty
-        with pytest.raises(ProviderRequestError, match="z.AI API key not configured"):
+        with pytest.raises(
+            ProviderRequestError, match="z.AI API key not configured"
+        ):
             provider.send("Hello")
 
 
@@ -133,15 +141,16 @@ def test_zai_provider_network_error(mock_post):
 
 @patch("requests.post")
 def test_zai_provider_http_error(mock_post):
-    mock_post.return_value = _make_resp(status=500, json_data={"error": "internal error"})
+    mock_post.return_value = _make_resp(
+        status=500, json_data={"error": "internal error"}
+    )
     with _provider_env(api_key="test-key") as provider:
         with pytest.raises(ProviderRequestError, match="z.AI error 500"):
             provider.send("Hello")
 
+
 def test_zai_success():
 
-    provider = ZAIProvider(
-        api_key="fake"
-    )
+    provider = ZAIProvider(api_key="fake")
 
     assert provider is not None

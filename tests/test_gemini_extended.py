@@ -4,6 +4,7 @@ test_gemini_extended.py
 Tests for GeminiProvider and InMemoryVectorDB in gemini_provider.py.
 Uses the "test" / "test-key" api_key shortcut to avoid real API calls.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -14,9 +15,11 @@ import pytest
 # InMemoryVectorDB
 # ─────────────────────────────────────────────
 
+
 class TestInMemoryVectorDB:
     def _make_db(self):
         from ai_cli.providers.gemini_provider import InMemoryVectorDB
+
         db = InMemoryVectorDB.__new__(InMemoryVectorDB)
         db._items = []
         db.api_key = None
@@ -25,18 +28,34 @@ class TestInMemoryVectorDB:
 
     def test_upsert_and_query(self):
         db = self._make_db()
-        db.upsert([
-            {"id": "a", "vector": [1.0, 0.0], "text": "hello", "metadata": {}},
-            {"id": "b", "vector": [0.0, 1.0], "text": "world", "metadata": {}},
-        ])
+        db.upsert(
+            [
+                {
+                    "id": "a",
+                    "vector": [1.0, 0.0],
+                    "text": "hello",
+                    "metadata": {},
+                },
+                {
+                    "id": "b",
+                    "vector": [0.0, 1.0],
+                    "text": "world",
+                    "metadata": {},
+                },
+            ]
+        )
         results = db.query([1.0, 0.0], top_k=1)
         assert len(results) == 1
         assert results[0]["id"] == "a"
 
     def test_upsert_replaces_existing(self):
         db = self._make_db()
-        db.upsert([{"id": "x", "vector": [1.0, 0.0], "text": "v1", "metadata": {}}])
-        db.upsert([{"id": "x", "vector": [0.0, 1.0], "text": "v2", "metadata": {}}])
+        db.upsert(
+            [{"id": "x", "vector": [1.0, 0.0], "text": "v1", "metadata": {}}]
+        )
+        db.upsert(
+            [{"id": "x", "vector": [0.0, 1.0], "text": "v2", "metadata": {}}]
+        )
         assert len(db._items) == 1
         assert db._items[0]["text"] == "v2"
 
@@ -46,6 +65,7 @@ class TestInMemoryVectorDB:
 
     def test_cosine_similarity_identical(self):
         from ai_cli.providers.gemini_provider import InMemoryVectorDB
+
         sim = InMemoryVectorDB._cosine_similarity_with_norms(
             [1.0, 0.0], 1.0, [1.0, 0.0], 1.0
         )
@@ -53,6 +73,7 @@ class TestInMemoryVectorDB:
 
     def test_cosine_similarity_zero_norm(self):
         from ai_cli.providers.gemini_provider import InMemoryVectorDB
+
         sim = InMemoryVectorDB._cosine_similarity_with_norms(
             [0.0, 0.0], 0.0, [1.0, 0.0], 1.0
         )
@@ -60,17 +81,26 @@ class TestInMemoryVectorDB:
 
     def test_query_top_k_respected(self):
         db = self._make_db()
-        db.upsert([
-            {"id": f"item_{i}", "vector": [float(i), 0.0], "text": f"item {i}", "metadata": {}}
-            for i in range(1, 6)
-        ])
+        db.upsert(
+            [
+                {
+                    "id": f"item_{i}",
+                    "vector": [float(i), 0.0],
+                    "text": f"item {i}",
+                    "metadata": {},
+                }
+                for i in range(1, 6)
+            ]
+        )
         results = db.query([5.0, 0.0], top_k=2)
         assert len(results) == 2
 
     def test_upsert_zero_vector_norm(self):
         """Zero vector should not crash."""
         db = self._make_db()
-        db.upsert([{"id": "zero", "vector": [], "text": "empty", "metadata": {}}])
+        db.upsert(
+            [{"id": "zero", "vector": [], "text": "empty", "metadata": {}}]
+        )
         assert len(db._items) == 1
         assert db._items[0]["norm"] == 0.0
 
@@ -79,10 +109,12 @@ class TestInMemoryVectorDB:
 # GeminiProvider – mock API key path
 # ─────────────────────────────────────────────
 
+
 class TestGeminiProvider:
     def _make_provider(self, **kwargs):
         """Create a GeminiProvider with the test API key to avoid real SDK calls."""
         from ai_cli.providers.gemini_provider import GeminiProvider
+
         mock_model = MagicMock()
 
         with patch("ai_cli.providers.gemini_provider.genai") as mock_genai:
@@ -133,6 +165,7 @@ class TestGeminiProvider:
 
     def test_invalid_chunk_size_raises(self):
         from ai_cli.providers.gemini_provider import GeminiProvider
+
         with patch("ai_cli.providers.gemini_provider.genai") as mock_genai:
             mock_genai.configure = MagicMock()
             mock_genai.GenerativeModel.return_value = MagicMock()
@@ -141,10 +174,13 @@ class TestGeminiProvider:
 
     def test_invalid_chunk_overlap_raises(self):
         from ai_cli.providers.gemini_provider import GeminiProvider
+
         with patch("ai_cli.providers.gemini_provider.genai") as mock_genai:
             mock_genai.configure = MagicMock()
             mock_genai.GenerativeModel.return_value = MagicMock()
-            with pytest.raises(ValueError, match="chunk_overlap must be non-negative"):
+            with pytest.raises(
+                ValueError, match="chunk_overlap must be non-negative"
+            ):
                 GeminiProvider(api_key="test", chunk_overlap=-1)
 
     def test_missing_api_key_raises(self):
@@ -152,6 +188,7 @@ class TestGeminiProvider:
 
         from ai_cli.core.exceptions import ProviderRequestError
         from ai_cli.providers.gemini_provider import GeminiProvider
+
         env = {k: v for k, v in os.environ.items() if k != "GEMINI_API_KEY"}
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(ProviderRequestError, match="GEMINI_API_KEY"):
@@ -175,19 +212,24 @@ class TestGeminiProvider:
 
     def test_retrieve_relevant_context_with_results(self):
         p = self._make_provider()
-        p.query_vector_db = MagicMock(return_value=[
-            {"text": "chunk one"},
-            {"text": "chunk two"},
-        ])
+        p.query_vector_db = MagicMock(
+            return_value=[
+                {"text": "chunk one"},
+                {"text": "chunk two"},
+            ]
+        )
         result = p.retrieve_relevant_context("query")
         assert "chunk one" in result
         assert "chunk two" in result
 
     def test_send_with_rag_no_embedding_model_raises(self):
         from ai_cli.core.exceptions import ProviderRequestError
+
         p = self._make_provider()
         p.embedding_model = None
-        with pytest.raises(ProviderRequestError, match="Embedding model not configured"):
+        with pytest.raises(
+            ProviderRequestError, match="Embedding model not configured"
+        ):
             p.send_with_rag("hello")
 
     def test_send_with_rag_no_context(self):
@@ -220,13 +262,15 @@ class TestGeminiProvider:
         assert result == []
 
     def test_create_embeddings_no_sdk_raises(self):
-        import ai_cli.providers.gemini_provider as gm_mod
         from ai_cli.core.exceptions import ProviderRequestError
+
         p = self._make_provider()
-        # Patch genai to not have embeddings attribute
-        with patch.object(gm_mod, "genai", MagicMock(spec=[])):
-            with pytest.raises(ProviderRequestError, match="Embedding API not available"):
-                p._create_embeddings(["hello"])
+        p._use_new_api = True
+        p.client = MagicMock(spec=[])  # no "models" attribute
+        with pytest.raises(
+            ProviderRequestError, match="Embedding API not available"
+        ):
+            p._create_embeddings(["hello"])
 
     def test_query_vector_db_delegates_to_db(self):
         p = self._make_provider()
@@ -239,21 +283,28 @@ class TestGeminiProvider:
 
     def test_query_vector_db_embedding_fail_raises(self):
         from ai_cli.core.exceptions import ProviderRequestError
+
         p = self._make_provider()
-        p._create_embeddings = MagicMock(side_effect=ProviderRequestError("embed fail"))
+        p._create_embeddings = MagicMock(
+            side_effect=ProviderRequestError("embed fail")
+        )
         with pytest.raises(ProviderRequestError, match="embed fail"):
             p.query_vector_db("query")
 
     def test_index_document_mismatch_raises(self):
         from ai_cli.core.exceptions import ProviderRequestError
+
         p = self._make_provider(chunk_size=5, chunk_overlap=0)
-        p._create_embeddings = MagicMock(return_value=[[0.1]])   # only 1 vector
+        p._create_embeddings = MagicMock(return_value=[[0.1]])  # only 1 vector
         # chunk_text on "hello world" with chunk_size=5 → multiple chunks
-        with pytest.raises(ProviderRequestError, match="Embedding count does not match"):
+        with pytest.raises(
+            ProviderRequestError, match="Embedding count does not match"
+        ):
             p.index_document("doc1", "hello world and more text")
 
     def test_index_document_vector_db_error_raises(self):
         from ai_cli.core.exceptions import ProviderRequestError
+
         p = self._make_provider(chunk_size=500)
         p._create_embeddings = MagicMock(return_value=[[0.1, 0.2]])
         p.vector_db = MagicMock()
@@ -270,16 +321,20 @@ class TestGeminiProvider:
         p.client.generate_content.return_value = mock_resp
         # Since api_key == "test", _send_impl won't call the client;
         # health_check does call the client directly
-        assert p.health_check() is True or p.health_check() is False  # just no crash
+        assert (
+            p.health_check() is True or p.health_check() is False
+        )  # just no crash
 
 
 # ─────────────────────────────────────────────
 # GeminiProvider – _send_impl new API path
 # ─────────────────────────────────────────────
 
+
 class TestGeminiSendImpl:
     def _make_provider_real_key(self):
         from ai_cli.providers.gemini_provider import GeminiProvider
+
         mock_model = MagicMock()
         with patch("ai_cli.providers.gemini_provider.genai") as mock_genai:
             mock_genai.configure = MagicMock()

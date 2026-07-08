@@ -12,7 +12,6 @@ from .base import BaseProvider
 # "imported but unused" lint/compile errors.
 
 
-
 class CohereProvider(BaseProvider):
     """
     Cohere provider with optional RAG support.
@@ -22,7 +21,15 @@ class CohereProvider(BaseProvider):
     - chunk → embed → store lifecycle
     - cosine similarity retrieval
     """
-    def __init__(self, *, rag_enabled: bool = False, **kwargs: Any):
+
+    def __init__(
+        self,
+        *,
+        rag_enabled: bool = False,
+        chunk_size: int = 1000,
+        chunk_overlap: int = 100,
+        **kwargs: Any,
+    ):
         # ----------------------------
         # In-memory vector store
         # ----------------------------
@@ -31,6 +38,8 @@ class CohereProvider(BaseProvider):
         self._metadata: list[dict[str, Any]] = []
         super().__init__(**kwargs)
         self.rag_enabled = rag_enabled
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
         api_key = (
             kwargs.get("api_key")
             or getattr(self, "api_key", None)
@@ -75,8 +84,7 @@ class CohereProvider(BaseProvider):
 
         if context:
             context_text = "\n\n".join(
-                f"[{i}] {item['text']}"
-                for i, item in enumerate(context)
+                f"[{i}] {item['text']}" for i, item in enumerate(context)
             )
 
             prompt = (
@@ -86,23 +94,43 @@ class CohereProvider(BaseProvider):
             )
 
         return self._chat(prompt)
-    
+
     def chat(self, prompt: str, **kwargs: Any) -> str:
         try:
             return self.send(prompt, **kwargs)
         except Exception as exc:
-            raise RuntimeError(
-                f"Cohere connection failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"Cohere connection failed: {exc}") from exc
 
     def _chat(self, prompt: str) -> str:
         if self.client is None:
             return "mock:hello"
 
-        resp = self.client.chat(
-                message=prompt
-                )
+        resp = self.client.chat(message=prompt)
         return resp.text
+
+    # =========================================================
+    # Chunking
+    # =========================================================
+
+    def _chunk_text(self, text: str) -> list[str]:
+        """Split *text* into overlapping character-window chunks.
+
+        Uses ``self.chunk_size`` and ``self.chunk_overlap`` to control the
+        window size and overlap, mirroring the chunking contract used by
+        the OpenAI/Gemini providers.
+        """
+        step = max(self.chunk_size - self.chunk_overlap, 1)
+        text_len = len(text)
+        if text_len == 0:
+            return []
+
+        chunks: list[str] = []
+        for start in range(0, text_len, step):
+            end = start + self.chunk_size
+            chunks.append(text[start:end])
+            if end >= text_len:
+                break
+        return chunks
 
     # =========================================================
     # Embeddings
@@ -157,11 +185,13 @@ class CohereProvider(BaseProvider):
             for chunk_idx, chunk in enumerate(self._chunk_text(doc_text)):
                 chunk_texts.append(chunk)
 
-                chunk_meta.append({
-                    "doc_index": doc_idx,
-                    "chunk_index": chunk_idx,
-                    "metadata": doc_metadata,
-                })
+                chunk_meta.append(
+                    {
+                        "doc_index": doc_idx,
+                        "chunk_index": chunk_idx,
+                        "metadata": doc_metadata,
+                    }
+                )
 
         if not chunk_texts:
             return
@@ -179,7 +209,9 @@ class CohereProvider(BaseProvider):
         # ----------------------------
         # Store (append-only contract)
         # ----------------------------
-        for vec, txt, meta in zip(embeddings, chunk_texts, chunk_meta, strict=False):
+        for vec, txt, meta in zip(
+            embeddings, chunk_texts, chunk_meta, strict=False
+        ):
             self._vectors.append(vec)
             self._documents.append(txt)
             self._metadata.append(meta)
@@ -203,11 +235,13 @@ class CohereProvider(BaseProvider):
         for i, vec in enumerate(self._vectors):
             score = self._cosine_similarity(q_vec, vec)
 
-            scored.append({
-                "text": self._documents[i],
-                "metadata": self._metadata[i],
-                "score": score,
-            })
+            scored.append(
+                {
+                    "text": self._documents[i],
+                    "metadata": self._metadata[i],
+                    "score": score,
+                }
+            )
 
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_k]

@@ -70,7 +70,9 @@ def test_monitoring_functions_execute_safely():
                     except Exception:
                         pass  # ignore strict signature issues
         except Exception as e:
-            pytest.fail(f"Telemetry function {func} raised unexpected error: {e}")
+            pytest.fail(
+                f"Telemetry function {func} raised unexpected error: {e}"
+            )
 
 
 def test_monitoring_module_is_import_safe_multiple_times():

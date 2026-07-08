@@ -31,142 +31,144 @@ from openai import OpenAI  # type: ignore
 
 
 class DeepSeekProvider:
-     DEFAULT_MODEL = "deepseek-v4-flash"
-     DEFAULT_EMBED_MODEL = "text-embedding-3-small"
-     BASE_URL = "https://api.deepseek.com"
+    DEFAULT_MODEL = "deepseek-v4-flash"
+    DEFAULT_EMBED_MODEL = "text-embedding-3-small"
+    BASE_URL = "https://api.deepseek.com"
 
-     def __init__(self, api_key=None):
-          if api_key == "":
-               raise ValueError("DEEPSEEK_API_KEY not set")
+    def __init__(self, api_key=None):
+        if api_key == "":
+            raise ValueError("DEEPSEEK_API_KEY not set")
 
-          self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
 
-          self.client = None
+        self.client = None
 
-          if self.api_key:
-               self.client = OpenAI(
-                    api_key=self.api_key,
-                    base_url=self.BASE_URL,
-               )
+        if self.api_key:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.BASE_URL,
+            )
 
-     def health_check(self):
-          if not self.api_key:
-               return False
+    def health_check(self):
+        if not self.api_key:
+            return False
 
-          try:
-               self.ask(
-                    "ping",
-                    max_tokens=1,
-               )
-               return True
+        try:
+            self.ask(
+                "ping",
+                max_tokens=1,
+            )
+            return True
 
-          except Exception:
-               return False
-     
-     def ask(
-          self,
-          prompt: str,
-          model: str | None = None,
-          temperature: float = 0.7,
-          max_tokens: int | None = None,
-          system_prompt: str | None = None,
-          timeout: float | None = None,
-          **kwargs: Any,
-     ) -> str:
-          selected_model = model or self.DEFAULT_MODEL
+        except Exception:
+            return False
 
-          messages: list[dict[str, str]] = []
-          if system_prompt:
-               messages.append({"role": "system", "content": system_prompt})
-          messages.append({"role": "user", "content": prompt})
+    def ask(
+        self,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        system_prompt: str | None = None,
+        timeout: float | None = None,
+        **kwargs: Any,
+    ) -> str:
+        selected_model = model or self.DEFAULT_MODEL
 
-          try:
-               response = self.client.chat.completions.create(  # type: ignore
-                    model=selected_model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    timeout=timeout,
-                    **kwargs,
-               )
-               content = response.choices[0].message.content
-               return content.strip() if content else ""
-          except Exception as exc:
-               raise RuntimeError(f"DeepSeek request failed: {exc}") from exc
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
 
-     def embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
-          """
-          Create embeddings for a list of texts.
+        try:
+            response = self.client.chat.completions.create(  # type: ignore
+                model=selected_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout,
+                **kwargs,
+            )
+            content = response.choices[0].message.content
+            return content.strip() if content else ""
+        except Exception as exc:
+            raise RuntimeError(f"DeepSeek request failed: {exc}") from exc
 
-          Returns a list of float vectors corresponding to each input text.
-          """
-          selected = model or self.DEFAULT_EMBED_MODEL
-          try:
-               response = self.client.embeddings.create(model=selected, input=texts)
-               return [item.embedding for item in response.data]
-          except Exception as exc:
-               raise RuntimeError(f"DeepSeek embedding request failed: {exc}") from exc
+    def embeddings(
+        self, texts: list[str], model: str | None = None
+    ) -> list[list[float]]:
+        """
+        Create embeddings for a list of texts.
 
-     def _chat(self, prompt: str, **kwargs: Any) -> Any:
-          return self.client.chat.completions.create(  # type: ignore
-             model=self.DEFAULT_MODEL,
-             messages=[{"role": "user", "content": prompt}],
-             **kwargs,
-          )
+        Returns a list of float vectors corresponding to each input text.
+        """
+        selected = model or self.DEFAULT_EMBED_MODEL
+        try:
+            response = self.client.embeddings.create(
+                model=selected, input=texts
+            )
+            return [item.embedding for item in response.data]
+        except Exception as exc:
+            raise RuntimeError(
+                f"DeepSeek embedding request failed: {exc}"
+            ) from exc
 
-     def send(self, prompt: str, **kwargs: Any) -> str:
-          try:
-               response = self._chat(prompt, **kwargs)
+    def _chat(self, prompt: str, **kwargs: Any) -> Any:
+        return self.client.chat.completions.create(  # type: ignore
+            model=self.DEFAULT_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            **kwargs,
+        )
 
-               if hasattr(response, "choices") and response.choices:
-                    choice = response.choices[0]
+    def send(self, prompt: str, **kwargs: Any) -> str:
+        try:
+            response = self._chat(prompt, **kwargs)
 
-                    message = getattr(choice, "message", None)
+            if hasattr(response, "choices") and response.choices:
+                choice = response.choices[0]
 
-                    if isinstance(message, dict):
-                         return message.get("content", "")
+                message = getattr(choice, "message", None)
 
-                    if message:
-                         content = getattr(message, "content", None)
-                         if content:
-                              return content
+                if isinstance(message, dict):
+                    return message.get("content", "")
 
-                    text = getattr(choice, "text", None)
-                    if text:
-                         return text
+                if message:
+                    content = getattr(message, "content", None)
+                    if content:
+                        return content
 
-               if isinstance(response, str):
-                    return response
+                text = getattr(choice, "text", None)
+                if text:
+                    return text
 
-               return str(response)
+            if isinstance(response, str):
+                return response
 
-          except Exception:
-               return "mock:hello"
-     
-     def chat(self, prompt: str, **kwargs: Any) -> str:
-          try:
-               response = self.client(
-                    model=self.DEFAULT_MODEL,
-                    messages=[
-                         {"role": "user", "content": prompt}
-                    ],
-                    **kwargs,
-               )
+            return str(response)
 
-               if hasattr(response, "choices") and response.choices:
-                    choice = response.choices[0]
+        except Exception:
+            return "mock:hello"
 
-                    if hasattr(choice, "message"):
-                         content = getattr(choice.message, "content", None)
-                         if content:
-                              return content
+    def chat(self, prompt: str, **kwargs: Any) -> str:
+        try:
+            response = self.client(
+                model=self.DEFAULT_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                **kwargs,
+            )
 
-                    if hasattr(choice, "text"):
-                         return choice.text
+            if hasattr(response, "choices") and response.choices:
+                choice = response.choices[0]
 
-               return str(response)
+                if hasattr(choice, "message"):
+                    content = getattr(choice.message, "content", None)
+                    if content:
+                        return content
 
-          except Exception as exc:
-               raise RuntimeError(
-                    f"DeepSeek connection failed: {exc}"
-               ) from exc
+                if hasattr(choice, "text"):
+                    return choice.text
+
+            return str(response)
+
+        except Exception as exc:
+            raise RuntimeError(f"DeepSeek connection failed: {exc}") from exc

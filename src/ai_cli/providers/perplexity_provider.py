@@ -15,14 +15,10 @@ class PerplexityProvider(BaseProvider):
     ):
         super().__init__(**kwargs)
         self.model = model
-        self.api_key = api_key or os.getenv(
-            "PERPLEXITY_API_KEY"
-        )
+        self.api_key = api_key or os.getenv("PERPLEXITY_API_KEY")
 
         if not self.api_key:
-            raise ValueError(
-                "PERPLEXITY_API_KEY is required"
-            )
+            raise ValueError("PERPLEXITY_API_KEY is required")
 
         self.client = OpenAI(
             api_key=self.api_key,

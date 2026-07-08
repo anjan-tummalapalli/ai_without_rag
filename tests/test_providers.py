@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from ai_cli.providers.base import EchoProvider
 from ai_cli.providers.cohere_provider import CohereProvider
@@ -25,6 +26,7 @@ def test_simple_openai_provider_init():
     assert provider.api_key == "test-key"
     assert provider.model == "gpt-test"
 
+
 def test_simple_openai_provider_ask():
     """Covers ask()."""
     provider = SimpleOpenAIProvider(
@@ -32,10 +34,9 @@ def test_simple_openai_provider_ask():
         model="gpt-test",
     )
 
-    response = provider.ask(
-        "Hello OpenAI"
-    )
+    response = provider.ask("Hello OpenAI")
     assert response == "OpenAI response: Hello OpenAI"
+
 
 def _setup_openai_mock(openai_mock, chat_text="response"):
     client = MagicMock()
@@ -127,26 +128,20 @@ def test_xai_provider(openai_mock, monkeypatch):
     p = XAIProvider()
     assert p.send("hello") == "xai response"
 
-def test_cohere_api(monkeypatch):
-    provider = CohereProvider(
-        api_key="fake"
-    )
 
-    monkeypatch.setattr(
-        provider,
-        "_client",
-        None,
-        raising=False
-    )
+def test_cohere_api(monkeypatch):
+    provider = CohereProvider(api_key="fake")
+
+    monkeypatch.setattr(provider, "_client", None, raising=False)
+
 
 def test_deepseek_timeout():
 
-    provider = DeepSeekProvider(
-        api_key="fake"
-    )
+    provider = DeepSeekProvider(api_key="fake")
 
     with pytest.raises(Exception, match="DeepSeek connection failed"):
         provider.chat("hello")
+
 
 def test_deepseek_health_check():
 
@@ -161,13 +156,7 @@ def test_deepseek_embeddings(monkeypatch):
     mock_client = MagicMock()
 
     mock_client.embeddings.create.return_value = type(
-        "R",
-        (),
-        {
-            "data": [
-                type("D", (), {"embedding": [0.1, 0.2]})()
-            ]
-        }
+        "R", (), {"data": [type("D", (), {"embedding": [0.1, 0.2]})()]}
     )()
 
     monkeypatch.setattr(
@@ -190,18 +179,10 @@ def test_deepseek_chat_response(monkeypatch):
         {
             "choices": [
                 type(
-                    "C",
-                    (),
-                    {
-                        "message": type(
-                            "M",
-                            (),
-                            {"content": "hello"}
-                        )()
-                    }
+                    "C", (), {"message": type("M", (), {"content": "hello"})()}
                 )()
             ]
-        }
+        },
     )()
 
     monkeypatch.setattr(
@@ -213,38 +194,32 @@ def test_deepseek_chat_response(monkeypatch):
     result = p.ask("hello")
     assert result == "hello"
 
-def test_zai_success():
-    p = ZAIProvider()
 
-    p.client.chat.completions.create.return_value = type(
+def test_zai_success(monkeypatch):
+    """chat() delegates to send(), which performs the real HTTP call."""
+    resp = type(
         "R",
         (),
-        {
-            "choices": [
-                type(
-                    "C",
-                    (),
-                    {
-                        "message": type(
-                            "M",
-                            (),
-                            {"content": "hello"}
-                        )()
-                    }
-                )()
-            ]
-        }
+        {"status_code": 200, "json": lambda self: {"text": "hello"}},
     )()
+    monkeypatch.setattr("requests.post", lambda *a, **k: resp)
 
+    p = ZAIProvider(api_key="test-key")
     assert p.chat("hi") == "hello"
 
-def test_zai_error():
-    p = ZAIProvider()
 
-    p.client.chat.completions.create.side_effect = Exception("fail")
+def test_zai_error(monkeypatch):
+    """chat() surfaces network failures raised by send()."""
 
-    with pytest.raises(Exception, match="z\\.AI connection failed"):
+    def _raise(*_args, **_kwargs):
+        raise requests.RequestException("fail")
+
+    monkeypatch.setattr("requests.post", _raise)
+
+    p = ZAIProvider(api_key="test-key")
+    with pytest.raises(Exception, match="network error"):
         p.chat("hi")
+
 
 def test_cohere_clear_index():
     p = CohereProvider(api_key="test")
@@ -255,6 +230,7 @@ def test_cohere_clear_index():
     p.clear_index()
 
     assert p._documents == []
+
 
 def test_cohere_retrieve_empty():
     p = CohereProvider(api_key="test")

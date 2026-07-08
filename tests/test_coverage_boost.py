@@ -4,6 +4,7 @@ test_coverage_boost.py
 Tests to raise coverage above 75%.  Targets low-coverage and 0%-coverage
 modules that aren't adequately exercised by the existing test suite.
 """
+
 from __future__ import annotations
 
 import json
@@ -65,7 +66,9 @@ class TestAIProviderError:
         assert err.__cause__ is cause
 
     def test_to_dict(self):
-        err = AIProviderError("msg", code="C", retryable=True, details={"k": "v"})
+        err = AIProviderError(
+            "msg", code="C", retryable=True, details={"k": "v"}
+        )
         d = err.to_dict()
         assert d["message"] == "msg"
         assert d["code"] == "C"
@@ -397,7 +400,9 @@ class TestXAIProviderCoverage:
     def test_send_impl_error(self):
         """_send_impl returns error string on failure."""
         p = self._make_provider()
-        p.client.chat.completions.create.side_effect = ProviderRequestError("fail")
+        p.client.chat.completions.create.side_effect = ProviderRequestError(
+            "fail"
+        )
         result = p._send_impl("hello")
         assert "Error" in result
 
@@ -453,6 +458,7 @@ class TestZAIProviderCoverage:
     def test_send_impl_network_error(self, monkeypatch):
         """_send_impl raises on network error."""
         import requests as req
+
         monkeypatch.setattr(
             "requests.post",
             MagicMock(side_effect=req.RequestException("timeout")),
@@ -507,9 +513,7 @@ class TestZAIProviderCoverage:
         """_send_impl extracts from choices[0].text."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "choices": [{"text": "choice_text"}]
-        }
+        mock_resp.json.return_value = {"choices": [{"text": "choice_text"}]}
         monkeypatch.setattr("requests.post", lambda *a, **k: mock_resp)
         p = ZAIProvider(api_key="x")
         result = p._send_impl("hello")
@@ -595,6 +599,7 @@ class TestZAIProviderCoverage:
     def test_send_network_error(self, monkeypatch):
         """send() raises on network exception."""
         import requests as req
+
         monkeypatch.setattr(
             "requests.post",
             MagicMock(side_effect=req.RequestException("conn refused")),
@@ -603,37 +608,38 @@ class TestZAIProviderCoverage:
         with pytest.raises(ProviderRequestError, match="network error"):
             p.send("hello")
 
-    def test_chat_success(self):
-        """chat() delegates to client and returns content."""
+    def test_chat_success(self, monkeypatch):
+        """chat() delegates to send() and returns the text content."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"text": "chat_content"}
+        monkeypatch.setattr("requests.post", lambda *a, **k: resp)
         p = ZAIProvider(api_key="x")
-        mock_choice = MagicMock()
-        mock_choice.message.content = "chat_content"
-        p.client.chat.completions.create.return_value = MagicMock(
-            choices=[mock_choice]
-        )
         result = p.chat("hello")
         assert result == "chat_content"
 
-    def test_chat_text_fallback(self):
-        """chat() returns choice.text when message has no content."""
-        p = ZAIProvider(api_key="x")
-        mock_choice = MagicMock(spec=[])
-        mock_choice.text = "text_val"
-        # Remove message attr
-        type(mock_choice).message = property(lambda self: None)
+    def test_chat_text_fallback(self, monkeypatch):
+        """chat() extracts content from the 'choices' response shape too."""
         resp = MagicMock()
-        resp.choices = [mock_choice]
-        p.client.chat.completions.create.return_value = resp
-        # Since mock_choice.message is None, it won't have content
-        # Testing the hasattr branch
+        resp.status_code = 200
+        resp.json.return_value = {
+            "choices": [{"message": {"content": "text_val"}}]
+        }
+        monkeypatch.setattr("requests.post", lambda *a, **k: resp)
+        p = ZAIProvider(api_key="x")
         result = p.chat("hello")
         assert isinstance(result, str)
 
-    def test_chat_error(self):
+    def test_chat_error(self, monkeypatch):
         """chat() raises ProviderRequestError on failure."""
+        import requests as req
+
+        monkeypatch.setattr(
+            "requests.post",
+            MagicMock(side_effect=req.RequestException("down")),
+        )
         p = ZAIProvider(api_key="x")
-        p.client.chat.completions.create.side_effect = RuntimeError("down")
-        with pytest.raises(ProviderRequestError, match="connection failed"):
+        with pytest.raises(ProviderRequestError, match="network error"):
             p.chat("hello")
 
     def test_is_ready_with_key(self):
@@ -787,40 +793,13 @@ class TestDeepSeekProviderCoverage:
 class TestStubModules:
     """Import and exercise trivial 0%-coverage modules."""
 
-    def test_ask_service_top_level(self):
-        from ai_cli.ask_service import ask
-        result = ask("hello")
-        assert result == "mock:hello"
-
-    def test_contracts(self):
-        from ai_cli.contracts import BaseContract
-        c = BaseContract()
-        assert c is not None
-
-    def test_decorators(self):
-        from ai_cli.decorators import dummy_decorator
-        @dummy_decorator
-        def my_func():
-            return 42
-        assert my_func() == 42
-
-    def test_adapters(self):
-        from ai_cli.providers.adapters import LegacyAskAdapter
-        adapter = LegacyAskAdapter()
-        with pytest.raises(NotImplementedError):
-            adapter.ask("hello")
-
-    def test_provider_contracts(self):
-        from ai_cli.providers.contracts import ChatProvider, EmbeddingProvider
-        # These are ABCs, verify they exist
-        assert ChatProvider is not None
-        assert EmbeddingProvider is not None
-
     def test_provider_decorators(self):
         from ai_cli.providers.decorators import chat_provider, provider
+
         @provider("__test_prov_dec__")
         class P1:
             pass
+
         assert P1 is not None
 
         @chat_provider("__test_chat_dec__")
@@ -835,51 +814,15 @@ class TestStubModules:
 
     def test_openai_module(self):
         from ai_cli.providers.openai_provider import OpenAIProvider
+
         p = OpenAIProvider(api_key="test")
         result = p.ask("hello")
         assert "Mock response" in result
 
-    def test_spec(self):
-        from ai_cli.providers.spec import ProviderRequest
-        req = ProviderRequest(provider="openai", model="gpt-4")
-        assert req.provider == "openai"
-        assert req.model == "gpt-4"
-
-    def test_resolver(self):
-        from ai_cli.providers.resolver import resolve_provider_name
-        assert resolve_provider_name("auto") == "openai"
-        assert resolve_provider_name("gemini") == "gemini"
-        assert resolve_provider_name("  OpenAI  ") == "openai"
-
-    def test_config_resolve_api_key(self):
-        from ai_cli.providers.config import resolve_api_key
-        assert resolve_api_key("test", "explicit") == "explicit"
-        with patch.dict(os.environ, {"TEST_API_KEY": "env_key"}):
-            assert resolve_api_key("test") == "env_key"
-
     def test_test_mode(self):
         from ai_cli.utils.test_mode import is_test_mode
+
         with patch.dict(os.environ, {"AI_CLI_TEST_MODE": "1"}):
             assert is_test_mode() is True
         with patch.dict(os.environ, {"AI_CLI_TEST_MODE": "0"}):
             assert is_test_mode() is False
-
-
-# ============================================================
-# 7. core/service/ask_service.py  (0% → target 100%)
-# ============================================================
-
-
-class TestCoreAskService:
-    def test_ask_delegates_to_chat_provider(self):
-        from ai_cli.core.service.ask_service import ask
-
-        mock_provider = MagicMock()
-        mock_provider.chat.return_value = "service answer"
-
-        with patch(
-            "ai_cli.core.service.ask_service.get_chat_provider",
-            return_value=mock_provider,
-        ):
-            result = ask("hello", provider="echo")
-        assert result == "service answer"

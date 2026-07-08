@@ -13,10 +13,12 @@ def test_build_provider_invalid():
     with pytest.raises(ValueError):
         build_provider("unknown_provider")
 
+
 def test_build_provider_normal(monkeypatch):
     class DummyProvider:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
+
     monkeypatch.setitem(PROVIDER_MAP, "dummy", DummyProvider)
     provider = build_provider("dummy", foo="bar")
     assert isinstance(provider, DummyProvider)
@@ -56,10 +58,7 @@ def test_hallucination_single_pattern():
 def test_hallucination_all_patterns():
     detector = HallucinationDetector()
 
-    text = (
-        "100% accurate guaranteed "
-        "always works never fails trust me"
-    )
+    text = "100% accurate guaranteed always works never fails trust me"
 
     result = detector.evaluate(text)
 

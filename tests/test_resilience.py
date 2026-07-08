@@ -7,4 +7,5 @@ def test_resilience_fallback():
 
     def fallback():
         return "ok"
+
     assert execute_with_fallback(fail, fallback) == "ok"

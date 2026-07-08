@@ -19,9 +19,7 @@ from ai_cli.core.exceptions import ProviderRequestError
 def test_cli_build_parser():
     parser = build_parser()
 
-    args = parser.parse_args(
-        ["--prompt", "hello"]
-    )
+    args = parser.parse_args(["--prompt", "hello"])
 
     assert args.prompt == "hello"
 
@@ -80,15 +78,15 @@ def test_empty_prompt(monkeypatch):
 
     assert exc.value.code == 2
 
+
 def test_read_stdin_prompt(monkeypatch):
     monkeypatch.setattr(
         "sys.stdin",
-        io.TextIOWrapper(
-            io.BytesIO(b"hello from stdin")
-        ),
+        io.TextIOWrapper(io.BytesIO(b"hello from stdin")),
     )
 
     assert cli._read_stdin_prompt() == "hello from stdin"
+
 
 def test_timeout_validation():
     with pytest.raises(SystemExit) as exc:
@@ -102,6 +100,7 @@ def test_timeout_validation():
         )
 
     assert exc.value.code == 2
+
 
 def test_large_prompt_truncation(monkeypatch):
     monkeypatch.setattr(
@@ -118,6 +117,7 @@ def test_large_prompt_truncation(monkeypatch):
 
     assert result == 0
 
+
 def test_load_rag_docs_text():
     pipeline = cli._load_rag_docs(
         ["hello world"],
@@ -126,6 +126,7 @@ def test_load_rag_docs_text():
     )
 
     assert pipeline is not None
+
 
 def test_interactive_exit(monkeypatch):
     monkeypatch.setattr(
@@ -141,15 +142,15 @@ def test_interactive_exit(monkeypatch):
 
     assert result == 0
 
+
 def test_safe_resolve_path_none():
     assert cli._safe_resolve_path(None) is None
 
+
 def test_chunk_validation():
     with pytest.raises(ValueError):
-        chunk_text(
-            "abc",
-            chunk_size=0
-        )
+        chunk_text("abc", chunk_size=0)
+
 
 def test_cli_no_args_exit(monkeypatch):
     import pytest
@@ -158,72 +159,58 @@ def test_cli_no_args_exit(monkeypatch):
 
     monkeypatch.setattr(
         "ai_cli.cli._read_stdin_prompt",
-        lambda: (_ for _ in ()).throw(SystemExit())
+        lambda: (_ for _ in ()).throw(SystemExit()),
     )
 
     with pytest.raises(SystemExit):
         cli.main([])
 
+
 def test_cli_invalid_provider():
     with pytest.raises(SystemExit):
-        cli.main([
-            "--provider",
-            "invalid-provider",
-            "hello"
-        ])
+        cli.main(["--provider", "invalid-provider", "hello"])
+
 
 def test_cli_provider_error(monkeypatch):
     from ai_cli import cli
 
     monkeypatch.setattr(
         "ai_cli.cli.ask",
-        lambda *a, **k: (_ for _ in ()).throw(
-            Exception("bad provider")
-        )
+        lambda *a, **k: (_ for _ in ()).throw(Exception("bad provider")),
     )
 
     with pytest.raises(Exception, match="bad provider"):
-        cli.main([
-            "--provider",
-            "bad",
-            "--prompt",
-            "hello",
-        ])
+        cli.main(
+            [
+                "--provider",
+                "bad",
+                "--prompt",
+                "hello",
+            ]
+        )
+
 
 def test_cli_stdin_prompt(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr(
-        "ai_cli.cli.init_providers",
-        lambda: None
-    )
+    monkeypatch.setattr("ai_cli.cli.init_providers", lambda: None)
 
     monkeypatch.setattr(
         "ai_cli.providers.registry.build_provider",
-        lambda *a, **k: MagicMock(
-            send=lambda x: "hello"
-        )
+        lambda *a, **k: MagicMock(send=lambda x: "hello"),
     )
 
-    monkeypatch.setattr(
-        "ai_cli.cli._read_stdin_prompt",
-        lambda: "hello"
-    )
+    monkeypatch.setattr("ai_cli.cli._read_stdin_prompt", lambda: "hello")
 
     cli.main([])
+
 
 def test_cli_prompt_success(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr(
-        "ai_cli.cli.init_providers",
-        lambda: None
-    )
+    monkeypatch.setattr("ai_cli.cli.init_providers", lambda: None)
 
-    monkeypatch.setattr(
-        "ai_cli.cli.ask",
-        lambda **kwargs: "hello"
-    )
+    monkeypatch.setattr("ai_cli.cli.ask", lambda **kwargs: "hello")
 
     result = cli.main(
         [
@@ -240,15 +227,9 @@ def test_cli_prompt_success(monkeypatch):
 def test_cli_stream_mode(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr(
-        "ai_cli.cli.init_providers",
-        lambda: None
-    )
+    monkeypatch.setattr("ai_cli.cli.init_providers", lambda: None)
 
-    monkeypatch.setattr(
-        "ai_cli.cli.ask",
-        lambda **kwargs: "stream ok"
-    )
+    monkeypatch.setattr("ai_cli.cli.ask", lambda **kwargs: "stream ok")
 
     result = cli.main(
         [
@@ -264,130 +245,127 @@ def test_cli_stream_mode(monkeypatch):
 def test_cli_debug(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr(
-        "ai_cli.cli.init_providers",
-        lambda: None
+    monkeypatch.setattr("ai_cli.cli.init_providers", lambda: None)
+
+    monkeypatch.setattr("ai_cli.cli.ask", lambda **kwargs: "ok")
+
+    assert (
+        cli.main(
+            [
+                "--prompt",
+                "debug",
+                "--debug",
+            ]
+        )
+        == 0
     )
 
-    monkeypatch.setattr(
-        "ai_cli.cli.ask",
-        lambda **kwargs: "ok"
-    )
-
-    assert cli.main(
-        [
-            "--prompt",
-            "debug",
-            "--debug",
-        ]
-    ) == 0
 
 def test_cli_timeout_success(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr(
-        "ai_cli.cli.init_providers",
-        lambda: None
+    monkeypatch.setattr("ai_cli.cli.init_providers", lambda: None)
+
+    monkeypatch.setattr("ai_cli.cli.ask", lambda **kwargs: "ok")
+
+    assert (
+        cli.main(
+            [
+                "--prompt",
+                "hello",
+                "--timeout",
+                "20",
+            ]
+        )
+        == 0
     )
 
-    monkeypatch.setattr(
-        "ai_cli.cli.ask",
-        lambda **kwargs: "ok"
-    )
-
-    assert cli.main(
-        [
-            "--prompt",
-            "hello",
-            "--timeout",
-            "20",
-        ]
-    ) == 0
 
 def test_cli_debug_success(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr(
-        "ai_cli.cli.init_providers",
-        lambda: None
+    monkeypatch.setattr("ai_cli.cli.init_providers", lambda: None)
+
+    monkeypatch.setattr("ai_cli.cli.ask", lambda **kwargs: "ok")
+
+    assert (
+        cli.main(
+            [
+                "--prompt",
+                "hello",
+                "--debug",
+            ]
+        )
+        == 0
     )
 
-    monkeypatch.setattr(
-        "ai_cli.cli.ask",
-        lambda **kwargs: "ok"
-    )
-
-    assert cli.main(
-        [
-            "--prompt",
-            "hello",
-            "--debug",
-        ]
-    ) == 0
 
 def test_run_interactive_exit(monkeypatch):
     from ai_cli.cli import run_interactive
 
     inputs = iter(["/exit"])
 
-    monkeypatch.setattr(
-        "builtins.input",
-        lambda *_: next(inputs)
+    monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+
+    assert (
+        run_interactive(
+            provider="openai",
+            model=None,
+            timeout=30,
+        )
+        == 0
     )
 
-    assert run_interactive(
-        provider="openai",
-        model=None,
-        timeout=30,
-    ) == 0
 
 def test_run_interactive_commands(monkeypatch):
     from ai_cli.cli import run_interactive
 
-    inputs = iter([
-        "/help",
-        "/switch gemini",
-        "/model test-model",
-        "/profile dev",
-        "/stream",
-        "/exit",
-    ])
-
-    monkeypatch.setattr(
-        "builtins.input",
-        lambda *_: next(inputs)
+    inputs = iter(
+        [
+            "/help",
+            "/switch gemini",
+            "/model test-model",
+            "/profile dev",
+            "/stream",
+            "/exit",
+        ]
     )
 
-    assert run_interactive(
-        provider="openai",
-        model=None,
-        timeout=30,
-    ) == 0
+    monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+
+    assert (
+        run_interactive(
+            provider="openai",
+            model=None,
+            timeout=30,
+        )
+        == 0
+    )
+
 
 def test_run_interactive_prompt(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr(
-        cli,
-        "_invoke_with_retries",
-        lambda kwargs: 0
+    monkeypatch.setattr(cli, "_invoke_with_retries", lambda kwargs: 0)
+
+    inputs = iter(
+        [
+            "hello",
+            "/exit",
+        ]
     )
 
-    inputs = iter([
-        "hello",
-        "/exit",
-    ])
+    monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
 
-    monkeypatch.setattr(
-        "builtins.input",
-        lambda *_: next(inputs)
+    assert (
+        cli.run_interactive(
+            provider="openai",
+            model=None,
+            timeout=30,
+        )
+        == 0
     )
 
-    assert cli.run_interactive(
-        provider="openai",
-        model=None,
-        timeout=30,
-    ) == 0
 
 def test_cli_reads_stdin(monkeypatch):
     import io
@@ -402,33 +380,24 @@ def test_cli_reads_stdin(monkeypatch):
         def isatty(self):
             return False
 
-    monkeypatch.setattr(
-        sys,
-        "stdin",
-        FakeStdin()
-    )
+    monkeypatch.setattr(sys, "stdin", FakeStdin())
 
-    monkeypatch.setattr(
-        cli,
-        "_invoke_with_retries",
-        lambda kwargs: 0
-    )
+    monkeypatch.setattr(cli, "_invoke_with_retries", lambda kwargs: 0)
 
     assert cli.main([]) == 0
+
 
 def test_sync_result_dict():
     from ai_cli.cli import _handle_sync_result
 
-    assert _handle_sync_result(
-        {"a":1}
-    ) == 0
+    assert _handle_sync_result({"a": 1}) == 0
+
 
 def test_sync_result_iterable():
     from ai_cli.cli import _handle_sync_result
 
-    assert _handle_sync_result(
-        ["a","b"]
-    ) == 0
+    assert _handle_sync_result(["a", "b"]) == 0
+
 
 def test_decode_chunk():
     from ai_cli.cli import _decode_chunk
@@ -436,13 +405,16 @@ def test_decode_chunk():
     assert _decode_chunk(b"hello") == "hello"
     assert _decode_chunk("x") == "x"
 
+
 def test_interactive_help_exit(monkeypatch):
     from ai_cli import cli
 
-    inputs = iter([
-        "/help",
-        "/exit",
-    ])
+    inputs = iter(
+        [
+            "/help",
+            "/exit",
+        ]
+    )
 
     monkeypatch.setattr("builtins.input", lambda _: next(inputs))
 
@@ -455,42 +427,39 @@ def test_interactive_help_exit(monkeypatch):
         == 0
     )
 
+
 def test_cli_rag_prompt(monkeypatch):
     from ai_cli import cli
 
-    monkeypatch.setattr(
-        cli,
-        "ask",
-        lambda **kwargs: "ok"
-    )
+    monkeypatch.setattr(cli, "ask", lambda **kwargs: "ok")
 
-    assert cli.main([
-        "--prompt",
-        "hello",
-        "--rag"
-    ]) == 0
+    assert cli.main(["--prompt", "hello", "--rag"]) == 0
+
 
 def test_interactive_commands(monkeypatch):
     from ai_cli import cli
 
-    commands = iter([
-        "/switch gemini",
-        "/model test-model",
-        "/profile dev",
-        "/stream",
-        "/exit",
-    ])
-
-    monkeypatch.setattr(
-        "builtins.input",
-        lambda _: next(commands)
+    commands = iter(
+        [
+            "/switch gemini",
+            "/model test-model",
+            "/profile dev",
+            "/stream",
+            "/exit",
+        ]
     )
 
-    assert cli.run_interactive(
-        provider="echo",
-        model=None,
-        timeout=60,
-    ) == 0
+    monkeypatch.setattr("builtins.input", lambda _: next(commands))
+
+    assert (
+        cli.run_interactive(
+            provider="echo",
+            model=None,
+            timeout=60,
+        )
+        == 0
+    )
+
 
 def test_read_stdin_prompt_bytes(monkeypatch):
     import io
@@ -504,23 +473,28 @@ def test_read_stdin_prompt_bytes(monkeypatch):
 
     assert cli._read_stdin_prompt() == "hello from stdin"
 
+
 def test_timeout_negative(monkeypatch):
     from ai_cli import cli
 
     with pytest.raises(SystemExit):
         cli.main(["-q", "hello", "--timeout", "-1"])
 
+
 def test_cli_unknown_provider(monkeypatch, caplog):
     from ai_cli import cli
 
-    cli.main([
-        "--provider",
-        "does-not-exist",
-        "-q",
-        "hello",
-    ])
+    cli.main(
+        [
+            "--provider",
+            "does-not-exist",
+            "-q",
+            "hello",
+        ]
+    )
 
     assert "build_provider" in caplog.text
+
 
 def test_auto_provider_init_failure(monkeypatch):
     from ai_cli.providers import registry
@@ -537,13 +511,12 @@ def test_auto_provider_init_failure(monkeypatch):
         {"bad": Bad},
     )
 
-    p = AutoProvider(
-        fallback_order=["bad"]
-    )
+    p = AutoProvider(fallback_order=["bad"])
 
     with pytest.raises(ProviderRequestError) as exc:
         p.send("x")
     assert "fallback exhausted" in str(exc.value).lower()
+
 
 def test_deepseek_health_check_without_key(monkeypatch):
     from ai_cli.providers.deepseek_provider import DeepSeekProvider
@@ -556,6 +529,7 @@ def test_deepseek_health_check_without_key(monkeypatch):
     provider = DeepSeekProvider()
 
     assert provider.health_check() is False
+
 
 def test_prompt_truncation_in_main(monkeypatch):
     from ai_cli import cli
@@ -573,24 +547,30 @@ def test_prompt_truncation_in_main(monkeypatch):
         lambda **kwargs: "ok",
     )
 
-    result = cli.main([
-        "-q",
-        "x" * 100,
-    ])
+    result = cli.main(
+        [
+            "-q",
+            "x" * 100,
+        ]
+    )
 
     assert result == 0
+
 
 def test_safe_resolve_path_null_byte():
 
     assert _safe_resolve_path("abc\x00def") is None
 
+
 def test_safe_resolve_path_traversal():
 
     assert _safe_resolve_path("../secret") is None
 
+
 def test_decode_chunk_json_object():
 
     assert _decode_chunk({"a": 1}) == '{"a": 1}'
+
 
 def test_drain_async_result_string():
 
@@ -599,6 +579,7 @@ def test_drain_async_result_string():
         return await _drain_async_result("hello")
 
     assert asyncio.run(run()) == 0
+
 
 def test_decode_chunk_unserializable():
     from ai_cli.cli import _decode_chunk
@@ -615,9 +596,7 @@ def test_drain_async_result_iterable():
     from ai_cli.cli import _drain_async_result
 
     async def run():
-        return await _drain_async_result(
-            ["a", "b"]
-        )
+        return await _drain_async_result(["a", "b"])
 
     assert asyncio.run(run()) == 0
 
@@ -628,11 +607,10 @@ def test_drain_async_result_bytes():
     from ai_cli.cli import _drain_async_result
 
     async def run():
-        return await _drain_async_result(
-            b"hello"
-        )
+        return await _drain_async_result(b"hello")
 
     assert asyncio.run(run()) == 0
+
 
 def test_load_rag_docs_raw_text():
     from ai_cli.cli import _load_rag_docs
@@ -657,6 +635,7 @@ def test_load_rag_docs_missing_file():
 
     assert pipeline is not None
 
+
 def test_deepseek_send_text_response():
     from ai_cli.providers.deepseek_provider import DeepSeekProvider
 
@@ -680,16 +659,11 @@ def test_deepseek_chat_success():
     p.client = MagicMock()
 
     p.client.return_value = MagicMock(
-        choices=[
-            MagicMock(
-                message=MagicMock(
-                    content="ok"
-                )
-            )
-        ]
+        choices=[MagicMock(message=MagicMock(content="ok"))]
     )
 
     assert p.chat("hello") == "ok"
+
 
 def test_safe_resolve_path_invalid_null():
     from ai_cli.cli import _safe_resolve_path
@@ -702,6 +676,7 @@ def test_safe_resolve_path_parent_traversal():
 
     assert _safe_resolve_path("../secret.txt") is None
 
+
 def test_build_ask_kwargs_signature_failure(monkeypatch):
     from ai_cli.cli import _build_ask_kwargs
 
@@ -711,7 +686,7 @@ def test_build_ask_kwargs_signature_failure(monkeypatch):
 
     monkeypatch.setattr(
         "ai_cli.cli.inspect.signature",
-        lambda x: (_ for _ in ()).throw(TypeError())
+        lambda x: (_ for _ in ()).throw(TypeError()),
     )
 
     result = _build_ask_kwargs(
@@ -727,6 +702,7 @@ def test_build_ask_kwargs_signature_failure(monkeypatch):
     assert result["prompt"] == "hello"
     assert result["provider"] == "openai"
 
+
 def test_read_stdin_prompt_empty(monkeypatch):
     from ai_cli.cli import _read_stdin_prompt
 
@@ -737,12 +713,10 @@ def test_read_stdin_prompt_empty(monkeypatch):
     class FakeStdin:
         buffer = FakeBuffer()
 
-    monkeypatch.setattr(
-        "ai_cli.cli.sys.stdin",
-        FakeStdin()
-    )
+    monkeypatch.setattr("ai_cli.cli.sys.stdin", FakeStdin())
 
     assert _read_stdin_prompt() == ""
+
 
 def test_load_rag_docs_reads_file(tmp_path):
     from ai_cli.cli import _load_rag_docs
@@ -769,10 +743,7 @@ def test_load_rag_docs_bad_file(monkeypatch):
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(
-        "builtins.open",
-        lambda *a, **k: BadOpen()
-    )
+    monkeypatch.setattr("builtins.open", lambda *a, **k: BadOpen())
 
     pipeline = _load_rag_docs(
         ["missing.txt"],
@@ -781,6 +752,7 @@ def test_load_rag_docs_bad_file(monkeypatch):
     )
 
     assert pipeline is not None
+
 
 def test_safe_resolve_normal_path(tmp_path):
     from ai_cli.cli import _safe_resolve_path
@@ -801,6 +773,7 @@ def test_decode_chunk_object():
 
     assert "Obj" in _decode_chunk(Obj())
 
+
 def test_decode_chunk_bytes_and_objects():
     from ai_cli.cli import _decode_chunk
 
@@ -813,6 +786,7 @@ def test_decode_chunk_bytes_and_objects():
 
     assert _decode_chunk(Bad()) == '"bad-object"'
 
+
 @pytest.mark.asyncio
 async def test_drain_async_result_simple():
     from ai_cli.cli import _drain_async_result
@@ -820,6 +794,7 @@ async def test_drain_async_result_simple():
     result = await _drain_async_result("hello")
 
     assert result == 0
+
 
 @pytest.mark.asyncio
 async def test_drain_async_result_error():
@@ -839,6 +814,7 @@ def test_safe_resolve_path_null():
 
     assert _safe_resolve_path("abc\x00def") is None
 
+
 class FakeBuffer:
     def read(self, size):
         return b""
@@ -857,6 +833,7 @@ async def test_drain_async_result_async_iterable(capsys):
             async def gen():
                 yield "a"
                 yield b"b"
+
             return gen()
 
     rc = await _drain_async_result(AIter())
@@ -1024,12 +1001,15 @@ def test_run_interactive_help_exit(monkeypatch):
     seq = iter(["/help", "/exit"])
     monkeypatch.setattr("builtins.input", lambda *_: next(seq))
 
-    assert cli.run_interactive(
-        provider="openai",
-        model=None,
-        timeout=1,
-        rag=Dummy(),
-    ) == 0
+    assert (
+        cli.run_interactive(
+            provider="openai",
+            model=None,
+            timeout=1,
+            rag=Dummy(),
+        )
+        == 0
+    )
 
 
 def test_run_interactive_search(monkeypatch):
@@ -1042,9 +1022,12 @@ def test_run_interactive_search(monkeypatch):
         def retrieve_context(self, *a, **k):
             return "ctx"
 
-    assert cli.run_interactive(
-        provider="openai",
-        model=None,
-        timeout=1,
-        rag=Dummy(),
-    ) == 0
+    assert (
+        cli.run_interactive(
+            provider="openai",
+            model=None,
+            timeout=1,
+            rag=Dummy(),
+        )
+        == 0
+    )

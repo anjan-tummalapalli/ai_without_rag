@@ -4,7 +4,6 @@ from ai_cli.providers.base import BaseProvider
 
 
 class EchoProvider(BaseProvider):
-
     provider_name = "echo"
 
     def __init__(self, config: dict | None = None, **kwargs: Any) -> None:

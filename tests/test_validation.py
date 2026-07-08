@@ -27,18 +27,14 @@ def test_hallucination_empty_response():
 
 
 def test_hallucination_suspicious_phrase():
-    result = HallucinationDetector().evaluate(
-        "This is 100% accurate"
-    )
+    result = HallucinationDetector().evaluate("This is 100% accurate")
 
     assert result.score > 0
     assert "suspicious phrase" in result.reasons[0]
 
 
 def test_hallucination_todo():
-    result = HallucinationDetector().evaluate(
-        "TODO implement this"
-    )
+    result = HallucinationDetector().evaluate("TODO implement this")
 
     assert result.passed is False
 
