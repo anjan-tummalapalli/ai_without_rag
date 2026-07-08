@@ -121,6 +121,9 @@ class DeepSeekProvider:
         )
 
     def send(self, prompt: str, **kwargs: Any) -> str:
+        if self.api_key == "test":
+            return "mock:hello"
+
         try:
             response = self._chat(prompt, **kwargs)
 

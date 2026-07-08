@@ -753,8 +753,8 @@ class TestDeepSeekProviderCoverage:
         """send() returns mock:hello on exception."""
         p = self._make_provider()
         p.client.chat.completions.create.side_effect = RuntimeError("fail")
-        result = p.send("hello")
-        assert result == "mock:hello"
+        with pytest.raises(RuntimeError, match="DeepSeek request failed"):
+            p.send("hello")
 
     def test_chat_success(self):
         p = self._make_provider()
