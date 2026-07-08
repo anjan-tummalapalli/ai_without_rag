@@ -1,185 +1,381 @@
-# AI CLI Gateway — v0.3.0
+# Development Guide
 
-> Multi-provider AI CLI gateway with pluggable LLM providers, resilience
+## Prerequisites
 
----
+- Python 3.11.x
+- Poetry 2.x
+- Git
 
-## What's New in v0.3.0
-
-- **Provider registry** — lazy-loaded providers with deterministic registration (`auto`, `openai`, `gemini`, `cohere`, `perplexity`, `xai`, `zai`, `echo`)
-- **Resilience** — retry/backoff engine and response validation
-
----
-
-## Project Structure
-
-```
-src/ai_cli/
-├── cli.py                  # CLI entrypoint (ai-cli)
-├── core/
-│   ├── api.py              # ask() public API
-│   ├── resilience.py       # RetryEngine, circuit breaker
-│   └── service/
-│       ├── ask_service.py  # Chat provider wrapper
-│       └── embed_service.py
-├── providers/              # LLM provider implementations
-│   ├── registry.py         # Provider registration & factory
-│   ├── bootstrap.py        # Lazy provider initialization
-│   └── *_provider.py
-├── AI workflow/
-│   ├── prompt segmenter.py          # Sliding-window SemanticChunker
-│   ├── pipeline.py         # Token-aware sentence prompt segmenter
-│   ├── retriever.py        # Query → embed → search
-│   ├── in_memory.py        # Lightweight CLI AI workflow pipeline
-└── config/AI workflow_config.py    # AI workflow defaults and AI workflowConfig dataclass
-```
-
----
-
-## Quickstart
-
-### 1. Install
+Verify your environment:
 
 ```bash
-git clone https://github.com/yourusername/ai-cli.git
-cd ai-cli
+python3.11 --version
+poetry --version
+git --version
+```
+
+---
+
+# Clone the Repository
+
+```bash
+git clone git@github.com:anjan-tummalapalli/ai_without_rag.git
+cd ai_without_rag
+```
+
+---
+
+# Create a Poetry Environment
+
+Use Python 3.11 explicitly.
+
+```bash
+poetry env use $(which python3.11)
+```
+
+Verify:
+
+```bash
+poetry env info
+```
+
+---
+
+# Install Dependencies
+
+```bash
+poetry install
+```
+
+If you receive:
+
+```
+pyproject.toml changed significantly since poetry.lock was last generated
+```
+
+run:
+
+```bash
+poetry lock
+poetry install
+```
+
+If `poetry.lock` changes, commit the updated lock file.
+
+```bash
+git add poetry.lock
+git commit -m "Regenerate poetry.lock"
+git push
+```
+
+---
+
+# Activate Virtual Environment
+
+```bash
+poetry shell
+```
+
+or
+
+```bash
+source $(poetry env info --path)/bin/activate
+```
+
+---
+
+# Run the CLI
+
+```bash
+ai-cli -q "Hello"
+```
+
+Example:
+
+```bash
+ai-cli -q "Explain Kubernetes Operators"
+```
+
+---
+
+# Running Tests
+
+Run all tests
+
+```bash
+pytest
+```
+
+Verbose
+
+```bash
+pytest -v
+```
+
+Stop on first failure
+
+```bash
+pytest -x
+```
+
+Run a single file
+
+```bash
+pytest tests/test_providers.py
+```
+
+Run a single test
+
+```bash
+pytest tests/test_providers.py::test_openai_provider
+```
+
+Run tests matching a keyword
+
+```bash
+pytest -k openai
+```
+
+---
+
+# Code Coverage
+
+Generate coverage
+
+```bash
+pytest --cov=src --cov-report=term-missing
+```
+
+Generate HTML report
+
+```bash
+pytest --cov=src --cov-report=html
+```
+
+Open the report
+
+macOS
+
+```bash
+open htmlcov/index.html
+```
+
+Linux
+
+```bash
+xdg-open htmlcov/index.html
+```
+
+Coverage only
+
+```bash
+coverage run -m pytest
+coverage report
+```
+
+Detailed report
+
+```bash
+coverage report -m
+```
+
+Generate HTML
+
+```bash
+coverage html
+```
+
+---
+
+# Ruff
+
+Check formatting
+
+```bash
+ruff check .
+```
+
+Automatically fix issues
+
+```bash
+ruff check . --fix
+```
+
+Format project
+
+```bash
+ruff format .
+```
+
+---
+
+# Black
+
+Format source
+
+```bash
+black .
+```
+
+Check formatting only
+
+```bash
+black --check .
+```
+
+---
+
+# MyPy
+
+Run static type checking
+
+```bash
+mypy src
+```
+
+---
+
+# Useful Poetry Commands
+
+Show Poetry version
+
+```bash
+poetry --version
+```
+
+Show environment
+
+```bash
+poetry env info
+```
+
+List environments
+
+```bash
+poetry env list
+```
+
+Remove current environment
+
+```bash
+poetry env remove python
+```
+
+Install dependencies
+
+```bash
+poetry install
+```
+
+Update lock file
+
+```bash
+poetry lock
+```
+
+Update dependencies
+
+```bash
+poetry update
+```
+
+Validate project
+
+```bash
+poetry check
+```
+
+Show dependency tree
+
+```bash
+poetry show --tree
+```
+
+---
+
+# GitHub Actions Troubleshooting
+
+If CI fails with:
+
+```
+pyproject.toml changed significantly since poetry.lock was last generated
+```
+
+Solution:
+
+```bash
+poetry lock
+git add poetry.lock
+git commit -m "Regenerate poetry.lock"
+git push
+```
+
+This indicates that `pyproject.toml` has changed without regenerating `poetry.lock`.
+
+---
+
+# Cleaning the Environment
+
+Remove cache
+
+```bash
+poetry cache clear pypi --all
+```
+
+Remove virtual environment
+
+```bash
+poetry env remove python
+```
+
+Recreate environment
+
+```bash
+poetry env use $(which python3.11)
+poetry install
+```
+
+---
+
+# Project Structure
+
+```
+src/
+    ai_cli/
+        providers/
+        rag/
+        telemetry/
+        utils/
+
+tests/
+docs/
+README.md
+pyproject.toml
+poetry.lock
+```
+
+---
+
+# Recommended Development Workflow
+
+```bash
+git pull
+
 poetry install
 
-poetry install --with AI workflow
+ruff check . --fix
+
+ruff format .
+
+pytest
+
+pytest --cov=src --cov-report=term-missing
+
+git status
+
+git add .
+
+git commit -m "Describe your changes"
+
+git push
 ```
-
-### 2. Configure environment
-
-```bash
-cp .env.example .env
-# Set provider API keys, e.g.:
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
-```
-
-### 3. CLI examples
-
-```bash
-# Single prompt
-ai-cli -q "Explain Kubernetes operators"
-
-# Specify provider and model
-ai-cli --provider openai --model gpt-4o-mini -q "Hello"
-
-# Interactive chat
-ai-cli --interactive --provider openai
-
-# AI workflow: index docs and query with context
-ai-cli --AI workflow --AI workflow-docs docs/manual.md README.md \
-  -q "Summarize the security model" --AI workflow-top-k 5
-
-# Interactive AI workflow (use /index and /search inside the session)
-ai-cli --interactive --AI workflow --provider echo
-```
-
-### CLI flags (highlights)
-
-| Flag | Description |
-|------|-------------|
-| `-p`, `--provider` | Provider name (default: `auto`) |
-| `-q`, `--prompt` | Prompt text (or pipe via stdin) |
-| `-m`, `--model` | Model override |
-| `-i`, `--interactive` | Interactive REPL |
-| `--AI workflow` | Enable in-memory AI workflow context injection |
-| `--AI workflow-docs` | File paths or raw text to index |
-| `--AI workflow-prompt segment-size` | Chunk size in characters (default: 500) |
-| `--AI workflow-prompt segment-overlap` | Overlap between prompt segments (default: 50) |
-| `--AI workflow-top-k` | Top-k prompt segments to retrieve (default: 5) |
-| `--timeout` | Request timeout in seconds |
-| `--stream` | Stream responses when supported |
-| `--debug` | Enable debug logging |
-
----
-
-## Python API
-
-### Ask a provider
-
-```python
-from ai_cli.core.api import ask
-
-response = ask(
-    prompt="What is AI workflow?",
-    provider="openai",
-    model="gpt-4o-mini",
-)
-print(response)
-```
-
-### Chunk documents
-
-```python
-from ai_cli.AI workflow import prompt segment_text, SemanticChunker
-
-prompt segments = prompt segment_text("Long document text...", source="manual.md")
-# Or use the prompt segmenter class directly:
-prompt segmenter = SemanticChunker(prompt segment_size=500, overlap=50)
-prompt segments = prompt segmenter.prompt segment_text(text, source="manual.md")
-```
-
-### Embeddings + provider integrations
-
-```python
-from ai_cli.AI workflow import EmbeddingGenerator, VectorStore
-
-embedder = EmbeddingGenerator(model="all-MiniLM-L6-v2", batch_size=32)
-vectors = embedder.embed_batch([c.text for c in prompt segments])
-
-store = VectorStore()
-store.create_index(dimension=len(vectors[0]))
-store.add_model integrations(vectors, prompt segments)
-store.save()
-```
-
-
-```python
-from ai_cli.AI workflow import Retriever
-
-retriever = Retriever(store=store, embedder=embedder, top_k=5)
-context = retriever.build_context("How do we rotate secrets?")
-answer = ask(prompt=f"Context:\n{context}\n\nQuestion: How do we rotate secrets?")
-```
-
----
-
-## Supported Providers
-
-| Provider | Env variable | Notes |
-|----------|--------------|-------|
-| `auto` | — | Falls back through available providers |
-| `openai` | `OPENAI_API_KEY` | Chat + model integrations |
-| `gemini` | `GEMINI_API_KEY` | Google Gemini |
-| `cohere` | `COHERE_API_KEY` | Cohere chat |
-| `perplexity` | `PERPLEXITY_API_KEY` | Search-augmented |
-| `xai` | `XAI_API_KEY` | xAI Grok |
-| `zai` | `ZAI_API_KEY` | Z.AI |
-| `echo` | — | Local test provider (no API key) |
-
----
-
-## Testing
-
-```bash
-pytest tests/ -v
-pytest tests/test_enhanced.py -v   # AI workflow prompt processing + model integrations
-pytest tests/test_providers.py -v  # Provider contracts
-```
-
----
-
-## Documentation
-
-- [docs/USAGE.md](docs/USAGE.md) — CLI workflows and examples
-- [docs/API.md](docs/API.md) — Python API reference
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — Contributing guide
-
----
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
