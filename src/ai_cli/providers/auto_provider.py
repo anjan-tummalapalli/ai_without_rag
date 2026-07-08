@@ -56,9 +56,13 @@ class AutoProvider:
 
             # ---- EXECUTION ----
             try:
-                return provider.send(prompt)
+                print(f"Trying provider: {provider_name}")
+                result = provider.send(prompt)
+                print(f"Provider {provider_name} returned: {result!r}")
+                return result
 
             except Exception as exc:
+                print(f"Provider {provider_name} failed: {exc}")
                 msg = str(exc).lower()
 
                 if any(

@@ -154,11 +154,16 @@ class XAIProvider(AIProvider):
 
     def send(self, prompt: str, **kwargs: Any) -> str:
         """Send a prompt to the Grok model and return the raw response."""
+        print(f"[xAI] api_key={self.api_key!r}")
         del kwargs
         try:
             if self.api_key == "test":
+                print("[xAI] returning mock:hello")
                 return "mock:hello"
-
+            if not self.api_key:
+                raise ProviderRequestError(
+                        "xAI API key not configured"
+                )
             response = self.client.chat.completions.create(
                 model=self.model or "grok-beta",
                 messages=[{"role": "user", "content": prompt}],

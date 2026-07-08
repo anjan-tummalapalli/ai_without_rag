@@ -164,6 +164,7 @@ class ZAIProvider(AIProvider):
 
         try:
             if self.api_key == "test":
+                print("[zAI] returning mock:hello")
                 return "mock:hello"
 
             timeout = getattr(self, "timeout", None) or 30

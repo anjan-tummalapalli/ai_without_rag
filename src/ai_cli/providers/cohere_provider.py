@@ -103,7 +103,9 @@ class CohereProvider(BaseProvider):
 
     def _chat(self, prompt: str) -> str:
         if self.client is None:
-            return "mock:hello"
+            raise RuntimeError(
+                "Cohere client is not initialized."
+            )
 
         resp = self.client.chat(message=prompt)
         return resp.text

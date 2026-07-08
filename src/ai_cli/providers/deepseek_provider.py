@@ -146,8 +146,10 @@ class DeepSeekProvider:
 
             return str(response)
 
-        except Exception:
-            return "mock:hello"
+        except Exception as exc:
+            raise RuntimeError(
+                f"DeepSeek request failed: {exc}"
+            ) from exc
 
     def chat(self, prompt: str, **kwargs: Any) -> str:
         try:
