@@ -12,7 +12,6 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from ai_cli.core.exceptions import (
     AIProviderError,
     ChunkingError,

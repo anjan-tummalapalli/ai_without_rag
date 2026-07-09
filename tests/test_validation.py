@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
 import pytest
-
 from ai_cli.core.exceptions import ResponseValidationError
 from ai_cli.providers.registry import (
     CHAT_PROVIDERS,

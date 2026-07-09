@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from ai_cli import cli
 from ai_cli.cli import run_interactive
 from ai_cli.core.resilience import RetryEngine
