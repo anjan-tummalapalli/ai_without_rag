@@ -5,6 +5,22 @@ Tests to raise coverage above 75%.  Targets low-coverage and 0%-coverage
 modules that aren't adequately exercised by the existing test suite.
 """
 
+# pylint: disable=protected-access
+# This file deliberately white-box tests provider internals (e.g.
+# _send_impl, _call_model) that aren't exercised through the public
+# interface elsewhere.
+#
+# pylint: disable=import-outside-toplevel
+# Imports are scoped per-test intentionally, matching the pattern used
+# throughout this module, to keep each test's dependencies explicit and
+# avoid import-time side effects (e.g. provider registration) leaking
+# between unrelated tests.
+#
+# pylint: disable=too-few-public-methods,too-many-public-methods
+# Small dummy stub classes (used to test decorator registration) and one
+# large aggregating test class are both expected shapes for this kind of
+# coverage-focused test file.
+
 from __future__ import annotations
 
 import json
@@ -12,6 +28,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from ai_cli.core.exceptions import (
     AIProviderError,
     ChunkingError,
@@ -40,6 +57,7 @@ class TestAIProviderError:
     """Comprehensive tests for the base AIProviderError."""
 
     def test_basic_message(self):
+        """Test basic message."""
         err = AIProviderError("something broke")
         assert str(err) == "something broke"
         assert err.message == "something broke"
@@ -48,23 +66,28 @@ class TestAIProviderError:
         assert err.details == {}
 
     def test_with_code(self):
+        """Test with code."""
         err = AIProviderError("bad", code="ERR_001")
         assert "(code=ERR_001)" in str(err)
 
     def test_retryable(self):
+        """Test retryable."""
         err = AIProviderError("retry me", retryable=True)
         assert "[retryable]" in str(err)
 
     def test_with_details(self):
+        """Test with details."""
         err = AIProviderError("x", details={"foo": "bar"})
         assert "foo" in str(err)
 
     def test_with_cause(self):
+        """Test with cause."""
         cause = ValueError("root cause")
         err = AIProviderError("wrapped", cause=cause)
         assert err.__cause__ is cause
 
     def test_to_dict(self):
+        """Test to dict."""
         err = AIProviderError(
             "msg", code="C", retryable=True, details={"k": "v"}
         )
@@ -76,12 +99,14 @@ class TestAIProviderError:
         assert d["cause"] is None
 
     def test_to_dict_with_cause(self):
+        """Test to dict with cause."""
         cause = RuntimeError("boom")
         err = AIProviderError("msg", cause=cause)
         d = err.to_dict()
         assert "RuntimeError" in d["cause"]
 
     def test_to_json(self):
+        """Test to json."""
         err = AIProviderError("msg", code="X")
         j = err.to_json()
         parsed = json.loads(j)
@@ -89,12 +114,14 @@ class TestAIProviderError:
         assert parsed["code"] == "X"
 
     def test_from_exception(self):
+        """Test from exception."""
         orig = ValueError("original")
         err = AIProviderError.from_exception(orig)
         assert err.__cause__ is orig
         assert "original" in err.message
 
     def test_from_exception_custom_message(self):
+        """Test from exception custom message."""
         orig = ValueError("original")
         err = AIProviderError.from_exception(orig, message="custom")
         assert err.message == "custom"
@@ -104,6 +131,7 @@ class TestProviderRequestError:
     """ProviderRequestError has extra init params."""
 
     def test_with_all_details(self):
+        """Test with all details."""
         err = ProviderRequestError(
             "req failed",
             status_code=500,
@@ -117,74 +145,97 @@ class TestProviderRequestError:
         assert err.details["response_body"]["error"] == "oops"
 
     def test_without_optional_details(self):
+        """Test without optional details."""
         err = ProviderRequestError("simple")
         assert "status_code" not in err.details
 
 
 class TestChunkingError:
+    """Tests for TestChunkingError."""
+
     def test_with_chunk_index(self):
+        """Test with chunk index."""
         err = ChunkingError("chunk fail", chunk_index=5)
         assert err.details["chunk_index"] == 5
 
     def test_without_chunk_index(self):
+        """Test without chunk index."""
         err = ChunkingError("chunk fail")
         assert "chunk_index" not in err.details
 
 
 class TestEmbeddingError:
+    """Tests for TestEmbeddingError."""
+
     def test_with_model(self):
+        """Test with model."""
         err = EmbeddingError("embed fail", model="text-embed-3")
         assert err.details["model"] == "text-embed-3"
 
     def test_without_model(self):
+        """Test without model."""
         err = EmbeddingError("embed fail")
         assert "model" not in err.details
 
 
 class TestVectorDBError:
+    """Tests for TestVectorDBError."""
+
     def test_with_operation(self):
+        """Test with operation."""
         err = VectorDBError("db fail", operation="upsert")
         assert err.details["operation"] == "upsert"
 
     def test_without_operation(self):
+        """Test without operation."""
         err = VectorDBError("db fail")
         assert "operation" not in err.details
 
 
 class TestRetrievalError:
+    """Tests for TestRetrievalError."""
+
     def test_with_query_and_retrieved(self):
+        """Test with query and retrieved."""
         err = RetrievalError("no results", query="test", retrieved=0)
         assert err.details["query"] == "test"
         assert err.details["retrieved"] == 0
 
     def test_without_optional_params(self):
+        """Test without optional params."""
         err = RetrievalError("no results")
         assert "query" not in err.details
 
 
 class TestCaptureExceptionInfo:
+    """Tests for TestCaptureExceptionInfo."""
+
     def test_captures_info(self):
+        """Test captures info."""
         try:
             raise ValueError("test error")
         except ValueError as exc:
             info = capture_exception_info(exc)
-        assert info["type"] == "ValueError"
-        assert info["message"] == "test error"
-        assert "traceback" in info
+            assert info["type"] == "ValueError"
+            assert info["message"] == "test error"
+            assert "traceback" in info
 
 
 class TestSubclassInstantiation:
     """Ensure all subclasses can be instantiated."""
 
     def test_prompt_validation_error(self):
+        """Test prompt validation error."""
         err = PromptValidationError("bad prompt")
         assert isinstance(err, AIProviderError)
 
     def test_provider_configuration_error(self):
+        """Test provider configuration error."""
         err = ProviderConfigurationError("bad config")
         assert isinstance(err, AIProviderError)
 
     def test_response_validation_error(self):
+        """Test response validation error."""
         err = ResponseValidationError("bad response")
         assert isinstance(err, AIProviderError)
 
@@ -195,18 +246,23 @@ class TestSubclassInstantiation:
 
 
 class TestTextChunker:
+    """Tests for TestTextChunker."""
+
     def test_chunk_by_tokens_basic(self):
+        """Test chunk by tokens basic."""
         chunker = TextChunker(tokens_per_chunk=3, overlap=1)
         chunks = chunker.chunk_by_tokens("a b c d e f g")
         assert len(chunks) > 1
         assert chunks[0] == "a b c"
 
     def test_chunk_by_tokens_empty(self):
+        """Test chunk by tokens empty."""
         chunker = TextChunker()
         chunks = chunker.chunk_by_tokens("")
         assert chunks == []
 
     def test_chunk_by_tokens_with_meta(self):
+        """Test chunk by tokens with meta."""
         chunker = TextChunker(tokens_per_chunk=3, overlap=0)
         metas = chunker.chunk_by_tokens_with_meta("a b c d e f")
         assert isinstance(metas[0], Chunk)
@@ -214,17 +270,20 @@ class TestTextChunker:
         assert metas[0].index == 0
 
     def test_chunk_by_sentences(self):
+        """Test chunk by sentences."""
         chunker = TextChunker(tokens_per_chunk=10, overlap=2)
         text = "Hello world. This is a test. Another sentence here."
         chunks = chunker.chunk_by_sentences(text)
         assert len(chunks) >= 1
 
     def test_chunk_by_sentences_empty(self):
+        """Test chunk by sentences empty."""
         chunker = TextChunker()
         chunks = chunker.chunk_by_sentences("")
         assert chunks == []
 
     def test_chunk_by_sentences_with_meta(self):
+        """Test chunk by sentences with meta."""
         chunker = TextChunker(tokens_per_chunk=5, overlap=1)
         text = "Hello world. This is test. Another one."
         metas = chunker.chunk_by_sentences_with_meta(text)
@@ -232,17 +291,20 @@ class TestTextChunker:
         assert isinstance(metas[0], Chunk)
 
     def test_chunk_by_sentences_with_max_tokens(self):
+        """Test chunk by sentences with max tokens."""
         chunker = TextChunker(tokens_per_chunk=3, overlap=1)
         text = "Hello world foo. Bar baz qux. Another sentence here."
         metas = chunker.chunk_by_sentences_with_meta(text, max_tokens=4)
         assert len(metas) >= 1
 
     def test_max_chunks_limit_tokens(self):
+        """Test max chunks limit tokens."""
         chunker = TextChunker(tokens_per_chunk=2, overlap=0, max_chunks=2)
         chunks = chunker.chunk_by_tokens("a b c d e f g h")
         assert len(chunks) == 2
 
     def test_max_chunks_limit_sentences(self):
+        """Test max chunks limit sentences."""
         chunker = TextChunker(tokens_per_chunk=3, overlap=0, max_chunks=1)
         text = "One two three. Four five six. Seven eight nine."
         chunks = chunker.chunk_by_sentences(text)
@@ -250,31 +312,39 @@ class TestTextChunker:
 
 
 class TestPromptCorrector:
+    """Tests for TestPromptCorrector."""
+
     def test_correct_empty(self):
+        """Test correct empty."""
         pc = PromptCorrector()
         assert pc.correct("") == ""
 
     def test_correct_by_sentences(self):
+        """Test correct by sentences."""
         pc = PromptCorrector(tokens_per_chunk=5, overlap=1)
         result = pc.correct("Hello world foo. Bar baz qux.", by_sentences=True)
         assert isinstance(result, str)
 
     def test_correct_by_tokens(self):
+        """Test correct by tokens."""
         pc = PromptCorrector(tokens_per_chunk=3, overlap=1)
         result = pc.correct("a b c d e f g", by_sentences=False)
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_correct_with_meta_empty(self):
+        """Test correct with meta empty."""
         pc = PromptCorrector()
-        assert pc.correct_with_meta("") == []
+        assert not pc.correct_with_meta("")
 
     def test_correct_with_meta_by_sentences(self):
+        """Test correct with meta by sentences."""
         pc = PromptCorrector(tokens_per_chunk=5, overlap=1)
         result = pc.correct_with_meta("Hello. World.", by_sentences=True)
         assert isinstance(result, list)
 
     def test_correct_with_meta_by_tokens(self):
+        """Test correct with meta by tokens."""
         pc = PromptCorrector(tokens_per_chunk=3, overlap=0)
         result = pc.correct_with_meta("a b c d e f", by_sentences=False)
         assert isinstance(result, list)
@@ -282,14 +352,19 @@ class TestPromptCorrector:
 
 
 class TestPromptCorrectorFunctions:
+    """Tests for TestPromptCorrectorFunctions."""
+
     def test_prompt_corrector_function(self):
+        """Test prompt corrector function."""
         result = prompt_corrector("Hello world foo bar.")
         assert isinstance(result, str)
 
     def test_correct_prompt_empty(self):
+        """Test correct prompt empty."""
         assert correct_prompt("") == ""
 
     def test_correct_prompt_nonempty(self):
+        """Test correct prompt nonempty."""
         result = correct_prompt("Hello world.")
         assert isinstance(result, str)
         assert len(result) > 0
@@ -642,11 +717,13 @@ class TestZAIProviderCoverage:
             p.chat("hello")
 
     def test_is_ready_with_key(self):
+        """Test is ready with key."""
         with patch.dict(os.environ, {"ZAI_API_KEY": "k"}):
             p = ZAIProvider(api_key="x")
             assert p.is_ready() is True
 
     def test_is_ready_without_key(self):
+        """Test is ready without key."""
         env = {k: v for k, v in os.environ.items() if k != "ZAI_API_KEY"}
         with patch.dict(os.environ, env, clear=True):
             p = ZAIProvider(api_key="x")
@@ -659,7 +736,10 @@ class TestZAIProviderCoverage:
 
 
 class TestDeepSeekProviderCoverage:
+    """Tests for TestDeepSeekProviderCoverage."""
+
     def _make_provider(self):
+        """Test make provider."""
         with patch("ai_cli.providers.deepseek_provider.OpenAI") as mock_cls:
             mock_client = MagicMock()
             mock_cls.return_value = mock_client
@@ -668,10 +748,12 @@ class TestDeepSeekProviderCoverage:
         return p
 
     def test_init_empty_key_raises(self):
+        """Test init empty key raises."""
         with pytest.raises(ValueError, match="DEEPSEEK_API_KEY"):
             DeepSeekProvider(api_key="")
 
     def test_init_no_key(self):
+        """Test init no key."""
         env = {k: v for k, v in os.environ.items() if k != "DEEPSEEK_API_KEY"}
         with patch.dict(os.environ, env, clear=True):
             with patch("ai_cli.providers.deepseek_provider.OpenAI"):
@@ -679,6 +761,7 @@ class TestDeepSeekProviderCoverage:
                 assert p.client is None
 
     def test_ask_success(self):
+        """Test ask success."""
         p = self._make_provider()
         mock_choice = MagicMock()
         mock_choice.message.content = "  deepseek answer  "
@@ -689,6 +772,7 @@ class TestDeepSeekProviderCoverage:
         assert result == "deepseek answer"
 
     def test_ask_with_system_prompt(self):
+        """Test ask with system prompt."""
         p = self._make_provider()
         mock_choice = MagicMock()
         mock_choice.message.content = "sys answer"
@@ -699,6 +783,7 @@ class TestDeepSeekProviderCoverage:
         assert result == "sys answer"
 
     def test_ask_empty_content(self):
+        """Test ask empty content."""
         p = self._make_provider()
         mock_choice = MagicMock()
         mock_choice.message.content = None
@@ -709,12 +794,14 @@ class TestDeepSeekProviderCoverage:
         assert result == ""
 
     def test_ask_api_error(self):
+        """Test ask api error."""
         p = self._make_provider()
         p.client.chat.completions.create.side_effect = RuntimeError("API down")
         with pytest.raises(RuntimeError, match="DeepSeek request failed"):
             p.ask("hello")
 
     def test_send_success_message_content(self):
+        """Test send success message content."""
         p = self._make_provider()
         mock_choice = MagicMock()
         mock_choice.message.content = "send_answer"
@@ -756,20 +843,25 @@ class TestDeepSeekProviderCoverage:
             p.send("hello")
 
     def test_chat_success(self):
+        """Test chat success."""
         p = self._make_provider()
         mock_choice = MagicMock()
         mock_choice.message.content = "chat_answer"
-        p.client.return_value = MagicMock(choices=[mock_choice])
+        p.client.chat.completions.create.return_value = MagicMock(
+            choices=[mock_choice]
+        )
         result = p.chat("hello")
         assert isinstance(result, str)
 
     def test_chat_error(self):
+        """Test chat error."""
         p = self._make_provider()
-        p.client.side_effect = RuntimeError("fail")
+        p.client.chat.completions.create.side_effect = RuntimeError("fail")
         with pytest.raises(RuntimeError, match="DeepSeek connection failed"):
             p.chat("hello")
 
     def test_embeddings_success(self):
+        """Test embeddings success."""
         p = self._make_provider()
         mock_item = MagicMock()
         mock_item.embedding = [0.1, 0.2, 0.3]
@@ -778,6 +870,7 @@ class TestDeepSeekProviderCoverage:
         assert result == [[0.1, 0.2, 0.3]]
 
     def test_embeddings_error(self):
+        """Test embeddings error."""
         p = self._make_provider()
         p.client.embeddings.create.side_effect = RuntimeError("embed fail")
         with pytest.raises(RuntimeError, match="DeepSeek embedding"):
@@ -793,25 +886,31 @@ class TestStubModules:
     """Import and exercise trivial 0%-coverage modules."""
 
     def test_provider_decorators(self):
+        """Test provider decorators."""
         from ai_cli.providers.decorators import chat_provider, provider
 
         @provider("__test_prov_dec__")
         class P1:
-            pass
+            """Tests for P1."""
 
         assert P1 is not None
 
         @chat_provider("__test_chat_dec__")
         class P2:
-            def ask(self, prompt: str, **kwargs):
+            """Tests for P2."""
+
+            def ask(self, prompt: str, **_kwargs):
+                """Test ask."""
                 return prompt
 
-            def send(self, prompt: str, **kwargs):
+            def send(self, prompt: str, **_kwargs):
+                """Test send."""
                 return prompt
 
         assert P2 is not None
 
     def test_openai_module(self):
+        """Test openai module."""
         from ai_cli.providers.openai_provider import OpenAIProvider
 
         p = OpenAIProvider(api_key="test")
@@ -819,6 +918,7 @@ class TestStubModules:
         assert "Mock response" in result
 
     def test_test_mode(self):
+        """Test mode."""
         from ai_cli.utils.test_mode import is_test_mode
 
         with patch.dict(os.environ, {"AI_CLI_TEST_MODE": "1"}):

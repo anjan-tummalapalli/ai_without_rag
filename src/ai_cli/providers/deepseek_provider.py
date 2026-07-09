@@ -121,9 +121,6 @@ class DeepSeekProvider:
         )
 
     def send(self, prompt: str, **kwargs: Any) -> str:
-        if self.api_key == "test":
-            return "mock:hello"
-
         try:
             response = self._chat(prompt, **kwargs)
 
@@ -150,17 +147,11 @@ class DeepSeekProvider:
             return str(response)
 
         except Exception as exc:
-            raise RuntimeError(
-                f"DeepSeek request failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"DeepSeek request failed: {exc}") from exc
 
     def chat(self, prompt: str, **kwargs: Any) -> str:
         try:
-            response = self.client(
-                model=self.DEFAULT_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                **kwargs,
-            )
+            response = self._chat(prompt, **kwargs)
 
             if hasattr(response, "choices") and response.choices:
                 choice = response.choices[0]

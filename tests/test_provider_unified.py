@@ -39,8 +39,20 @@ def test_zai_provider():
 
 
 def test_deepseek_provider():
+    from unittest.mock import MagicMock, patch
+
     from ai_cli.providers.deepseek_provider import DeepSeekProvider
 
-    provider = DeepSeekProvider(api_key="test")
-    result = provider.send("hello")
-    assert result is not None
+    with patch("ai_cli.providers.deepseek_provider.OpenAI") as mock_cls:
+        mock_client = MagicMock()
+        mock_cls.return_value = mock_client
+        provider = DeepSeekProvider(api_key="test")
+        mock_choice = MagicMock()
+        mock_choice.message.content = "hello back"
+        mock_client.chat.completions.create.return_value = MagicMock(
+            choices=[mock_choice]
+        )
+
+        result = provider.send("hello")
+
+    assert result == "hello back"

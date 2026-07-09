@@ -3,6 +3,7 @@ import io
 from unittest.mock import MagicMock
 
 import pytest
+
 from ai_cli import cli
 from ai_cli.ai_chat import chunk_text
 from ai_cli.cli import (
@@ -153,6 +154,7 @@ def test_chunk_validation():
 
 def test_cli_no_args_exit(monkeypatch):
     import pytest
+
     from ai_cli import cli
 
     monkeypatch.setattr(
@@ -656,7 +658,7 @@ def test_deepseek_chat_success():
 
     p.client = MagicMock()
 
-    p.client.return_value = MagicMock(
+    p.client.chat.completions.create.return_value = MagicMock(
         choices=[MagicMock(message=MagicMock(content="ok"))]
     )
 
