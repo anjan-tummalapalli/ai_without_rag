@@ -1,8 +1,8 @@
+from ai_cli.providers.contracts import ChatProvider, EmbeddingProvider
 from ai_cli.providers.registry import (
     CHAT_PROVIDERS,
 )
 from ai_cli.utils.test_mode import is_test_mode
-from ai_cli.providers.contracts import ChatProvider, EmbeddingProvider
 
 
 def test_all_chat_providers_have_ask():

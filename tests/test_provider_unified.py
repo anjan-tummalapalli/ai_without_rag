@@ -1,10 +1,17 @@
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from ai_cli.providers import factory
+from ai_cli.providers.cohere_provider import CohereProvider
+from ai_cli.providers.config import resolve_api_key
+from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli.providers.gemini_provider import GeminiProvider
 from ai_cli.providers.openai import OpenAIProvider
 from ai_cli.providers.spec import ProviderRequest
-from ai_cli.providers.config import resolve_api_key
+from ai_cli.providers.xAI_provider import XAIProvider
+from ai_cli.providers.zAI_provider import ZAIProvider
 
 
 class FakeClient:
@@ -16,42 +23,30 @@ class FakeClient:
 
 
 def test_gemini_provider_basic():
-    from ai_cli.providers.gemini_provider import GeminiProvider
-
     provider = GeminiProvider(api_key="test")
     result = provider.send("hello")
     assert result is not None
 
 
 def test_cohere_provider_basic():
-    from ai_cli.providers.cohere_provider import CohereProvider
-
     provider = CohereProvider(api_key="test")
     result = provider.send("hello")
     assert result is not None
 
 
 def test_xai_provider():
-    from ai_cli.providers.xAI_provider import XAIProvider
-
     provider = XAIProvider(api_key="test")
     result = provider.send("hello")
     assert result is not None
 
 
 def test_zai_provider():
-    from ai_cli.providers.zAI_provider import ZAIProvider
-
     provider = ZAIProvider(api_key="test")
     result = provider.send("hello")
     assert result is not None
 
 
 def test_deepseek_provider():
-    from unittest.mock import MagicMock, patch
-
-    from ai_cli.providers.deepseek_provider import DeepSeekProvider
-
     with patch("ai_cli.providers.deepseek_provider.OpenAI") as mock_cls:
         mock_client = MagicMock()
         mock_cls.return_value = mock_client

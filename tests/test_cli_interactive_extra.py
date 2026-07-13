@@ -1,5 +1,5 @@
 import builtins
-import pytest
+
 import ai_cli.cli as cli
 
 

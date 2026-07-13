@@ -1,3 +1,5 @@
+import pytest
+
 from ai_cli.utils import secrets
 from ai_cli.utils.secrets import chunk_text
 
@@ -26,10 +28,6 @@ def test_chunk_text_forward_progress_branch():
     assert len(chunks) >= 2
     assert chunks[0] == "abcdefghij"
     assert chunks[-1]
-
-import pytest
-
-from ai_cli.utils.secrets import chunk_text
 
 
 def test_chunk_text_invalid_chunk_size():

@@ -1,4 +1,30 @@
+import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
+import requests
+
+from ai_cli.providers.cohere_provider import CohereProvider
+from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli.providers.echo_provider import EchoProvider
+from ai_cli.providers.openai_provider import (
+    OpenAIProvider,
+    SimpleOpenAIProvider,
+)
+from ai_cli.providers.perplexity_provider import PerplexityProvider
+from ai_cli.providers.xai_provider import XAIProvider
+from ai_cli.providers.zai_provider import ZAIProvider
+
+try:
+    from ai_cli.providers.gemini_provider import (
+        GEMINI_IMPORT_ERROR,
+        GeminiProvider,
+    )
+except Exception as e:
+    GeminiProvider = None
+    GEMINI_IMPORT_ERROR = e
+
+
 
 pytest.skip("Gemini SDK incompatible on Python 3.14 in this environment", allow_module_level=True)
 

@@ -1,19 +1,29 @@
+import sys
+from unittest.mock import MagicMock
+
 import pytest
 
-pytest.skip("Gemini SDK incompatible on Python 3.14 in this environment", allow_module_level=True)
+try:
+    from ai_cli.providers.gemini_provider import (
+        GeminiProvider,
+        InMemoryVectorDB,
+        ProviderRequestError,
+        genai,
+    )
+except Exception as exc:
+    GeminiProvider = None
+    ProviderRequestError = RuntimeError
+    InMemoryVectorDB = None
+    genai = None
+    GEMINI_IMPORT_ERROR = exc
+else:
+    GEMINI_IMPORT_ERROR = None
+
 
 pytestmark = pytest.mark.skipif(
     sys.version_info >= (3, 14),
     reason="Gemini SDK is incompatible with Python 3.14 in this environment",
 )
-
-try:
-    from ai_cli.providers.gemini_provider import GeminiProvider
-except Exception as exc:
-    GeminiProvider = None
-    GEMINI_IMPORT_ERROR = exc
-else:
-    GEMINI_IMPORT_ERROR = None
 
 
 def test_gemini_import_available():
@@ -22,7 +32,7 @@ def test_gemini_import_available():
     assert GeminiProvider is not None
 
 
-
+@pytest.mark.skipif(GeminiProvider is None, reason="Gemini provider unavailable")
 class TestGeminiCoverageBoost:
     def _provider(self):
         p = GeminiProvider.__new__(GeminiProvider)
@@ -37,14 +47,9 @@ class TestGeminiCoverageBoost:
         p.client = MagicMock()
         return p
 
-    # ------------------------------------------------------------------
-    # InMemoryVectorDB
-    # ------------------------------------------------------------------
-
     def test_cosine_zero_norm(self):
         assert (
-            InMemoryVectorDB._cosine_similarity_with_norms([1], 0.0, [1], 1.0)
-            == 0.0
+            InMemoryVectorDB._cosine_similarity_with_norms([1], 0.0, [1], 1.0) == 0.0
         )
 
     def test_cosine_normal(self):
@@ -90,10 +95,6 @@ class TestGeminiCoverageBoost:
         result = db.query([1.0], top_k=2)
         assert len(result) == 2
 
-    # ------------------------------------------------------------------
-    # chunk_text
-    # ------------------------------------------------------------------
-
     def test_chunk_empty(self):
         p = self._provider()
         assert p.chunk_text("") == []
@@ -106,10 +107,6 @@ class TestGeminiCoverageBoost:
         p = self._provider()
         chunks = p.chunk_text("abcdefghijklmnopqrstuvwxyz")
         assert len(chunks) > 1
-
-    # ------------------------------------------------------------------
-    # embeddings
-    # ------------------------------------------------------------------
 
     def test_embeddings_empty(self):
         p = self._provider()
@@ -124,9 +121,7 @@ class TestGeminiCoverageBoost:
             p._create_embeddings(["abc"])
 
     def test_embeddings_missing_vector(self, monkeypatch):
-        monkeypatch.setattr(
-            genai, "embed_content", lambda **kwargs: {}, raising=False
-        )
+        monkeypatch.setattr(genai, "embed_content", lambda **kwargs: {}, raising=False)
 
         p = self._provider()
 
@@ -143,10 +138,6 @@ class TestGeminiCoverageBoost:
 
         with pytest.raises(ProviderRequestError):
             p._create_embeddings(["abc"])
-
-    # ------------------------------------------------------------------
-    # index_document
-    # ------------------------------------------------------------------
 
     def test_index_document_no_chunks(self):
         p = self._provider()
@@ -173,10 +164,6 @@ class TestGeminiCoverageBoost:
         with pytest.raises(ProviderRequestError):
             p.index_document("doc", "text")
 
-    # ------------------------------------------------------------------
-    # query_vector_db
-    # ------------------------------------------------------------------
-
     def test_query_embedding_failure(self):
         p = self._provider()
         p._create_embeddings = MagicMock(return_value=[])
@@ -190,10 +177,6 @@ class TestGeminiCoverageBoost:
 
         with pytest.raises(ProviderRequestError):
             p.query_vector_db("abc")
-
-    # ------------------------------------------------------------------
-    # retrieve context
-    # ------------------------------------------------------------------
 
     def test_context_none(self):
         p = self._provider()
@@ -212,10 +195,6 @@ class TestGeminiCoverageBoost:
         assert "one" in result
         assert "two" in result
 
-    # ------------------------------------------------------------------
-    # send_with_rag
-    # ------------------------------------------------------------------
-
     def test_send_with_rag_no_embedding_model(self):
         p = self._provider()
         p.embedding_model = None
@@ -232,17 +211,10 @@ class TestGeminiCoverageBoost:
         p = self._provider()
         p.retrieve_relevant_context = MagicMock(return_value="CTX")
         p._send_impl = MagicMock(return_value="ok")
-        p.send_with_rag(
-            "hello",
-            prepend_context=False,
-        )
+        p.send_with_rag("hello", prepend_context=False)
         sent = p._send_impl.call_args.args[0]
         assert sent.startswith("hello")
         assert "CTX" in sent
-
-    # ------------------------------------------------------------------
-    # send / health
-    # ------------------------------------------------------------------
 
     def test_send_mock(self):
         p = self._provider()

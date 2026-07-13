@@ -1,23 +1,27 @@
+from unittest.mock import MagicMock
+
 import pytest
+
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
 
 
 def test_deepseek_missing_key():
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         DeepSeekProvider(api_key=None).send("hello")
 
 
-def test_deepseek_success(monkeypatch):
+def test_deepseek_success():
     class FakeResp:
-        choices = [type("C", (), {"message": type("M", (), {"content": "ok"})()})]
+        def __init__(self):
+            self.choices = [
+                type("C", (), {"message": type("M", (), {"content": "ok"})()})()
+            ]
 
-    class FakeCompletions:
-        def create(self, **kwargs):
-            return FakeResp()
-
-    class FakeClient:
-        chat = type("Chat", (), {"completions": FakeCompletions()})()
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.return_value = FakeResp()
 
     p = DeepSeekProvider(api_key="x")
-    p.client = FakeClient()
-    assert "ok" in p.send("hello")
+    p.client = fake_client
+
+    assert p.send("hello") == "ok"
+
