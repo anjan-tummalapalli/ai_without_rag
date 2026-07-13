@@ -7,13 +7,10 @@ import requests
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
 from ai_cli.providers.echo_provider import EchoProvider
-from ai_cli.providers.openai_provider import (
-    OpenAIProvider,
-    SimpleOpenAIProvider,
-)
+from ai_cli.providers.openai_provider import OpenAIProvider
 from ai_cli.providers.perplexity_provider import PerplexityProvider
-from ai_cli.providers.xai_provider import XAIProvider
-from ai_cli.providers.zai_provider import ZAIProvider
+from ai_cli.providers.xAI_provider import XAIProvider
+from ai_cli.providers.zAI_provider import ZAIProvider
 
 try:
     from ai_cli.providers.gemini_provider import (
@@ -40,28 +37,6 @@ def test_gemini_import_available():
     if GeminiProvider is None:
         pytest.skip(f"Gemini unavailable: {GEMINI_IMPORT_ERROR}")
     assert GeminiProvider is not None
-
-
-def test_simple_openai_provider_init():
-    """Covers __init__()."""
-    provider = SimpleOpenAIProvider(
-        api_key="test-key",
-        model="gpt-test",
-    )
-
-    assert provider.api_key == "test-key"
-    assert provider.model == "gpt-test"
-
-
-def test_simple_openai_provider_ask():
-    """Covers ask()."""
-    provider = SimpleOpenAIProvider(
-        api_key="abc",
-        model="gpt-test",
-    )
-
-    response = provider.ask("Hello OpenAI")
-    assert response == "OpenAI response: Hello OpenAI"
 
 
 def _setup_openai_mock(openai_mock, chat_text="response"):
