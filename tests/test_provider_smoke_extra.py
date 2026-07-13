@@ -6,13 +6,15 @@ from ai_cli.providers.xAI_provider import XAIProvider
 from ai_cli.providers.zAI_provider import ZAIProvider
 
 
+class Boom(Exception):
+    pass
+
+
+def fail(*args, **kwargs):
+    raise Boom("fail")
+
+
 def test_openai_provider_raises_on_api_error():
-    class Boom(Exception):
-        pass
-
-    def fail(*args, **kwargs):
-        raise Boom("fail")
-
     p = OpenAIProvider(api_key="x")
     p.client = type(
         "C",
@@ -37,12 +39,6 @@ def test_openai_provider_raises_on_api_error():
         match="OpenAI request failed",
     ):
         p.send("hello")
-
-class Boom(Exception):
-    pass
-
-def fail(*args, **kwargs):
-    raise Boom("fail")
 
 
 def test_xai_missing_key():
