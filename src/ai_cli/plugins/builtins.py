@@ -15,8 +15,6 @@ from ai_cli.providers.registry import PROVIDERS, register_provider
 logger = logging.getLogger(__name__)
 
 
-
-
 class OpenAIProvider(AIProvider):
     """Concrete provider using OpenAI SDK."""
 
@@ -31,6 +29,7 @@ class OpenAIProvider(AIProvider):
     def send(self, prompt: str, **kwargs: Any) -> str:
         try:
             import importlib
+
             OpenAI = importlib.import_module("openai").OpenAI
         except Exception as exc:
             raise ProviderConfigurationError("Install openai package") from exc
@@ -59,7 +58,6 @@ class OpenAIProvider(AIProvider):
         return content.strip()
 
 
-
 class OpenAICompatibleProvider(AIProvider):
     """Generic provider for OpenAI-compatible APIs."""
 
@@ -78,15 +76,20 @@ class OpenAICompatibleProvider(AIProvider):
     def _get_openai_client(self) -> Any:
         try:
             import importlib
+
             OpenAI = importlib.import_module("openai").OpenAI
         except Exception as exc:
-            raise ProviderConfigurationError("Install OpenAI SDK: pip install openai") from exc
+            raise ProviderConfigurationError(
+                "Install OpenAI SDK: pip install openai"
+            ) from exc
 
         api_key = os.getenv(self.api_key_env)
         if not api_key:
             raise ProviderConfigurationError(f"{self.api_key_env} not set")
 
-        return OpenAI(api_key=api_key, base_url=self.api_base_url, timeout=self.timeout)
+        return OpenAI(
+            api_key=api_key, base_url=self.api_base_url, timeout=self.timeout
+        )
 
     def send(self, prompt: str, **kwargs: Any) -> str:
         client = self._get_openai_client()
@@ -98,7 +101,9 @@ class OpenAICompatibleProvider(AIProvider):
                 max_tokens=2048,
             )
         except Exception as exc:
-            raise ProviderRequestError(f"{self.provider_name} request failed: {exc}") from exc
+            raise ProviderRequestError(
+                f"{self.provider_name} request failed: {exc}"
+            ) from exc
 
         try:
             content = response.choices[0].message.content
@@ -187,6 +192,7 @@ class CohereProvider(AIProvider):
     def send(self, prompt: str, **kwargs) -> str:
         try:
             import importlib
+
             cohere = importlib.import_module("cohere")
         except Exception as exc:
             raise ProviderConfigurationError(
@@ -215,8 +221,6 @@ class CohereProvider(AIProvider):
             raise ResponseValidationError("Empty response")
 
         return content.strip()
-
-
 
 
 # Register them

@@ -24,4 +24,3 @@ def test_deepseek_success():
     p.client = fake_client
 
     assert p.send("hello") == "ok"
-

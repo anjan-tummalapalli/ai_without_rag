@@ -92,9 +92,7 @@ class DeepSeekProvider:
             content = response.choices[0].message.content
             return content.strip() if content else ""
         except Exception as exc:
-            raise RuntimeError(
-                f"DeepSeek request failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"DeepSeek request failed: {exc}") from exc
 
     def embeddings(
         self, texts: list[str], model: str | None = None
@@ -125,10 +123,8 @@ class DeepSeekProvider:
     def send(self, prompt: str, **kwargs: Any) -> str:
         try:
             if self.client is None:
-                raise RuntimeError(
-                    "DeepSeek client is not initialized."
-                )
-            
+                raise RuntimeError("DeepSeek client is not initialized.")
+
             response = self._chat(prompt, **kwargs)
 
             if hasattr(response, "choices") and response.choices:
@@ -154,9 +150,7 @@ class DeepSeekProvider:
             return str(response)
 
         except Exception as exc:
-            raise RuntimeError(
-                f"DeepSeek request failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"DeepSeek request failed: {exc}") from exc
 
     def chat(self, prompt: str, **kwargs: Any) -> str:
         try:

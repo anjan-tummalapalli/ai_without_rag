@@ -525,6 +525,7 @@ class Telemetry:
         self.events.append(event)
         return True
 
+
 # ----------------------------------------------------------------------
 # Backward compatibility for older tests/code
 # ----------------------------------------------------------------------

@@ -1033,11 +1033,13 @@ def test_run_interactive_search(monkeypatch):
         == 0
     )
 
+
 def test_main_rejects_empty_prompt(monkeypatch):
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     with pytest.raises(SystemExit) as exc:
         main([])
     assert exc.value.code == 2
+
 
 def test_main_reads_stdin(monkeypatch):
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
@@ -1050,6 +1052,7 @@ def test_main_reads_stdin(monkeypatch):
         lambda kwargs: 0,
     )
     assert main([]) == 0
+
 
 def test_main_debug_flag(monkeypatch):
     monkeypatch.setattr("ai_cli.cli._invoke_with_retries", lambda kwargs: 0)

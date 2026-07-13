@@ -375,9 +375,7 @@ class GeminiProvider(AIProvider):
                 "Embedding API not available in google-genai SDK"
             )
 
-        result = self.client.models.embed_content(
-            model=model, contents=payload
-        )
+        result = self.client.models.embed_content(model=model, contents=payload)
         embeddings = getattr(result, "embeddings", None)
         if not embeddings:
             raise ProviderRequestError("Embedding API returned no data")

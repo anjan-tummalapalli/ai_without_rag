@@ -161,9 +161,7 @@ class XAIProvider(AIProvider):
                 print("[xAI] returning mock:hello")
                 return "mock:hello"
             if not self.api_key:
-                raise ProviderRequestError(
-                        "xAI API key not configured"
-                )
+                raise ProviderRequestError("xAI API key not configured")
             response = self.client.chat.completions.create(
                 model=self.model or "grok-beta",
                 messages=[{"role": "user", "content": prompt}],

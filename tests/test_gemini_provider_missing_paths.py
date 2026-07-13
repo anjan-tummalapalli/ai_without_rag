@@ -117,6 +117,7 @@ def test_is_ready_true(monkeypatch):
 
     assert p.is_ready() is True
 
+
 def test_query_vector_db_empty_embeddings(monkeypatch):
     p = make_provider()
 
@@ -128,6 +129,7 @@ def test_query_vector_db_empty_embeddings(monkeypatch):
 
     with pytest.raises(ProviderRequestError):
         p.query_vector_db("hello")
+
 
 def test_query_vector_db_embedding_failure(monkeypatch):
     p = make_provider()
@@ -143,6 +145,7 @@ def test_query_vector_db_embedding_failure(monkeypatch):
 
     with pytest.raises(ProviderRequestError):
         p.query_vector_db("hello")
+
 
 def test_query_vector_db_vector_store_failure(monkeypatch):
     p = make_provider()

@@ -15,6 +15,7 @@ def provider():
 # _send_impl
 # ------------------------------------------------------------------
 
+
 def test_send_impl_test_key():
     p = provider()
     assert p._send_impl("hello") == "gemini response"
@@ -23,6 +24,7 @@ def test_send_impl_test_key():
 # ------------------------------------------------------------------
 # health_check
 # ------------------------------------------------------------------
+
 
 def test_health_check_true():
     p = provider()
@@ -63,6 +65,7 @@ def test_health_check_false():
 # chunk_text
 # ------------------------------------------------------------------
 
+
 def test_chunk_text_empty():
     p = provider()
     assert p.chunk_text("") == []
@@ -84,6 +87,7 @@ def test_chunk_text_normal():
 # ------------------------------------------------------------------
 # index_document
 # ------------------------------------------------------------------
+
 
 def test_index_document_no_chunks(monkeypatch):
     p = provider()
@@ -145,6 +149,7 @@ def test_index_document_upsert_failure(monkeypatch):
 # retrieve_relevant_context
 # ------------------------------------------------------------------
 
+
 def test_retrieve_context_empty(monkeypatch):
     p = provider()
 
@@ -175,9 +180,11 @@ def test_retrieve_context_success(monkeypatch):
     assert "xyz" in result
     assert "---" in result
 
+
 # ------------------------------------------------------------------
 # send_with_rag
 # ------------------------------------------------------------------
+
 
 def test_send_with_rag_missing_embedding():
     p = GeminiProvider(api_key="test-key")

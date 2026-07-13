@@ -32,7 +32,9 @@ def test_gemini_import_available():
     assert GeminiProvider is not None
 
 
-@pytest.mark.skipif(GeminiProvider is None, reason="Gemini provider unavailable")
+@pytest.mark.skipif(
+    GeminiProvider is None, reason="Gemini provider unavailable"
+)
 class TestGeminiCoverageBoost:
     def _provider(self):
         p = GeminiProvider.__new__(GeminiProvider)
@@ -49,7 +51,8 @@ class TestGeminiCoverageBoost:
 
     def test_cosine_zero_norm(self):
         assert (
-            InMemoryVectorDB._cosine_similarity_with_norms([1], 0.0, [1], 1.0) == 0.0
+            InMemoryVectorDB._cosine_similarity_with_norms([1], 0.0, [1], 1.0)
+            == 0.0
         )
 
     def test_cosine_normal(self):
@@ -121,7 +124,9 @@ class TestGeminiCoverageBoost:
             p._create_embeddings(["abc"])
 
     def test_embeddings_missing_vector(self, monkeypatch):
-        monkeypatch.setattr(genai, "embed_content", lambda **kwargs: {}, raising=False)
+        monkeypatch.setattr(
+            genai, "embed_content", lambda **kwargs: {}, raising=False
+        )
 
         p = self._provider()
 

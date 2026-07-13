@@ -107,9 +107,7 @@ class CohereProvider(BaseProvider):
             if self.api_key == "test":
                 return "mock:hello"
 
-            raise RuntimeError(
-                "Cohere client is not initialized."
-            )
+            raise RuntimeError("Cohere client is not initialized.")
 
         resp = self.client.chat(message=prompt)
         return resp.text

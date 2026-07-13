@@ -15,6 +15,7 @@ from ai_cli.core.exceptions import (
 # OpenAI Provider
 # ---------------------------------------------------------------------
 
+
 def test_openai_missing_api_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
@@ -61,9 +62,7 @@ def test_openai_request_failure(monkeypatch):
 def test_openai_invalid_response(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "dummy")
 
-    response = SimpleNamespace(
-        choices=[]
-    )
+    response = SimpleNamespace(choices=[])
 
     fake_client = MagicMock()
     fake_client.chat.completions.create.return_value = response
@@ -114,6 +113,7 @@ def test_openai_success(monkeypatch):
 # ---------------------------------------------------------------------
 # OpenAI Compatible Providers
 # ---------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "provider_cls,env_name",
@@ -179,6 +179,7 @@ def test_openai_compatible_success(monkeypatch, provider_cls, env_name):
 # Gemini
 # ---------------------------------------------------------------------
 
+
 def test_gemini_missing_key(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
@@ -192,6 +193,7 @@ def test_gemini_missing_key(monkeypatch):
 # Cohere
 # ---------------------------------------------------------------------
 
+
 def test_cohere_missing_key(monkeypatch):
     monkeypatch.delenv("COHERE_API_KEY", raising=False)
 
@@ -199,6 +201,7 @@ def test_cohere_missing_key(monkeypatch):
 
     with pytest.raises(ProviderConfigurationError):
         provider.send("hello")
+
 
 def test_openai_empty_response(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "dummy")
@@ -223,6 +226,7 @@ def test_openai_empty_response(monkeypatch):
     with pytest.raises(ResponseValidationError):
         provider.send("hello")
 
+
 def test_openai_compatible_import_failure(monkeypatch):
     monkeypatch.setenv("PERPLEXITY_API_KEY", "dummy")
 
@@ -236,6 +240,7 @@ def test_openai_compatible_import_failure(monkeypatch):
 
     with pytest.raises(ProviderConfigurationError):
         provider.send("hello")
+
 
 def test_openai_compatible_request_failure(monkeypatch):
     monkeypatch.setenv("PERPLEXITY_API_KEY", "dummy")
@@ -255,6 +260,7 @@ def test_openai_compatible_request_failure(monkeypatch):
 
     with pytest.raises(ProviderRequestError):
         provider.send("hello")
+
 
 def test_openai_compatible_invalid_response(monkeypatch):
     monkeypatch.setenv("PERPLEXITY_API_KEY", "dummy")
@@ -276,6 +282,7 @@ def test_openai_compatible_invalid_response(monkeypatch):
 
     with pytest.raises(ResponseValidationError):
         provider.send("hello")
+
 
 def test_openai_compatible_empty_response(monkeypatch):
     monkeypatch.setenv("PERPLEXITY_API_KEY", "dummy")
@@ -300,9 +307,11 @@ def test_openai_compatible_empty_response(monkeypatch):
     with pytest.raises(ResponseValidationError):
         provider.send("hello")
 
+
 def test_gemini_provider_init():
     provider = builtins.GeminiProvider()
     assert provider.provider_name == "gemini"
+
 
 def test_cohere_import_failure(monkeypatch):
     monkeypatch.setenv("COHERE_API_KEY", "dummy")
@@ -317,6 +326,7 @@ def test_cohere_import_failure(monkeypatch):
 
     with pytest.raises(ProviderConfigurationError):
         provider.send("hello")
+
 
 def test_cohere_request_failure(monkeypatch):
     monkeypatch.setenv("COHERE_API_KEY", "dummy")
@@ -339,13 +349,12 @@ def test_cohere_request_failure(monkeypatch):
     with pytest.raises(ProviderRequestError):
         provider.send("hello")
 
+
 def test_cohere_invalid_response(monkeypatch):
     monkeypatch.setenv("COHERE_API_KEY", "dummy")
 
     fake_client = MagicMock()
-    fake_client.generate.return_value = SimpleNamespace(
-        generations=[]
-    )
+    fake_client.generate.return_value = SimpleNamespace(generations=[])
 
     fake_sdk = SimpleNamespace(
         Client=lambda key: fake_client,
@@ -361,6 +370,7 @@ def test_cohere_invalid_response(monkeypatch):
 
     with pytest.raises(ResponseValidationError):
         provider.send("hello")
+
 
 def test_cohere_success(monkeypatch):
     monkeypatch.setenv("COHERE_API_KEY", "dummy")
@@ -385,6 +395,7 @@ def test_cohere_success(monkeypatch):
     provider = builtins.CohereProvider()
 
     assert provider.send("hi") == "hello"
+
 
 def test_cohere_empty_response(monkeypatch):
     monkeypatch.setenv("COHERE_API_KEY", "dummy")

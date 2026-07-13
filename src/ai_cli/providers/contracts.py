@@ -9,6 +9,7 @@ class ChatProvider(ABC):
     def ask(self, prompt: str, **kwargs: Any) -> str:
         pass
 
+
 class EmbeddingProvider(ABC):
     @abstractmethod
     def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:

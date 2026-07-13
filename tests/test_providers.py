@@ -25,8 +25,10 @@ except Exception as e:
     GEMINI_IMPORT_ERROR = e
 
 
-
-pytest.skip("Gemini SDK incompatible on Python 3.14 in this environment", allow_module_level=True)
+pytest.skip(
+    "Gemini SDK incompatible on Python 3.14 in this environment",
+    allow_module_level=True,
+)
 
 pytestmark = pytest.mark.skipif(
     sys.version_info >= (3, 14),
@@ -38,6 +40,7 @@ def test_gemini_import_available():
     if GeminiProvider is None:
         pytest.skip(f"Gemini unavailable: {GEMINI_IMPORT_ERROR}")
     assert GeminiProvider is not None
+
 
 def test_simple_openai_provider_init():
     """Covers __init__()."""

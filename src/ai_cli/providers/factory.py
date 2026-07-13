@@ -20,8 +20,4 @@ def build_provider(request: Any) -> Any:
     kwargs = request.kwargs or {}
     kwargs["api_key"] = api_key
 
-    return cls(
-        provider_name=provider_name,
-        model=request.model,
-        **kwargs
-    )
+    return cls(provider_name=provider_name, model=request.model, **kwargs)

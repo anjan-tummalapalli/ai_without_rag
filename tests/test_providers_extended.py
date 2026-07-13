@@ -288,7 +288,6 @@ class TestAutoProvider:
         assert isinstance(ap.fallback_order, list)
 
 
-
 # --------------------------------------------
 # providers/openai_provider.py
 # --------------------------------------------

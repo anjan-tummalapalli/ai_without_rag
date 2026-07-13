@@ -12,13 +12,15 @@ def test_run_interactive_help(monkeypatch, capsys):
 
 
 def test_run_interactive_switch_model_profile_stream(monkeypatch):
-    inputs = iter([
-        "/switch echo",
-        "/model gpt-4o",
-        "/profile dev",
-        "/stream",
-        "/quit",
-    ])
+    inputs = iter(
+        [
+            "/switch echo",
+            "/model gpt-4o",
+            "/profile dev",
+            "/stream",
+            "/quit",
+        ]
+    )
     monkeypatch.setattr(builtins, "input", lambda _: next(inputs))
     assert cli.run_interactive("auto", None, 60) == 0
 

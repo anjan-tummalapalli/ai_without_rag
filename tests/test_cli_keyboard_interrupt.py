@@ -6,18 +6,21 @@ from ai_cli.telemetry.monitoring import Monitoring
 
 def test_interactive_keyboard_interrupt():
     with patch("builtins.input", side_effect=KeyboardInterrupt):
-        assert cli.run_interactive(
-            provider="openai",
-            model=None,
-            profile=None,
-            stream=False,
-            timeout=30,
-            modules=None,
-            rag=None,
-            rag_chunk_size=100,
-            rag_chunk_overlap=10,
-            rag_top_k=3,
-        ) == 0
+        assert (
+            cli.run_interactive(
+                provider="openai",
+                model=None,
+                profile=None,
+                stream=False,
+                timeout=30,
+                modules=None,
+                rag=None,
+                rag_chunk_size=100,
+                rag_chunk_overlap=10,
+                rag_top_k=3,
+            )
+            == 0
+        )
 
 
 def test_empty_input_then_exit():
@@ -25,18 +28,21 @@ def test_empty_input_then_exit():
         "builtins.input",
         side_effect=["", "/quit"],
     ):
-        assert cli.run_interactive(
-            provider="openai",
-            model=None,
-            profile=None,
-            stream=False,
-            timeout=30,
-            modules=None,
-            rag=None,
-            rag_chunk_size=100,
-            rag_chunk_overlap=10,
-            rag_top_k=3,
-        ) == 0
+        assert (
+            cli.run_interactive(
+                provider="openai",
+                model=None,
+                profile=None,
+                stream=False,
+                timeout=30,
+                modules=None,
+                rag=None,
+                rag_chunk_size=100,
+                rag_chunk_overlap=10,
+                rag_top_k=3,
+            )
+            == 0
+        )
 
 
 def test_switch_without_provider():
@@ -125,7 +131,6 @@ def test_large_prompt(monkeypatch):
             rag_chunk_overlap=10,
             rag_top_k=3,
         )
-
 
 
 class BadMetric:
