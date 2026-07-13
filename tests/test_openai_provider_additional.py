@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.openai_provider import OpenAIProvider
 
 
@@ -18,5 +19,5 @@ def test_openai_provider_raises_on_api_error(monkeypatch):
     client.chat.completions.create.side_effect = fail
     monkeypatch.setattr(p, "client", client, raising=False)
 
-    with pytest.raises(Boom, match="fail"):
+    with pytest.raises(ProviderRequestError, match="OpenAI request failed"):
         p.send("hello")

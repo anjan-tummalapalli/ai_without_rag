@@ -6,7 +6,7 @@ from ai_cli.providers.deepseek_provider import DeepSeekProvider
 
 
 def test_deepseek_missing_key():
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         DeepSeekProvider(api_key=None).send("hello")
 
 
