@@ -2,6 +2,7 @@ from ai_cli.providers.registry import (
     CHAT_PROVIDERS,
 )
 from ai_cli.utils.test_mode import is_test_mode
+from ai_cli.providers.contracts import ChatProvider, EmbeddingProvider
 
 
 def test_all_chat_providers_have_ask():
@@ -45,3 +46,23 @@ def test_fake_zai():
         return "mock:zAI:" + prompt
 
     assert fake_send("hello") == "mock:zAI:hello"
+
+
+class DummyChatProvider(ChatProvider):
+    def ask(self, prompt: str, **kwargs):
+        return f"reply:{prompt}"
+
+
+class DummyEmbeddingProvider(EmbeddingProvider):
+    def embed(self, texts, **kwargs):
+        return [[1.0] * len(texts)]
+
+
+def test_chat_provider_contract():
+    provider = DummyChatProvider()
+    assert provider.ask("hello") == "reply:hello"
+
+
+def test_embedding_provider_contract():
+    provider = DummyEmbeddingProvider()
+    assert provider.embed(["a", "b"]) == [[1.0, 1.0]]

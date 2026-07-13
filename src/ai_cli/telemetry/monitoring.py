@@ -524,3 +524,8 @@ class Telemetry:
     def track(self, event: str):
         self.events.append(event)
         return True
+
+# ----------------------------------------------------------------------
+# Backward compatibility for older tests/code
+# ----------------------------------------------------------------------
+Monitoring = Metrics

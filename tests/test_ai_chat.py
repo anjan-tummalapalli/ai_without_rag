@@ -8,8 +8,9 @@ import math
 from collections.abc import Iterable
 from unittest.mock import patch
 
-import ai_cli.cli as cli
 import pytest
+
+import ai_cli.cli as cli
 from ai_cli.ai_chat import (
     _last_sentence_end,
     _last_whitespace,

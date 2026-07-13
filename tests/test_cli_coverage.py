@@ -12,6 +12,7 @@ from ai_cli.cli import (
     _safe_resolve_path,
     _sanitize_log_value,
     build_parser,
+    main,
 )
 from ai_cli.core.exceptions import ProviderRequestError
 
@@ -1031,3 +1032,25 @@ def test_run_interactive_search(monkeypatch):
         )
         == 0
     )
+
+def test_main_rejects_empty_prompt(monkeypatch):
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    with pytest.raises(SystemExit) as exc:
+        main([])
+    assert exc.value.code == 2
+
+def test_main_reads_stdin(monkeypatch):
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr(
+        "ai_cli.cli._read_stdin_prompt",
+        lambda: "hello",
+    )
+    monkeypatch.setattr(
+        "ai_cli.cli._invoke_with_retries",
+        lambda kwargs: 0,
+    )
+    assert main([]) == 0
+
+def test_main_debug_flag(monkeypatch):
+    monkeypatch.setattr("ai_cli.cli._invoke_with_retries", lambda kwargs: 0)
+    assert main(["--debug", "-q", "hello"]) == 0
