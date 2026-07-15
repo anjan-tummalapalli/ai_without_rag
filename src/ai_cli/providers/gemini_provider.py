@@ -26,6 +26,20 @@ from .base import AIProvider, BaseProvider, EchoProvider
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+try:
+    import google.generativeai as genai  # type: ignore  # Legacy SDK
+except Exception:  # pragma: no cover
+    genai = None
+
+def _require_genai():
+    if genai is None:
+        raise RuntimeError(
+            "google.generativeai is unavailable. Install a compatible Gemini SDK "
+            "or use an environment that supports protobuf on this Python version."
+        )
+    return genai
+
+
 
 # Minimal shim used when neither Google Generative AI SDK is installed.
 # Defined at module level so pylint suppression works correctly.
