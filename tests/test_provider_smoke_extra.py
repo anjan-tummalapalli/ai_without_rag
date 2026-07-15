@@ -1,5 +1,4 @@
 import pytest
-
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.openai_provider import OpenAIProvider
 from ai_cli.providers.xAI_provider import XAIProvider

@@ -8,7 +8,10 @@ and public telemetry API functions.
 
 from __future__ import annotations
 
+import importlib
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 # ─────────────────────────────────────────────
 # ModelQualityMetrics computed properties
@@ -390,3 +393,163 @@ class TestTracerExtra:
             t.shutdown()
         except RuntimeError:
             pass
+
+def test_safe_counter_generic_exception(monkeypatch):
+    import ai_cli.telemetry.monitoring as monitoring
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("counter failed")
+
+    monkeypatch.setattr(monitoring, "PromCounter", boom)
+
+    metric = monitoring._safe_counter(
+        "unit_test_counter",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+def test_safe_gauge_generic_exception(monkeypatch):
+    import ai_cli.telemetry.monitoring as monitoring
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("gauge failed")
+
+    monkeypatch.setattr(monitoring, "PromGauge", boom)
+
+    metric = monitoring._safe_gauge(
+        "unit_test_gauge",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+def test_safe_counter_duplicate_without_existing(monkeypatch):
+    import ai_cli.telemetry.monitoring as monitoring
+
+    class Duplicate:
+        def __call__(self, *args, **kwargs):
+            raise ValueError("duplicate")
+
+    monkeypatch.setattr(
+        monitoring,
+        "PromCounter",
+        Duplicate(),
+    )
+
+    monkeypatch.setattr(
+        monitoring,
+        "_find_existing_metric",
+        lambda name: None,
+    )
+
+    metric = monitoring._safe_counter(
+        "duplicate_counter",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+def test_safe_gauge_duplicate_without_existing(monkeypatch):
+    import ai_cli.telemetry.monitoring as monitoring
+
+    class Duplicate:
+        def __call__(self, *args, **kwargs):
+            raise ValueError("duplicate")
+
+    monkeypatch.setattr(
+        monitoring,
+        "PromGauge",
+        Duplicate(),
+    )
+
+    monkeypatch.setattr(
+        monitoring,
+        "_find_existing_metric",
+        lambda name: None,
+    )
+
+    metric = monitoring._safe_gauge(
+        "duplicate_gauge",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+def test_prometheus_import_failure(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name.startswith("prometheus_client"):
+            raise ImportError("missing")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    import ai_cli.telemetry.monitoring as monitoring
+
+    reloaded = importlib.reload(monitoring)
+
+    assert reloaded.PromCounter is None
+    assert reloaded.PromGauge is None
+
+def test_chat_without_client_raises():
+    from ai_cli.providers.cohere_provider import CohereProvider
+
+    provider = CohereProvider(api_key="test")
+
+    provider.client = None
+    provider.api_key = "not-test"
+
+    with pytest.raises(RuntimeError, match="not initialized"):
+        provider._chat("hello")
+
+def test_chunk_text_empty_and_overlap():
+    from ai_cli.providers.cohere_provider import CohereProvider
+
+    provider = CohereProvider(
+        api_key="test",
+        chunk_size=5,
+        chunk_overlap=10,
+    )
+
+    assert provider._chunk_text("") == []
+
+    chunks = provider._chunk_text("abcdefghij")
+
+    assert len(chunks) > 1
+    assert chunks[0] == "abcde"
+
+def test_upsert_documents_no_chunks(monkeypatch):
+    from ai_cli.providers.cohere_provider import CohereProvider
+
+    provider = CohereProvider(api_key="test")
+
+    monkeypatch.setattr(
+        provider,
+        "_chunk_text",
+        lambda text: [],
+    )
+
+    called = False
+
+    def fake_embed(_):
+        nonlocal called
+        called = True
+        return []
+
+    monkeypatch.setattr(
+        provider,
+        "_embed",
+        fake_embed,
+    )
+
+    provider.upsert_documents(["hello"])
+
+    assert called is False

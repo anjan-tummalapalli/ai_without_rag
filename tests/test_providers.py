@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
 from ai_cli.providers.echo_provider import EchoProvider

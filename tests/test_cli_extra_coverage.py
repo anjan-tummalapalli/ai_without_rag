@@ -1,8 +1,7 @@
 import io
 
-import pytest
-
 import ai_cli.cli as cli
+import pytest
 
 
 def test_main_rejects_missing_prompt(monkeypatch):
