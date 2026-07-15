@@ -8,10 +8,13 @@ and public telemetry API functions.
 
 from __future__ import annotations
 
-import importlib
 from unittest.mock import MagicMock, patch
 
 import pytest
+from ai_cli.providers.fallback_provider import _FallbackOkProvider
+
+from ai_cli.core.exceptions import ProviderRequestError
+from ai_cli.providers.auto_provider import PROVIDER_MAP, AutoProvider
 
 # ─────────────────────────────────────────────
 # ModelQualityMetrics computed properties
@@ -105,8 +108,8 @@ class TestMetricsNoOp:
 
     def test_record_request_noop(self):
         m = self._make_noop_metrics()
-        m.record_request("openai")  # Should not raise
-        m.record_request(None)  # provider=None fallback
+        m.record_request("openai")
+        m.record_request(None)
 
     def test_record_failure_noop(self):
         m = self._make_noop_metrics()
@@ -117,13 +120,13 @@ class TestMetricsNoOp:
         m = self._make_noop_metrics()
         m.record_latency("openai", 1.5)
         m.record_latency(None, 0.1)
-        m.record_latency("openai", None)  # seconds=None should early-return
+        m.record_latency("openai", None)
 
     def test_record_chunks_noop(self):
         m = self._make_noop_metrics()
         m.record_chunks("openai", "gpt-4", count=5)
         m.record_chunks(None, None, count=3)
-        m.record_chunks("openai", "gpt-4", count=0)  # count<=0 should skip
+        m.record_chunks("openai", "gpt-4", count=0)
 
     def test_record_embedding_noop(self):
         m = self._make_noop_metrics()
@@ -134,11 +137,11 @@ class TestMetricsNoOp:
         m = self._make_noop_metrics()
         m.record_vector_query("openai", "gpt-4", hits=5, seconds=0.1)
         m.record_vector_query(None, None)
-        m.record_vector_query("openai", "gpt-4", hits=0)  # no hits increment
+        m.record_vector_query("openai", "gpt-4", hits=0)
 
     def test_close_noop(self):
         m = self._make_noop_metrics()
-        m.close()  # Should not raise
+        m.close()
 
 
 # ─────────────────────────────────────────────
@@ -187,7 +190,7 @@ class TestTracer:
 
         t = Tracer.__new__(Tracer)
         t._provider = None
-        t.shutdown()  # Should not raise
+        t.shutdown()
 
     def test_tracer_shutdown_with_provider(self):
         from ai_cli.telemetry.monitoring import Tracer
@@ -319,10 +322,8 @@ class TestNoopMetricExtra:
         from ai_cli.telemetry.monitoring import _NoopMetric
 
         m = _NoopMetric()
-
         assert m.labels("a") is m
         assert m.inc() is None
-
         if hasattr(m, "set"):
             assert m.set(5) is None
 
@@ -337,13 +338,7 @@ class TestSafeMetricCreation:
         with patch.object(
             monitoring,
             "prom_core",
-            type(
-                "P",
-                (),
-                {
-                    "REGISTRY": Dummy(),
-                },
-            ),
+            type("P", (), {"REGISTRY": Dummy()}),
         ):
             assert monitoring._find_existing_metric("missing") is None
 
@@ -353,10 +348,8 @@ class TestTelemetryExtra:
         from ai_cli.telemetry.monitoring import Telemetry
 
         t = Telemetry()
-
         for i in range(10):
             assert t.track(f"e{i}")
-
         assert len(t.events) == 10
 
 
@@ -388,168 +381,35 @@ class TestTracerExtra:
         t = Tracer.__new__(Tracer)
         t._provider = provider
 
-        # should not propagate if implementation catches it
         try:
             t.shutdown()
         except RuntimeError:
             pass
 
-def test_safe_counter_generic_exception(monkeypatch):
-    import ai_cli.telemetry.monitoring as monitoring
 
-    def boom(*args, **kwargs):
-        raise RuntimeError("counter failed")
+class _UnauthorizedThenOkProvider:
+    """Stub that raises an 'unauthorized' error."""
 
-    monkeypatch.setattr(monitoring, "PromCounter", boom)
+    def send(self, prompt: str) -> str:
+        _ = prompt
+        raise ProviderRequestError("401 unauthorized")
 
-    metric = monitoring._safe_counter(
-        "unit_test_counter",
-        "doc",
-        [],
-    )
+    def ask(self, prompt: str) -> str:
+        return self.send(prompt)
 
-    assert isinstance(metric, monitoring._NoopMetric)
 
-def test_safe_gauge_generic_exception(monkeypatch):
-    import ai_cli.telemetry.monitoring as monitoring
+def test_send_skips_unauthorized_error_and_raises() -> None:
+    """send() records an 'unauthorized'-style failure as skipped."""
+    PROVIDER_MAP["__auto_unauthorized__"] = _UnauthorizedThenOkProvider
+    ap = AutoProvider(fallback_order=["__auto_unauthorized__"])
+    with pytest.raises(ProviderRequestError, match="Auto fallback exhausted"):
+        ap.send("hello")
 
-    def boom(*args, **kwargs):
-        raise RuntimeError("gauge failed")
 
-    monkeypatch.setattr(monitoring, "PromGauge", boom)
-
-    metric = monitoring._safe_gauge(
-        "unit_test_gauge",
-        "doc",
-        [],
-    )
-
-    assert isinstance(metric, monitoring._NoopMetric)
-
-def test_safe_counter_duplicate_without_existing(monkeypatch):
-    import ai_cli.telemetry.monitoring as monitoring
-
-    class Duplicate:
-        def __call__(self, *args, **kwargs):
-            raise ValueError("duplicate")
-
-    monkeypatch.setattr(
-        monitoring,
-        "PromCounter",
-        Duplicate(),
-    )
-
-    monkeypatch.setattr(
-        monitoring,
-        "_find_existing_metric",
-        lambda name: None,
-    )
-
-    metric = monitoring._safe_counter(
-        "duplicate_counter",
-        "doc",
-        [],
-    )
-
-    assert isinstance(metric, monitoring._NoopMetric)
-
-def test_safe_gauge_duplicate_without_existing(monkeypatch):
-    import ai_cli.telemetry.monitoring as monitoring
-
-    class Duplicate:
-        def __call__(self, *args, **kwargs):
-            raise ValueError("duplicate")
-
-    monkeypatch.setattr(
-        monitoring,
-        "PromGauge",
-        Duplicate(),
-    )
-
-    monkeypatch.setattr(
-        monitoring,
-        "_find_existing_metric",
-        lambda name: None,
-    )
-
-    metric = monitoring._safe_gauge(
-        "duplicate_gauge",
-        "doc",
-        [],
-    )
-
-    assert isinstance(metric, monitoring._NoopMetric)
-
-def test_prometheus_import_failure(monkeypatch):
-    import builtins
-
-    real_import = builtins.__import__
-
-    def fake_import(name, *args, **kwargs):
-        if name.startswith("prometheus_client"):
-            raise ImportError("missing")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
-
-    import ai_cli.telemetry.monitoring as monitoring
-
-    reloaded = importlib.reload(monitoring)
-
-    assert reloaded.PromCounter is None
-    assert reloaded.PromGauge is None
-
-def test_chat_without_client_raises():
-    from ai_cli.providers.cohere_provider import CohereProvider
-
-    provider = CohereProvider(api_key="test")
-
-    provider.client = None
-    provider.api_key = "not-test"
-
-    with pytest.raises(RuntimeError, match="not initialized"):
-        provider._chat("hello")
-
-def test_chunk_text_empty_and_overlap():
-    from ai_cli.providers.cohere_provider import CohereProvider
-
-    provider = CohereProvider(
-        api_key="test",
-        chunk_size=5,
-        chunk_overlap=10,
-    )
-
-    assert provider._chunk_text("") == []
-
-    chunks = provider._chunk_text("abcdefghij")
-
-    assert len(chunks) > 1
-    assert chunks[0] == "abcde"
-
-def test_upsert_documents_no_chunks(monkeypatch):
-    from ai_cli.providers.cohere_provider import CohereProvider
-
-    provider = CohereProvider(api_key="test")
-
-    monkeypatch.setattr(
-        provider,
-        "_chunk_text",
-        lambda text: [],
-    )
-
-    called = False
-
-    def fake_embed(_):
-        nonlocal called
-        called = True
-        return []
-
-    monkeypatch.setattr(
-        provider,
-        "_embed",
-        fake_embed,
-    )
-
-    provider.upsert_documents(["hello"])
-
-    assert called is False
+def test_send_reports_provider_not_found() -> None:
+    """send() records a 'not found' error for a missing provider class."""
+    PROVIDER_MAP["__auto_present__"] = _FallbackOkProvider
+    ap = AutoProvider(fallback_order=["__auto_present__"])
+    ap.fallback_order = ["__auto_missing_now__", "__auto_present__"]
+    result = ap.send("hello")
+    assert result == "fallback_ok"

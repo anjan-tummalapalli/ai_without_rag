@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from ai_cli.providers import factory
 from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.config import resolve_api_key
