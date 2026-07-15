@@ -5,8 +5,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from ai_cli.core.exceptions import ProviderRequestError
-from ai_cli.providers.auto_provider import AutoProvider, PROVIDER_MAP
+from ai_cli.providers.auto_provider import AutoProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli.providers.registry import PROVIDER_MAP
 
 
 def test_deepseek_missing_key():

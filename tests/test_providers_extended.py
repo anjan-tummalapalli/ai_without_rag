@@ -248,6 +248,19 @@ class _AlwaysFailProvider:
         return self.send(prompt)
 
 
+class _UnauthorizedThenOkProvider:
+    """Stub that raises an 'unauthorized' error."""
+
+    def send(self, prompt: str) -> str:  # noqa: D401
+        """Always raise an unauthorized-style error, ignoring prompt."""
+        _ = prompt
+        raise ProviderRequestError("401 unauthorized")
+
+    def ask(self, prompt: str) -> str:  # noqa: D401
+        """Delegate to send()."""
+        return self.send(prompt)
+
+
 class TestAutoProvider:
     """Tests for AutoProvider fallback logic."""
 
@@ -286,6 +299,25 @@ class TestAutoProvider:
         """AutoProvider initialises fallback_order to a list."""
         ap = AutoProvider()
         assert isinstance(ap.fallback_order, list)
+
+    def test_send_skips_unauthorized_error_and_raises(self) -> None:
+        """send() records an 'unauthorized'-style failure as skipped."""
+        PROVIDER_MAP["__auto_unauthorized__"] = _UnauthorizedThenOkProvider
+        ap = AutoProvider(fallback_order=["__auto_unauthorized__"])
+        with pytest.raises(
+            ProviderRequestError, match="Auto fallback exhausted"
+        ):
+            ap.send("hello")
+
+    def test_send_reports_provider_not_found(self) -> None:
+        """send() records a 'not found' error for a missing provider class."""
+        PROVIDER_MAP["__auto_present__"] = _FallbackOkProvider
+        ap = AutoProvider(fallback_order=["__auto_present__"])
+        # Simulate the provider disappearing from the map between init and
+        # send(), exercising the "provider_cls is None" branch.
+        ap.fallback_order = ["__auto_missing_now__", "__auto_present__"]
+        result = ap.send("hello")
+        assert result == "fallback_ok"
 
 
 # --------------------------------------------
@@ -730,3 +762,37 @@ class TestPerplexityProvider:
         )
         result = p.send("hello")
         assert result == ""
+
+    def test_send_empty_content_returns_empty(self) -> None:
+        """send() returns '' when the message content is empty."""
+        p = self._make_provider()
+        mock_choice = MagicMock()
+        mock_choice.message.content = ""
+        p.client.chat.completions.create.return_value = MagicMock(
+            choices=[mock_choice]
+        )
+        result = p.send("hello")
+        assert result == ""
+
+
+class _UnauthorizedThenOkProvider:
+    """Stub that raises an 'unauthorized' error."""
+
+    def send(self, prompt: str) -> str:  # noqa: D401
+        """Always raise an unauthorized-style error, ignoring prompt."""
+        _ = prompt
+        raise ProviderRequestError("401 unauthorized")
+
+    def ask(self, prompt: str) -> str:  # noqa: D401
+        """Delegate to send()."""
+        return self.send(prompt)
+
+
+class TestPerplexityProviderMissingKey:
+    """Extra coverage for PerplexityProvider missing-key validation."""
+
+    def test_missing_api_key_raises(self, monkeypatch) -> None:
+        """PerplexityProvider raises ValueError when no key is available."""
+        monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
+        with pytest.raises(ValueError, match="PERPLEXITY_API_KEY is required"):
+            PerplexityProvider(api_key=None)

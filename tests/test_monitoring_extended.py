@@ -11,10 +11,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from ai_cli.providers.fallback_provider import _FallbackOkProvider
 
 from ai_cli.core.exceptions import ProviderRequestError
-from ai_cli.providers.auto_provider import PROVIDER_MAP, AutoProvider
+from ai_cli.providers.auto_provider import AutoProvider
+from ai_cli.providers.registry import PROVIDER_MAP
 
 # ─────────────────────────────────────────────
 # ModelQualityMetrics computed properties
@@ -398,6 +398,15 @@ class _UnauthorizedThenOkProvider:
         return self.send(prompt)
 
 
+class _FallbackOkProvider:
+    def send(self, prompt: str) -> str:
+        _ = prompt
+        return "fallback_ok"
+
+    def ask(self, prompt: str) -> str:
+        return self.send(prompt)
+
+
 def test_send_skips_unauthorized_error_and_raises() -> None:
     """send() records an 'unauthorized'-style failure as skipped."""
     PROVIDER_MAP["__auto_unauthorized__"] = _UnauthorizedThenOkProvider
@@ -413,3 +422,93 @@ def test_send_reports_provider_not_found() -> None:
     ap.fallback_order = ["__auto_missing_now__", "__auto_present__"]
     result = ap.send("hello")
     assert result == "fallback_ok"
+
+
+def test_safe_counter_generic_exception(monkeypatch):
+    import ai_cli.telemetry.monitoring as monitoring
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("counter failed")
+
+    monkeypatch.setattr(monitoring, "PromCounter", boom)
+
+    metric = monitoring._safe_counter(
+        "unit_test_counter",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+
+def test_safe_gauge_generic_exception(monkeypatch):
+    import ai_cli.telemetry.monitoring as monitoring
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("gauge failed")
+
+    monkeypatch.setattr(monitoring, "PromGauge", boom)
+
+    metric = monitoring._safe_gauge(
+        "unit_test_gauge",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+
+def test_safe_counter_duplicate_without_existing(monkeypatch):
+    import ai_cli.telemetry.monitoring as monitoring
+
+    class Duplicate:
+        def __call__(self, *args, **kwargs):
+            raise ValueError("duplicate")
+
+    monkeypatch.setattr(
+        monitoring,
+        "PromCounter",
+        Duplicate(),
+    )
+
+    monkeypatch.setattr(
+        monitoring,
+        "_find_existing_metric",
+        lambda name: None,
+    )
+
+    metric = monitoring._safe_counter(
+        "duplicate_counter",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+
+def test_safe_gauge_duplicate_without_existing(monkeypatch):
+    import ai_cli.telemetry.monitoring as monitoring
+
+    class Duplicate:
+        def __call__(self, *args, **kwargs):
+            raise ValueError("duplicate")
+
+    monkeypatch.setattr(
+        monitoring,
+        "PromGauge",
+        Duplicate(),
+    )
+
+    monkeypatch.setattr(
+        monitoring,
+        "_find_existing_metric",
+        lambda name: None,
+    )
+
+    metric = monitoring._safe_gauge(
+        "duplicate_gauge",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)

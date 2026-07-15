@@ -31,9 +31,9 @@ def test_monitoring_has_expected_attributes():
         "track",
     ]
 
-    assert any(
-        hasattr(module, attr) for attr in possible_attrs
-    ), "Telemetry module should expose at least one monitoring function/class"
+    assert any(hasattr(module, attr) for attr in possible_attrs), (
+        "Telemetry module should expose at least one monitoring function/class"
+    )
 
 
 def test_monitoring_functions_execute_safely():
