@@ -796,3 +796,23 @@ class TestPerplexityProviderMissingKey:
         monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
         with pytest.raises(ValueError, match="PERPLEXITY_API_KEY is required"):
             PerplexityProvider(api_key=None)
+
+def test_chunk_text_multiple_windows():
+    p = CohereProvider.__new__(CohereProvider)
+    p.chunk_size = 5
+    p.chunk_overlap = 2
+
+    chunks = p._chunk_text("abcdefghijk")
+
+    assert chunks == [
+        "abcde",
+        "defgh",
+        "ghijk",
+    ]
+
+def test_chunk_empty():
+    p = CohereProvider.__new__(CohereProvider)
+    p.chunk_size = 5
+    p.chunk_overlap = 1
+
+    assert p._chunk_text("") == []
