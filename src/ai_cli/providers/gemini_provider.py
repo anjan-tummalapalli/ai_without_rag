@@ -67,10 +67,12 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
 
 try:
     import google.generativeai as genai  # type: ignore  # Legacy SDK
+
     _GENAI_LEGACY = True
 except Exception:
     try:
         from google import genai  # type: ignore  # New SDK
+
         _GENAI_LEGACY = False
     except Exception:
         genai = _GenaiShim()  # type: ignore[assignment]

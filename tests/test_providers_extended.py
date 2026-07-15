@@ -797,6 +797,7 @@ class TestPerplexityProviderMissingKey:
         with pytest.raises(ValueError, match="PERPLEXITY_API_KEY is required"):
             PerplexityProvider(api_key=None)
 
+
 def test_chunk_text_multiple_windows():
     p = CohereProvider.__new__(CohereProvider)
     p.chunk_size = 5
@@ -809,6 +810,7 @@ def test_chunk_text_multiple_windows():
         "defgh",
         "ghijk",
     ]
+
 
 def test_chunk_empty():
     p = CohereProvider.__new__(CohereProvider)
