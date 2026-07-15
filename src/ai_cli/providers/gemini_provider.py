@@ -26,28 +26,11 @@ from .base import AIProvider, BaseProvider, EchoProvider
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-try:
-    import google.generativeai as genai  # type: ignore  # Legacy SDK
-except Exception:  # pragma: no cover
-    genai = None
 
-def _require_genai():
-    if genai is None:
-        raise RuntimeError(
-            "google.generativeai is unavailable. Install a compatible Gemini SDK "
-            "or use an environment that supports protobuf on this Python version."
-        )
-    return genai
-
-
-
-# Minimal shim used when neither Google Generative AI SDK is installed.
-# Defined at module level so pylint suppression works correctly.
 class _GenaiShim:  # pylint: disable=too-few-public-methods
     """Shim that raises ProviderRequestError when no Google SDK is found."""
 
     def configure(self, *_args, **_kwargs) -> None:
-        """Raise immediately — SDK not installed."""
         raise ProviderRequestError(
             "Google Generative AI SDK is not installed; "
             "install 'google-generativeai' or 'google-genai'."
@@ -57,7 +40,6 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
         """Stub GenerativeModel that raises when SDK is missing."""
 
         def __init__(self, *_args, **_kwargs) -> None:
-            """Raise immediately — SDK not installed."""
             raise ProviderRequestError(
                 "Google Generative AI SDK is not installed; "
                 "cannot create model."
@@ -67,7 +49,6 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
         """Stub Client that raises when SDK is missing."""
 
         def __init__(self, *_args, **_kwargs) -> None:
-            """Raise immediately — SDK not installed."""
             raise ProviderRequestError(
                 "Google Generative AI SDK is not installed; "
                 "cannot create client."
@@ -78,7 +59,6 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
 
             @staticmethod
             def generate_content(*_args, **_kwargs) -> None:
-                """Raise immediately — SDK not installed."""
                 raise ProviderRequestError(
                     "Google Generative AI SDK is not installed; "
                     "cannot generate content."
@@ -87,14 +67,12 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
 
 try:
     import google.generativeai as genai  # type: ignore  # Legacy SDK
-
     _GENAI_LEGACY = True
-except ImportError:
+except Exception:
     try:
         from google import genai  # type: ignore  # New SDK
-
         _GENAI_LEGACY = False
-    except ImportError:
+    except Exception:
         genai = _GenaiShim()  # type: ignore[assignment]
         _GENAI_LEGACY = False
 
@@ -116,11 +94,7 @@ class InMemoryVectorDB:
         self._items: list[dict[str, Any]] = []
 
     def upsert(self, items: list[dict[str, Any]]) -> None:
-        """Insert or replace items by id, precomputing each vector's norm.
-
-        Args:
-            items: Sequence of dicts with at least ``id`` and ``vector`` keys.
-        """
+        """Insert or replace items by id, precomputing each vector's norm."""
         ids = {it["id"] for it in items}
         self._items = [it for it in self._items if it["id"] not in ids]
         for it in items:
@@ -143,17 +117,6 @@ class InMemoryVectorDB:
         b: list[float],
         b_norm: float,
     ) -> float:
-        """Return cosine similarity using precomputed norms.
-
-        Args:
-            a: First vector.
-            a_norm: L2 norm of *a*.
-            b: Second vector.
-            b_norm: L2 norm of *b*.
-
-        Returns:
-            Cosine similarity, or ``0.0`` when either norm is zero.
-        """
         if a_norm == 0.0 or b_norm == 0.0:
             return 0.0
         dot = sum(x * y for x, y in zip(a, b, strict=True))
@@ -162,16 +125,6 @@ class InMemoryVectorDB:
     def query(
         self, vector: list[float], top_k: int = 5
     ) -> list[dict[str, Any]]:
-        """Return *top_k* items most similar to *vector*.
-
-        Args:
-            vector: Query vector.
-            top_k: Maximum number of results to return.
-
-        Returns:
-            List of result dicts with ``id``, ``score``, ``metadata``,
-            and ``text`` keys, sorted by descending score.
-        """
         if not self._items:
             return []
         vec = list(vector)
@@ -200,7 +153,6 @@ class GeminiProvider(AIProvider):
 
     provider_name = "gemini"
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
         self,
         model: str | None = None,
@@ -211,18 +163,6 @@ class GeminiProvider(AIProvider):
         chunk_overlap: int = 50,
         **kwargs: Any,
     ) -> None:
-        """Initialise GeminiProvider.
-
-        Args:
-            model: Gemini model name; defaults to ``"gemini-1.5-flash"``.
-            api_key: Google API key; falls back to ``GEMINI_API_KEY`` env var.
-            embedding_model: Optional embedding model name for RAG.
-            vector_db_client: Optional custom vector store; uses
-                InMemoryVectorDB when not provided.
-            chunk_size: Character chunk size for RAG splitting.
-            chunk_overlap: Character overlap between consecutive chunks.
-            **kwargs: Forwarded to AIProvider.__init__.
-        """
         super().__init__(
             model=model or "gemini-1.5-flash",
             api_key=api_key,
@@ -234,11 +174,6 @@ class GeminiProvider(AIProvider):
                 "GEMINI_API_KEY environment variable is not set"
             )
 
-        # Initialize against whichever SDK generation is available.
-        # The legacy `google-generativeai` SDK uses a global
-        # `genai.configure()` + `GenerativeModel(...)`; the modern
-        # `google-genai` SDK takes the API key directly on `Client(...)`
-        # and has no `configure()` function at all.
         if _GENAI_LEGACY:
             genai.configure(api_key=self.api_key)
             self.client = genai.GenerativeModel(self.model)
@@ -256,15 +191,9 @@ class GeminiProvider(AIProvider):
         self.vector_db = vector_db_client or InMemoryVectorDB()
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-
-        # Use a mock flag when running tests; do not return from __init__.
         self._mock = self.api_key == "test"
 
-    # -----------------------
-    # Core send & health
-    # -----------------------
     def _send_impl(self, prompt: str) -> str:
-        # test override path MUST come first
         if self.api_key in ("test", "test-key"):
             return "gemini response"
 
@@ -281,16 +210,10 @@ class GeminiProvider(AIProvider):
                 return response.text
 
             return "gemini response"
-
         except Exception:
             return "gemini response"
 
     def health_check(self) -> bool:
-        """Perform a lightweight Gemini connectivity test.
-
-        Returns:
-            ``True`` if the model responds with non-empty text.
-        """
         try:
             if self._use_new_api:
                 response = self.client.models.generate_content(  # type: ignore
@@ -300,34 +223,21 @@ class GeminiProvider(AIProvider):
                 response = self.client.generate_content("ping")  # type: ignore
         except Exception:  # pylint: disable=broad-exception-caught
             return False
+
         text = getattr(response, "text", None) or (
             response.get("text") if isinstance(response, dict) else None
         )
         return bool(text)
 
-    # -----------------------
-    # Chunking utilities
-    # -----------------------
     def chunk_text(
         self,
         text: str,
         chunk_size: int | None = None,
         overlap: int | None = None,
     ) -> list[str]:
-        """Split *text* into overlapping character-window chunks.
-
-        Args:
-            text: Source text to split.
-            chunk_size: Override for ``self.chunk_size``.
-            overlap: Override for ``self.chunk_overlap``.
-
-        Returns:
-            List of text chunks; empty when *text* is empty.
-        """
         chunk_size = chunk_size if chunk_size is not None else self.chunk_size
         overlap = overlap if overlap is not None else self.chunk_overlap
 
-        # Ensure forward progress on every iteration.
         step = max(chunk_size - overlap, 1)
         text_len = len(text)
         if text_len == 0:
@@ -341,21 +251,7 @@ class GeminiProvider(AIProvider):
                 break
         return chunks
 
-    # -----------------------
-    # Embeddings utilities
-    # -----------------------
     def _create_embeddings(self, inputs: list[str]) -> list[list[float]]:
-        """Return embedding vectors for *inputs* via the Gemini embedding API.
-
-        Args:
-            inputs: Texts to embed.
-
-        Returns:
-            List of float vectors, one per input string.
-
-        Raises:
-            ProviderRequestError: On API unavailability, empty data, or
-                missing embedding vectors in the response."""
         if not inputs:
             return []
 
@@ -381,7 +277,6 @@ class GeminiProvider(AIProvider):
     def _embed_with_new_sdk(
         self, model: str, payload: list[str]
     ) -> list[list[float]]:
-        """Embed *payload* using the modern ``google-genai`` client."""
         if not hasattr(self.client, "models") or not hasattr(
             self.client.models, "embed_content"
         ):
@@ -407,7 +302,6 @@ class GeminiProvider(AIProvider):
     def _embed_with_legacy_sdk(
         self, model: str, payload: list[str]
     ) -> list[list[float]]:
-        """Embed *payload* using the legacy ``google-generativeai`` SDK."""
         if not hasattr(genai, "embed_content"):
             raise ProviderRequestError(
                 "Embedding API not available in google-generativeai SDK"
@@ -428,25 +322,12 @@ class GeminiProvider(AIProvider):
             vectors.append(list(emb))
         return vectors
 
-    # -----------------------
-    # Indexing and querying
-    # -----------------------
     def index_document(
         self,
         doc_id: str,
         text: str,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Chunk *text*, embed each chunk, and upsert into the vector store.
-
-        Args:
-            doc_id: Unique document identifier (used to namespace chunk IDs).
-            text: Source document text.
-            metadata: Optional metadata dict attached to every chunk.
-
-        Raises:
-            ProviderRequestError: On embedding failure or vector DB error.
-        """
         chunks = self.chunk_text(text)
         if not chunks:
             return
@@ -477,18 +358,6 @@ class GeminiProvider(AIProvider):
     def query_vector_db(
         self, query: str, top_k: int = 3
     ) -> list[dict[str, Any]]:
-        """Embed *query* and return the *top_k* nearest chunks.
-
-        Args:
-            query: Natural-language query string.
-            top_k: Maximum number of results to return.
-
-        Returns:
-            List of result dicts from the vector store.
-
-        Raises:
-            ProviderRequestError: On embedding or vector DB failure.
-        """
         try:
             q_vecs = self._create_embeddings([query])
             if not q_vecs or len(q_vecs) != 1:
@@ -516,25 +385,12 @@ class GeminiProvider(AIProvider):
         top_k: int = 3,
         joiner: str = "\n---\n",
     ) -> str:
-        """Return joined text from the *top_k* most relevant stored chunks.
-
-        Args:
-            query: Natural-language query string.
-            top_k: Number of chunks to retrieve.
-            joiner: Separator between retrieved text snippets.
-
-        Returns:
-            Concatenated context string, or ``""`` when nothing is found.
-        """
         results = self.query_vector_db(query, top_k=top_k)
         if not results:
             return ""
         texts = [res.get("text", "") for res in results if res.get("text")]
         return joiner.join(texts)
 
-    # -----------------------
-    # High-level RAG send
-    # -----------------------
     def send_with_rag(
         self,
         prompt: str,
@@ -542,24 +398,6 @@ class GeminiProvider(AIProvider):
         prepend_context: bool = True,
         context_prefix: str | None = None,
     ) -> str:
-        """Retrieve context from the vector store and send augmented prompt.
-
-        Augments *prompt* with retrieved context before calling the model.
-
-        Args:
-            prompt: User prompt to augment and send.
-            top_k: Number of context chunks to retrieve.
-            prepend_context: When ``True``, context appears before the prompt;
-                otherwise it appears after.
-            context_prefix: Label line before the context block; defaults to
-                ``"Context (retrieved):"``.
-
-        Returns:
-            Model response string.
-
-        Raises:
-            ProviderRequestError: When no embedding model is configured.
-        """
         if not self.embedding_model:
             raise ProviderRequestError(
                 "Embedding model not configured; cannot perform RAG. "
@@ -585,17 +423,16 @@ class GeminiProvider(AIProvider):
     def send(self, prompt: str, **kwargs: Any) -> str:
         if getattr(self, "_mock", False):
             return "gemini response"
-
         return self._send_impl(prompt)
 
     def is_ready(self) -> bool:
         return bool(os.getenv("GEMINI_API_KEY"))
 
 
-# Keep __all__ minimal to avoid importing optional provider modules at package import time.
-# Heavy providers (openai, cohere, xAI, etc.) are loaded lazily by loader/bootstrap.
 __all__ = [
     "BaseProvider",
     "AIProvider",
     "EchoProvider",
+    "GeminiProvider",
+    "InMemoryVectorDB",
 ]
