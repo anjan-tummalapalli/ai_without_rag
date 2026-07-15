@@ -559,24 +559,19 @@ def test_prompt_truncation_in_main(monkeypatch):
 
 
 def test_safe_resolve_path_null_byte():
-
     assert _safe_resolve_path("abc\x00def") is None
 
 
 def test_safe_resolve_path_traversal():
-
     assert _safe_resolve_path("../secret") is None
 
 
 def test_decode_chunk_json_object():
-
     assert _decode_chunk({"a": 1}) == '{"a": 1}'
 
 
 def test_drain_async_result_string():
-
     async def run():
-
         return await _drain_async_result("hello")
 
     assert asyncio.run(run()) == 0
@@ -853,7 +848,6 @@ async def test_drain_async_result_sync_iterable(capsys):
 
 @pytest.mark.asyncio
 async def test_drain_async_keyboardinterrupt(capsys):
-
     from ai_cli.cli import _drain_async_result
 
     class BadAwait:

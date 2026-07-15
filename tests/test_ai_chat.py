@@ -240,7 +240,6 @@ def test_chunk_text_word_split():
 
 
 def test_chunk_text_exact_length_break():
-
     text = "hello"
 
     result = chunk_text(
@@ -253,7 +252,6 @@ def test_chunk_text_exact_length_break():
 
 
 def test_chunk_text_multiple_chunks_progress():
-
     text = "one two three four five six seven eight nine"
 
     result = chunk_text(
@@ -277,7 +275,6 @@ def test_chunk_text_empty_after_strip_exit():
 
 
 def test_chunk_text_empty_chunk_after_strip():
-
     result = chunk_text(
         "   ",
         chunk_size=5,

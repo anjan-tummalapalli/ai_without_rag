@@ -5,7 +5,6 @@ from ai_cli.utils.secrets import chunk_text
 
 
 def test_secret_chunk_text():
-
     result = secrets.chunk_text(
         "hello world",
         chunk_size=10,

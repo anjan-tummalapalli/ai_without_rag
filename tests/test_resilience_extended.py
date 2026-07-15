@@ -154,7 +154,6 @@ def test_circuit_breaker_reopens():
 
 @pytest.mark.asyncio
 async def test_async_retry_engine_success():
-
     engine = AsyncRetryEngine(
         max_attempts=2,
         base_delay=0,
@@ -172,7 +171,6 @@ async def test_async_retry_engine_success():
 @pytest.mark.asyncio
 @pytest.mark.asyncio
 async def test_async_retry_engine_failure():
-
     engine = AsyncRetryEngine(
         max_attempts=1,
     )
@@ -302,7 +300,6 @@ def test_retry_engine_exhausted():
 
 @pytest.mark.asyncio
 async def test_async_retry_decorator():
-
     engine = AsyncRetryEngine()
 
     @engine.decorator()
@@ -340,7 +337,6 @@ def test_execute_with_fallback_exception_path():
 
 
 def test_cache_eviction():
-
     from ai_cli.core.resilience import Cache
 
     cache = Cache(max_entries=1)
@@ -353,7 +349,6 @@ def test_cache_eviction():
 
 
 def test_retry_engine_decorator_executes():
-
     from ai_cli.core.resilience import RetryEngine
 
     engine = RetryEngine()
@@ -366,7 +361,6 @@ def test_retry_engine_decorator_executes():
 
 
 def test_retry_engine_retry_filter():
-
     from ai_cli.core.resilience import RetryEngine
 
     engine = RetryEngine(max_attempts=2, retry_on=(ValueError,), base_delay=0)
@@ -380,7 +374,6 @@ def test_retry_engine_retry_filter():
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_async_wrap():
-
     from ai_cli.core.resilience import CircuitBreaker
 
     cb = CircuitBreaker()
@@ -393,7 +386,6 @@ async def test_circuit_breaker_async_wrap():
 
 
 def test_rate_limiter_constructor_values():
-
     from ai_cli.core.resilience import RateLimiter
 
     limiter = RateLimiter(capacity=5, rate_per_second=2)
@@ -417,7 +409,6 @@ def test_retry_engine_rejects_coroutine():
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_async_wrap_threshold():
-
     cb = CircuitBreaker(threshold=1)
 
     @cb.wrap

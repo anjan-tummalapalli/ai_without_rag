@@ -86,7 +86,6 @@ def test_interactive_profile_and_stream():
 
 
 def test_interactive_index_text():
-
     pipeline = MagicMock()
 
     inputs = iter(
@@ -108,7 +107,6 @@ def test_interactive_index_text():
 
 
 def test_cli_stdin_empty(monkeypatch):
-
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
     monkeypatch.setattr("sys.stdin.buffer.read", lambda x: b"")

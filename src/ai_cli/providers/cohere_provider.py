@@ -102,7 +102,6 @@ class CohereProvider(BaseProvider):
             raise RuntimeError(f"Cohere connection failed: {exc}") from exc
 
     def _chat(self, prompt: str):
-
         if self.client is None:
             if self.api_key == "test":
                 return "mock:hello"

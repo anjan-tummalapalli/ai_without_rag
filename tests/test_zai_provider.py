@@ -150,7 +150,6 @@ def test_zai_provider_http_error(mock_post):
 
 
 def test_zai_success():
-
     provider = ZAIProvider(api_key="fake")
 
     assert provider is not None

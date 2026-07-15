@@ -137,7 +137,6 @@ def test_cohere_api(monkeypatch):
 
 
 def test_deepseek_timeout():
-
     provider = DeepSeekProvider(api_key="fake")
 
     with pytest.raises(Exception, match="DeepSeek connection failed"):
@@ -145,7 +144,6 @@ def test_deepseek_timeout():
 
 
 def test_deepseek_health_check():
-
     p = DeepSeekProvider(api_key="x")
 
     p.ask = lambda *a, **k: "ok"

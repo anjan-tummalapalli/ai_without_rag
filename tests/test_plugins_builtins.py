@@ -149,7 +149,6 @@ def test_openai_compatible_missing_key(monkeypatch, provider_cls, env_name):
     ],
 )
 def test_openai_compatible_success(monkeypatch, provider_cls, env_name):
-
     monkeypatch.setenv(env_name, "dummy")
 
     message = SimpleNamespace(content="success")

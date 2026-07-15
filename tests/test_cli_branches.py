@@ -36,7 +36,6 @@ def test_cli_valid_prompt(monkeypatch):
 
 
 def test_cli_no_args(monkeypatch):
-
     class FakeStdin:
         def isatty(self):
             return False
@@ -65,7 +64,6 @@ def test_cli_no_args(monkeypatch):
     ],
 )
 def test_cli_provider_selection(provider, monkeypatch):
-
     monkeypatch.setattr("ai_cli.cli.ask", lambda *a, **k: "ok")
 
     cli.main(

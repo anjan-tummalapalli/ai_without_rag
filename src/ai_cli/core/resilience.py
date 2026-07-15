@@ -28,7 +28,9 @@ class RateLimiter:
     ) -> None:
         self.capacity = capacity
         self.rate_per_second = rate_per_second
-        self.period = period / rate_per_second if rate_per_second > 0 else period
+        self.period = (
+            period / rate_per_second if rate_per_second > 0 else period
+        )
         self.calls: deque[float] = deque()
 
     def allow(self) -> bool:
@@ -87,7 +89,9 @@ class CircuitBreaker:
         self.record_failure()
 
     @overload
-    def wrap(self, func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]: ...
+    def wrap(
+        self, func: Callable[P, Awaitable[R]]
+    ) -> Callable[P, Awaitable[R]]: ...
 
     @overload
     def wrap(self, func: Callable[P, R]) -> Callable[P, R]: ...
@@ -131,7 +135,8 @@ class CircuitBreaker:
 
         if (
             self.last_failure_time is not None
-            and time.monotonic() - self.last_failure_time > self.recovery_timeout
+            and time.monotonic() - self.last_failure_time
+            > self.recovery_timeout
         ):
             self.open = False
             return True
@@ -145,15 +150,21 @@ class RetryEngine:
         max_attempts: int = 3,
         retries: int | None = None,
         base_delay: float = 0,
-        retry_on: Callable[[Exception], bool] | tuple[type[Exception], ...] | None = None,
-        retry_filter: Callable[[Exception], bool] | tuple[type[Exception], ...] | None = None,
+        retry_on: Callable[[Exception], bool]
+        | tuple[type[Exception], ...]
+        | None = None,
+        retry_filter: Callable[[Exception], bool]
+        | tuple[type[Exception], ...]
+        | None = None,
         **kwargs: Any,
     ) -> None:
         self.max_attempts = retries or max_attempts
         self.base_delay = base_delay
         self.retry_on = retry_on or retry_filter
 
-    def execute(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+    def execute(
+        self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs
+    ) -> R:
         if inspect.iscoroutinefunction(func):
             raise TypeError("RetryEngine cannot execute async functions")
 
@@ -220,14 +231,18 @@ class AsyncRetryEngine:
                         last = exc
 
                 if last is None:
-                    raise RuntimeError("AsyncRetryEngine failed without exception")
+                    raise RuntimeError(
+                        "AsyncRetryEngine failed without exception"
+                    )
                 raise last
 
             return wrapper
 
         return deco
 
-    def __call__(self, func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+    def __call__(
+        self, func: Callable[P, Awaitable[R]]
+    ) -> Callable[P, Awaitable[R]]:
         return self.decorator()(func)
 
     async def execute(
