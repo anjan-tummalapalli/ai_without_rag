@@ -1,12 +1,6 @@
-# Provider registry for ai_cli.
-"""
-This module maintains mappings of provider names to their implementing classes.
-It avoids eager imports to prevent circular import issues. Provider modules
-register themselves via ``register_provider`` (and related functions) when they
-are imported. ``ai_cli.providers.bootstrap.init_providers`` loads all provider
-modules lazily.
-"""
+from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from ai_cli.providers.base import BaseProvider
@@ -14,37 +8,36 @@ from ai_cli.providers.cohere_provider import CohereProvider
 from ai_cli.providers.xAI_provider import XAIProvider
 
 # Core mappings populated by provider modules at import time
-PROVIDER_MAP: dict[str, type] = {}
-CHAT_PROVIDERS: dict[str, type] = {}
+PROVIDER_MAP: dict[str, type[BaseProvider]] = {}
+CHAT_PROVIDERS: dict[str, type[BaseProvider]] = {}
 DEFAULT_PROVIDER = "openai"
 
 
-class ProviderRegistry(dict):  # pylint: disable=invalid-name
-    """Dict-like view onto ``PROVIDER_MAP`` that always reflects live state.
+class ProviderRegistry(dict[str, type[BaseProvider]]):
+    """Dict-like view onto ``PROVIDER_MAP`` that always reflects live state."""
 
-    Kept as the legacy/backward-compatible ``PROVIDERS`` name expected by
-    plugins and tests, without duplicating (and risking drift from) the
-    real mapping.
-    """
-
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> type[BaseProvider] | None:
         return PROVIDER_MAP.get(key)
 
 
 PROVIDERS = ProviderRegistry()
 
 
-def register_provider(name: str, cls: type | None = None, metadata=None) -> Any:
-    """
-    Register a provider.
+def register_provider(
+    name: str,
+    cls: type[BaseProvider] | None = None,
+    metadata: Any | None = None,
+) -> (
+    type[BaseProvider]
+    | Callable[[type[BaseProvider]], type[BaseProvider]]
+):
+    """Register a provider."""
 
-    Args:
-        name: Provider name.
-        cls: Provider class.
-        metadata: Optional provider metadata.
-    """
+    del metadata  # metadata currently unused
 
-    def decorator(provider_cls):
+    def decorator(
+        provider_cls: type[BaseProvider],
+    ) -> type[BaseProvider]:
         PROVIDER_MAP[name] = provider_cls
         return provider_cls
 
@@ -55,65 +48,57 @@ def register_provider(name: str, cls: type | None = None, metadata=None) -> Any:
     return cls
 
 
-def register_chat_provider(name: str, cls: type) -> None:
-    """Register a chat‑capable provider.
-
-    This also registers the class as a generic provider so that ``build_provider``
-    can retrieve it.
-    """
+def register_chat_provider(
+    name: str,
+    cls: type[BaseProvider],
+) -> None:
+    """Register a chat-capable provider."""
     CHAT_PROVIDERS[name] = cls
     PROVIDER_MAP[name] = cls
 
 
-def get_chat_provider(name: str, **kwargs: Any) -> BaseProvider:
-    """Retrieve an instantiated chat provider.
-
-    The provider class must have been registered via ``register_chat_provider``.
-    """
+def get_chat_provider(
+    name: str,
+    **kwargs: Any,
+) -> BaseProvider:
+    """Retrieve an instantiated chat provider."""
     ensure_initialized()
+
     if name not in CHAT_PROVIDERS:
         raise ValueError(f"Unknown chat provider: {name}")
+
     return CHAT_PROVIDERS[name](**kwargs)
 
 
-def list_providers():
+def list_providers() -> list[str]:
     """Return a sorted list of all registered provider names."""
     ensure_initialized()
     return sorted(PROVIDER_MAP.keys())
 
 
-def ensure_initialized():
-    """Ensure all providers are loaded.
-
-    Calls init_providers unconditionally to guarantee that the registry contains
-    every provider, including "echo" which may have been missing in earlier
-    initializations. Re‑registering is safe because the mappings are overwritten
-    with the same class objects.
-    """
-    # Deferred import is intentional: it breaks the real circular-import
-    # chain at runtime (registry -> bootstrap -> loader -> providers ->
-    # registry). Pylint's static R0401 check still reports the graph even
-    # though the import never executes at module load time.
-    from ai_cli.providers.bootstrap import (  # pylint: disable=cyclic-import
+def ensure_initialized() -> None:
+    """Ensure all providers are loaded."""
+    from ai_cli.providers.bootstrap import (
         init_providers,
     )
 
     init_providers()
 
 
-def build_provider(name: str, **kwargs: Any) -> BaseProvider:
-    """Factory for a generic provider.
-
-    ``ensure_initialized`` should be called beforehand (via ``ensure_initialized``
-    or ``ensure_initialized`` in callers) to populate the registry.
-    """
+def build_provider(
+    name: str,
+    **kwargs: Any,
+) -> BaseProvider:
+    """Factory for a generic provider."""
     ensure_initialized()
+
     if name not in PROVIDER_MAP:
         raise ValueError(f"Unknown provider: {name}")
+
     return PROVIDER_MAP[name](**kwargs)
 
 
-provider_all = {
+provider_all: dict[str, type[BaseProvider]] = {
     "BaseProvider": BaseProvider,
     "CohereProvider": CohereProvider,
     "XAIProvider": XAIProvider,

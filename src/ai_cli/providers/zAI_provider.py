@@ -10,7 +10,7 @@ z.AI provider implementation for ai_cli.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.base import AIProvider, ProviderMetadata
@@ -138,7 +138,7 @@ class ZAIProvider(AIProvider):
                         and k in first
                         and isinstance(first[k], str)
                     ):
-                        return first[k]
+                        return cast(str, first[k])
                 # nested message.content
                 message = (
                     first.get("message") if isinstance(first, dict) else None
@@ -188,10 +188,10 @@ class ZAIProvider(AIProvider):
             data = resp.json()
 
             if "text" in data:
-                return data["text"]
+                return cast(str, data["text"])
 
             if "choices" in data:
-                return data["choices"][0]["message"]["content"]
+                return cast(str, data["choices"][0]["message"]["content"])
 
             raise ProviderRequestError(
                 "unable to coerce z.AI response to string"

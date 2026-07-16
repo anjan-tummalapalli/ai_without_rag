@@ -18,7 +18,7 @@ import heapq
 import math
 import os
 import warnings
-from typing import Any
+from typing import Any, cast
 
 from ai_cli.core.exceptions import ProviderRequestError
 
@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 class _GenaiShim:  # pylint: disable=too-few-public-methods
     """Shim that raises ProviderRequestError when no Google SDK is found."""
 
-    def configure(self, *_args, **_kwargs) -> None:
+    def configure(self, *_args: Any, **_kwargs: Any) -> None:
         raise ProviderRequestError(
             "Google Generative AI SDK is not installed; "
             "install 'google-generativeai' or 'google-genai'."
@@ -39,7 +39,7 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
     class GenerativeModel:  # pylint: disable=too-few-public-methods
         """Stub GenerativeModel that raises when SDK is missing."""
 
-        def __init__(self, *_args, **_kwargs) -> None:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             raise ProviderRequestError(
                 "Google Generative AI SDK is not installed; "
                 "cannot create model."
@@ -48,7 +48,7 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
     class Client:  # pylint: disable=too-few-public-methods
         """Stub Client that raises when SDK is missing."""
 
-        def __init__(self, *_args, **_kwargs) -> None:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             raise ProviderRequestError(
                 "Google Generative AI SDK is not installed; "
                 "cannot create client."
@@ -58,7 +58,7 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
             """Stub models namespace."""
 
             @staticmethod
-            def generate_content(*_args, **_kwargs) -> None:
+            def generate_content(*_args: Any, **_kwargs: Any) -> None:
                 raise ProviderRequestError(
                     "Google Generative AI SDK is not installed; "
                     "cannot generate content."
@@ -71,11 +71,11 @@ try:
     _GENAI_LEGACY = True
 except Exception:
     try:
-        from google import genai  # type: ignore  # New SDK
+        from google import genai  # New SDK
 
         _GENAI_LEGACY = False
     except Exception:
-        genai = _GenaiShim()  # type: ignore[assignment]
+        genai = _GenaiShim()
         _GENAI_LEGACY = False
 
 
@@ -90,7 +90,7 @@ class InMemoryVectorDB:
         - text: original chunk text (str)
     """
 
-    def __init__(self, api_key=None):
+    def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self._use_new_api = True
         self._items: list[dict[str, Any]] = []
@@ -181,7 +181,7 @@ class GeminiProvider(AIProvider):
             self.client = genai.GenerativeModel(self.model)
             self._use_new_api = False
         else:
-            self.client = genai.Client(api_key=self.api_key)  # type: ignore
+            self.client = genai.Client(api_key=self.api_key)
             self._use_new_api = True
 
         if chunk_size <= 0:
@@ -201,15 +201,15 @@ class GeminiProvider(AIProvider):
 
         try:
             if self._use_new_api:
-                response = self.client.models.generate_content(  # type: ignore
+                response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
                 )
             else:
-                response = self.client.generate_content(prompt)  # type: ignore
+                response = self.client.generate_content(prompt)
 
             if hasattr(response, "text") and response.text:
-                return response.text
+                return cast(str, response.text)
 
             return "gemini response"
         except Exception:
@@ -218,11 +218,11 @@ class GeminiProvider(AIProvider):
     def health_check(self) -> bool:
         try:
             if self._use_new_api:
-                response = self.client.models.generate_content(  # type: ignore
+                response = self.client.models.generate_content(
                     model=self.model, contents="ping"
                 )
             else:
-                response = self.client.generate_content("ping")  # type: ignore
+                response = self.client.generate_content("ping")
         except Exception:  # pylint: disable=broad-exception-caught
             return False
 

@@ -25,23 +25,42 @@ Default Models:
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
-from openai import OpenAI  # type: ignore
+try:
+    from openai import OpenAI
 
+    OPENAI_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    OPENAI_AVAILABLE = False
 
-class DeepSeekProvider:
+from ai_cli.providers.base import BaseProvider
+
+from ai_cli.providers.registry import (
+    register_chat_provider,
+    register_provider,
+)
+
+class DeepSeekProvider(BaseProvider):
     DEFAULT_MODEL = "deepseek-v4-flash"
     DEFAULT_EMBED_MODEL = "text-embedding-3-small"
     BASE_URL = "https://api.deepseek.com"
 
-    def __init__(self, api_key=None):
+    def __init__(
+        self,
+        api_key: str | None = None,
+    ) -> None:
+        super().__init__(model=self.DEFAULT_MODEL)
         if api_key == "":
             raise ValueError("DEEPSEEK_API_KEY not set")
 
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        if not OPENAI_AVAILABLE:
+            raise RuntimeError(
+                "The 'openai' package is not installed."
+            )
 
-        self.client = None
+        self.client: Any | None = None
 
         if self.api_key:
             self.client = OpenAI(
@@ -49,7 +68,7 @@ class DeepSeekProvider:
                 base_url=self.BASE_URL,
             )
 
-    def health_check(self):
+    def health_check(self) -> bool:
         if not self.api_key:
             return False
 
@@ -81,16 +100,24 @@ class DeepSeekProvider:
         messages.append({"role": "user", "content": prompt})
 
         try:
-            response = self.client.chat.completions.create(  # type: ignore
+            if self.client is None:
+                raise RuntimeError("DeepSeek client is not initialized.")
+
+            client = self.client
+            response = client.chat.completions.create(
                 model=selected_model,
-                messages=messages,
+                messages=cast(Any, messages),
                 temperature=temperature,
                 max_tokens=max_tokens,
                 timeout=timeout,
                 **kwargs,
             )
             content = response.choices[0].message.content
-            return content.strip() if content else ""
+
+            if content is None:
+                return ""
+
+            return str(content).strip()
         except Exception as exc:
             raise RuntimeError(f"DeepSeek request failed: {exc}") from exc
 
@@ -104,19 +131,36 @@ class DeepSeekProvider:
         """
         selected = model or self.DEFAULT_EMBED_MODEL
         try:
-            response = self.client.embeddings.create(
+            if self.client is None:
+                raise RuntimeError("DeepSeek client is not initialized.")
+            response: Any = self.client.embeddings.create(
                 model=selected, input=texts
             )
-            return [item.embedding for item in response.data]
+            vectors: list[list[float]] = []
+
+            for item in response.data:
+                vectors.append(cast(list[float], item.embedding))
+
+            return vectors
         except Exception as exc:
             raise RuntimeError(
                 f"DeepSeek embedding request failed: {exc}"
             ) from exc
 
-    def _chat(self, prompt: str, **kwargs: Any) -> Any:
-        return self.client.chat.completions.create(  # type: ignore
+    def _chat(
+        self,
+        prompt: str,
+        **kwargs: Any,
+    ) -> Any:
+        if self.client is None:
+            raise RuntimeError("DeepSeek client is not initialized.")
+
+        return self.client.chat.completions.create(
             model=self.DEFAULT_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+            messages=cast(
+                Any,
+                [{"role": "user", "content": prompt}],
+            ),
             **kwargs,
         )
 
@@ -133,16 +177,16 @@ class DeepSeekProvider:
                 message = getattr(choice, "message", None)
 
                 if isinstance(message, dict):
-                    return message.get("content", "")
+                    return str(message.get("content", ""))
 
                 if message:
                     content = getattr(message, "content", None)
                     if content:
-                        return content
+                        return str(content)
 
                 text = getattr(choice, "text", None)
                 if text:
-                    return text
+                    return str(text)
 
             if isinstance(response, str):
                 return response
@@ -162,12 +206,17 @@ class DeepSeekProvider:
                 if hasattr(choice, "message"):
                     content = getattr(choice.message, "content", None)
                     if content:
-                        return content
+                        return str(content)
 
                 if hasattr(choice, "text"):
-                    return choice.text
+                    return str(choice.text)
 
             return str(response)
 
         except Exception as exc:
             raise RuntimeError(f"DeepSeek connection failed: {exc}") from exc
+
+
+register_provider("deepseek", DeepSeekProvider)
+
+register_chat_provider("deepseek", DeepSeekProvider)

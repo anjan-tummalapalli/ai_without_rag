@@ -2,9 +2,8 @@ import importlib
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
-
 import ai_cli.plugins.builtins as builtins
+import pytest
 from ai_cli.core.exceptions import (
     ProviderConfigurationError,
     ProviderRequestError,

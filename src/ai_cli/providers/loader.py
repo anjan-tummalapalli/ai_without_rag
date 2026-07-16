@@ -1,4 +1,12 @@
-def load_all_providers():
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ai_cli.providers.base import BaseProvider
+
+
+def load_all_providers() -> dict[str, type[BaseProvider]]:
     from ai_cli.providers.auto_provider import AutoProvider
     from ai_cli.providers.cohere_provider import CohereProvider
     from ai_cli.providers.deepseek_provider import DeepSeekProvider
@@ -8,7 +16,7 @@ def load_all_providers():
     from ai_cli.providers.xAI_provider import XAIProvider
     from ai_cli.providers.zAI_provider import ZAIProvider
 
-    providers = {
+    providers: dict[str, type[BaseProvider]] = {
         "openai": OpenAIProvider,
         "deepseek": DeepSeekProvider,
         "perplexity": PerplexityProvider,
@@ -22,9 +30,8 @@ def load_all_providers():
     try:
         from ai_cli.providers.gemini_provider import GeminiProvider
     except Exception:
-        GeminiProvider = None
-
-    if GeminiProvider is not None:
+        pass
+    else:
         providers["gemini"] = GeminiProvider
 
     return providers

@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, cast
 
 from openai import OpenAI
 
@@ -27,7 +27,7 @@ class PerplexityProvider(BaseProvider):
 
     def _send_impl(self, prompt: str) -> str:
         response = self.client.chat.completions.create(
-            model=self.model,
+            model=cast(str, self.model),
             messages=[{"role": "user", "content": prompt}],
         )
         choices = getattr(response, "choices", [])
@@ -39,8 +39,8 @@ class PerplexityProvider(BaseProvider):
         content = getattr(message, "content", "")
         return content.strip() if content else ""
 
-    def send(self, prompt: str, **kwargs):
+    def send(self, prompt: str, **kwargs: Any) -> str:
         return self._send_impl(prompt)
 
-    def ask(self, prompt: str, **kwargs):
+    def ask(self, prompt: str, **kwargs: Any) -> str:
         return self.send(prompt, **kwargs)
