@@ -402,12 +402,12 @@ class TestOpenAIProviderModule:
                 p._ensure_key()  # pylint: disable=protected-access
 
     def test_missing_api_key_on_init_raises(self) -> None:
-        """OpenAIProvider.__init__ raises ValueError when no API key found."""
+        """OpenAIProvider.__init__ raises ProviderRequestError when no API key found."""
         env: dict[str, str] = {
             k: v for k, v in os.environ.items() if k != "OPENAI_API_KEY"
         }
         with patch.dict(os.environ, env, clear=True):
-            with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+            with pytest.raises(ProviderRequestError, match="OPENAI_API_KEY"):
                 OpenAIProvider(api_key=None)
 
 
