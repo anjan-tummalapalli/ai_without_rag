@@ -54,6 +54,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,13 +74,13 @@ OTEL_ENABLED = os.getenv("OTEL_ENABLED", "1") not in ("0", "false", "False")
 # ---------- Prometheus shim / imports ----------
 if PROMETHEUS_ENABLED:
     try:
-        from prometheus_client import (  # type: ignore
+        from prometheus_client import (
             Counter as PromCounter,
         )
         from prometheus_client import (
             Gauge as PromGauge,
         )
-        from prometheus_client import core as prom_core  # type: ignore
+        from prometheus_client import core as prom_core
         from prometheus_client import (
             start_http_server,
         )
@@ -96,13 +97,13 @@ else:
 
 
 class _NoopMetric:
-    def labels(self, *_, **__):
+    def labels(self, *_args: Any, **_kwargs: Any) -> _NoopMetric:
         return self
 
-    def inc(self, _=1):
+    def inc(self, _amount: float = 1) -> None:
         return
 
-    def set(self, _=0):
+    def set(self, _value: float = 0) -> None:
         return
 
 
@@ -130,7 +131,7 @@ def _find_existing_metric(metric_name: str) -> Any | None:
     return None
 
 
-def _safe_counter(name: str, doc: str, labelnames: list[str]):
+def _safe_counter(name: str, doc: str, labelnames: list[str]) -> Any:
     """Create a Counter or return existing one on duplicate registration."""
     if PromCounter is None:
         return _NoopMetric()
@@ -149,7 +150,7 @@ def _safe_counter(name: str, doc: str, labelnames: list[str]):
         return _NoopMetric()
 
 
-def _safe_gauge(name: str, doc: str, labelnames: list[str]):
+def _safe_gauge(name: str, doc: str, labelnames: list[str]) -> Any:
     if PromGauge is None:
         return _NoopMetric()
     try:
@@ -170,11 +171,11 @@ def _safe_gauge(name: str, doc: str, labelnames: list[str]):
 # ---------- OpenTelemetry shim / imports ----------
 if OTEL_ENABLED:
     try:
-        from opentelemetry import trace  # type: ignore
-        from opentelemetry.sdk.trace import (  # type: ignore
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import (
             TracerProvider as SDKTracerProvider,
         )
-        from opentelemetry.sdk.trace.export import (  # type: ignore
+        from opentelemetry.sdk.trace.export import (
             ConsoleSpanExporter,
             SimpleSpanProcessor,
         )
@@ -217,7 +218,7 @@ class Tracer:
                 self._enabled = False
 
     @contextlib.contextmanager
-    def span(self, name: str):
+    def span(self, name: str) -> Iterator[Any | None]:
         """Context manager to start a trace span when enabled."""
         if not self._enabled or self._tracer is None:
             # yield a dummy contextmanager so caller code can uniformly
@@ -314,7 +315,7 @@ class Metrics:
 
         # Start HTTP server for Prometheus scraping if available
         try:
-            if start_http_server:
+            if start_http_server is not None:
                 # start_http_server may block in some implementations; for
                 # the common prometheus_client it spawns a thread and
                 # returns immediately.
@@ -325,7 +326,7 @@ class Metrics:
         except TypeError:
             # Some older versions expect only port
             try:
-                if start_http_server:
+                if start_http_server is not None:
                     start_http_server(port)
                     logger.info(
                         "Prometheus metrics server started on port %s", port
@@ -501,27 +502,27 @@ GLOBAL_METRICS = Metrics(host=PROMETHEUS_HOST, port=PROMETHEUS_PORT)
 
 
 # --- Public telemetry API (test-required) ---
-def start_trace(name: str = "default"):
+def start_trace(name: str = "default") -> dict[str, str]:
     return {"trace": name, "status": "started"}
 
 
-def end_trace(trace_id: str = "default"):
+def end_trace(trace_id: str = "default") -> dict[str, str]:
     return {"trace": trace_id, "status": "ended"}
 
 
-def log_event(event: str, data: dict | None = None):
+def log_event(event: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
     return {"event": event, "data": data or {}}
 
 
-def record_metric(name: str, value: float):
+def record_metric(name: str, value: float) -> dict[str, Any]:
     return {"metric": name, "value": value}
 
 
 class Telemetry:
-    def __init__(self):
-        self.events = []
+    def __init__(self) -> None:
+        self.events: list[str] = []
 
-    def track(self, event: str):
+    def track(self, event: str) -> bool:
         self.events.append(event)
         return True
 
