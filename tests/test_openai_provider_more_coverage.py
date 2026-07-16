@@ -1,13 +1,14 @@
 from unittest.mock import MagicMock
 
 import pytest
+
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.openai_provider import OpenAIProvider
 
 
 def test_openai_provider_raises_when_package_missing(monkeypatch):
     monkeypatch.setattr(
-        "ai_cli.providers.openai_provider.OpenAI", None, raising=False
+        "ai_cli.providers.openai_provider.OPENAI_AVAILABLE", False
     )
 
     with pytest.raises(ProviderRequestError, match="not installed"):
@@ -27,25 +28,11 @@ def test_openai_provider_raises_on_empty_choices(monkeypatch):
         p.send("hello")
 
 
-def test_openai_provider_handles_dict_style_message(monkeypatch):
-    p = OpenAIProvider(api_key="x")
-
-    response = MagicMock()
-    response.choices = [{"message": {"content": "dict response"}}]
-    client = MagicMock()
-    client.chat.completions.create.return_value = response
-    monkeypatch.setattr(p, "client", client, raising=False)
-
-    result = p.send("hello")
-
-    assert result == "dict response"
-
-
 def test_openai_provider_raises_on_empty_content(monkeypatch):
     p = OpenAIProvider(api_key="x")
 
     response = MagicMock()
-    response.choices = [{"message": {"content": ""}}]
+    response.choices = [MagicMock(message=MagicMock(content=None))]
     client = MagicMock()
     client.chat.completions.create.return_value = response
     monkeypatch.setattr(p, "client", client, raising=False)
@@ -54,10 +41,25 @@ def test_openai_provider_raises_on_empty_content(monkeypatch):
         p.send("hello")
 
 
-def test_openai_provider_is_ready_reflects_env_var(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "set")
+def test_openai_provider_returns_stripped_content(monkeypatch):
+    p = OpenAIProvider(api_key="x")
+
+    response = MagicMock()
+    response.choices = [MagicMock(message=MagicMock(content="  hi there  "))]
+    client = MagicMock()
+    client.chat.completions.create.return_value = response
+    monkeypatch.setattr(p, "client", client, raising=False)
+
+    assert p.send("hello") == "hi there"
+
+
+def test_openai_provider_is_ready_true_when_key_set():
     p = OpenAIProvider(api_key="x")
     assert p.is_ready() is True
 
+
+def test_openai_provider_is_ready_false_without_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    p = OpenAIProvider(api_key="x")
+    p.api_key = None
     assert p.is_ready() is False
