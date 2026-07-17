@@ -39,15 +39,16 @@ Design goals
 - Minimal runtime dependencies: telemetry is optional and fails closed.
 - Safe to import/instantiate in long-running interactive processes.
 - Small, well-documented surface for telemetry in the CLI.
-"""
 
-# pylint: disable=invalid-name
-# This module conditionally imports optional third-party classes (e.g.
-# ``Counter as PromCounter``) inside try/except blocks so the rest of the
-# code can run without those dependencies installed. Pylint treats these
-# module-level assignments as "constants" and expects UPPER_CASE, but they
-# are class/import aliases and PascalCase is the correct convention for
-# them.
+
+ pylint: disable=invalid-name
+ This module conditionally imports optional third-party classes (e.g.
+ ``Counter as PromCounter``) inside try/except blocks so the rest of the
+ code can run without those dependencies installed. Pylint treats these
+ module-level assignments as "constants" and expects UPPER_CASE, but they
+ are class/import aliases and PascalCase is the correct convention for
+ them.
+"""
 
 from __future__ import annotations
 
@@ -241,8 +242,9 @@ class Tracer:
 
 
 class Metrics:
-    """Lightweight Prometheus metrics with RAG helpers. No-op when
-    disabled.
+    """
+    Lightweight Prometheus metrics with RAG helpers. 
+    No-op when disabled.
     """
 
     def __init__(
@@ -425,16 +427,18 @@ class Metrics:
             logger.debug("Failed to record vector query metrics", exc_info=True)
 
     def close(self) -> None:
-        """Placeholder for cleanup if needed in the future."""
-        # prometheus_client's start_http_server does not expose a stop API.
-        # We keep this for symmetry and potential future implementations.
+        """
+        Placeholder for cleanup if needed in the future.
+        prometheus_client's start_http_server does not expose a stop API.
+        We keep this for symmetry and potential future implementations.
+        """
         return
 
 
 @dataclass
 class ModelQualityMetrics:
-    """Collect simple quality metrics for a model and provider. Extended
-    for RAG.
+    """
+    Collect simple quality metrics for a model and provider. Extended for RAG.
     """
 
     provider: str

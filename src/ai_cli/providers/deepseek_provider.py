@@ -35,11 +35,11 @@ except ImportError:  # pragma: no cover
     OPENAI_AVAILABLE = False
 
 from ai_cli.providers.base import BaseProvider
-
 from ai_cli.providers.registry import (
     register_chat_provider,
     register_provider,
 )
+
 
 class DeepSeekProvider(BaseProvider):
     DEFAULT_MODEL = "deepseek-v4-flash"

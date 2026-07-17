@@ -11,10 +11,18 @@ class OpenAIProvider(BaseProvider):
     """Lightweight stand-in that echoes the prompt without calling any API."""
 
     def __init__(
-        self, api_key: str | None = None, model: str | None = None
+        self,
+        api_key: str | None = None,
+        model: str | None = None
     ) -> None:
-        super().__init__(api_key=api_key, model=model)
+        super().__init__(
+            api_key=api_key,
+            model=model)
 
-    def send(self, prompt: str, **kwargs: Any) -> str:
+    def send(
+            self,
+            prompt: str,
+            **kwargs: Any
+            ) -> str:
         """Return a deterministic response without contacting OpenAI."""
         return f"OpenAI response: {prompt}"

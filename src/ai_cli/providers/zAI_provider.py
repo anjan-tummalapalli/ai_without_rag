@@ -9,6 +9,7 @@ z.AI provider implementation for ai_cli.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, cast
 
@@ -119,7 +120,11 @@ class ZAIProvider(AIProvider):
                 raise ProviderRequestError("empty response from z.AI") from exc
             return text
 
-        # common response shapes: {'text': ...}, {'output': ...}, {'choices': [...]}, {'data': ...}
+        # common response shapes:
+        # {'text': ...},
+        # {'output': ...},
+        # {'choices': [...]},
+        # {'data': ...}
         if isinstance(data, dict):
             if "text" in data and isinstance(data["text"], str):
                 return data["text"]
@@ -150,8 +155,6 @@ class ZAIProvider(AIProvider):
 
         # As a last resort, return the full JSON as string
         try:
-            import json
-
             return json.dumps(data, ensure_ascii=False)
         except Exception as exc:
             raise ProviderRequestError(
@@ -161,7 +164,6 @@ class ZAIProvider(AIProvider):
     def send(self, prompt: str, **kwargs: Any) -> str:
         if not self.api_key:
             raise ProviderRequestError("z.AI API key not configured")
-
         try:
             if self.api_key == "test":
                 print("[zAI] returning mock:hello")
@@ -196,7 +198,6 @@ class ZAIProvider(AIProvider):
             raise ProviderRequestError(
                 "unable to coerce z.AI response to string"
             )
-
         except requests.RequestException as exc:
             raise ProviderRequestError("network error") from exc
 

@@ -64,7 +64,11 @@ class AIProviderError(Exception):
 
     @classmethod
     def from_exception(
-        cls, exc: BaseException, *, message: str | None = None, **kwargs: Any
+        cls,
+        exc: BaseException,
+        *,
+        message: str | None = None,
+        **kwargs: Any
     ) -> AIProviderError:
         """Wrap an existing exception into an AIProviderError while preserving context."""
         msg = message or str(exc) or exc.__class__.__name__
@@ -141,7 +145,11 @@ class EmbeddingError(AIProviderError):
     """
 
     def __init__(
-        self, message: str, *, model: str | None = None, **kwargs: Any
+        self,
+        message: str,
+        *,
+        model: str | None = None,
+        **kwargs: Any
     ) -> None:
         details = kwargs.pop("details", {}) or {}
         if model:
@@ -156,7 +164,11 @@ class VectorDBError(AIProviderError):
     """
 
     def __init__(
-        self, message: str, *, operation: str | None = None, **kwargs: Any
+        self,
+        message: str,
+        *,
+        operation: str | None = None,
+        **kwargs: Any
     ) -> None:
         details = kwargs.pop("details", {}) or {}
         if operation:

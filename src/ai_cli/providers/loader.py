@@ -1,11 +1,11 @@
 from __future__ import annotations
-
+ 
 from typing import TYPE_CHECKING
-
+ 
 if TYPE_CHECKING:
     from ai_cli.providers.base import BaseProvider
-
-
+ 
+ 
 def load_all_providers() -> dict[str, type[BaseProvider]]:
     from ai_cli.providers.auto_provider import AutoProvider
     from ai_cli.providers.cohere_provider import CohereProvider
@@ -15,7 +15,7 @@ def load_all_providers() -> dict[str, type[BaseProvider]]:
     from ai_cli.providers.perplexity_provider import PerplexityProvider
     from ai_cli.providers.xAI_provider import XAIProvider
     from ai_cli.providers.zAI_provider import ZAIProvider
-
+ 
     providers: dict[str, type[BaseProvider]] = {
         "openai": OpenAIProvider,
         "deepseek": DeepSeekProvider,
@@ -26,12 +26,12 @@ def load_all_providers() -> dict[str, type[BaseProvider]]:
         "echo": EchoProvider,
         "auto": AutoProvider,
     }
-
+ 
     try:
         from ai_cli.providers.gemini_provider import GeminiProvider
     except Exception:
         pass
     else:
         providers["gemini"] = GeminiProvider
-
+ 
     return providers

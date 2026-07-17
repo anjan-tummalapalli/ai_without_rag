@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.auto_provider import AutoProvider
 from ai_cli.providers.deepseek_provider import DeepSeekProvider

@@ -37,7 +37,10 @@ class OpenAIProvider(BaseProvider):
         api_key: str | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(model=model, api_key=api_key, **kwargs)
+        super().__init__(
+            model=model,
+            api_key=api_key,
+            **kwargs)
 
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model or self.DEFAULT_CHAT_MODEL

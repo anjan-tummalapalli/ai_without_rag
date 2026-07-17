@@ -1,8 +1,8 @@
 import os
-
+ 
 from ai_cli.providers.registry import get_chat_provider
-
-
+ 
+ 
 def ask(
     prompt: str,
     provider: str = "auto",
@@ -12,7 +12,7 @@ def ask(
 ) -> str:
     if api_key is None:
         api_key = os.getenv(f"{provider.upper()}_API_KEY")
-
+ 
     provider_obj = get_chat_provider(
         provider,
         model=model,

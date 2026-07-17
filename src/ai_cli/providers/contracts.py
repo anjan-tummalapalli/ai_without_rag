@@ -12,5 +12,9 @@ class ChatProvider(ABC):
 
 class EmbeddingProvider(ABC):
     @abstractmethod
-    def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
+    def embed(
+        self,
+        texts: list[str],
+        **kwargs: Any
+        ) -> list[list[float]]:
         pass

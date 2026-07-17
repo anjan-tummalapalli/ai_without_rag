@@ -1,21 +1,22 @@
 from __future__ import annotations
-
+ 
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-
-
+from typing import Any
+ 
+ 
 @dataclass
 class Chunk:
     text: str
     start_word: int
     end_word: int  # exclusive
     index: int
-
-
+ 
+ 
 class TextChunker:
     SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-
+ 
     def __init__(
         self,
         tokens_per_chunk: int = 200,
@@ -33,7 +34,7 @@ class TextChunker:
             ]
         )
         self.max_chunks = max_chunks
-
+ 
     def chunk_by_tokens_with_meta(self, text: str) -> list[Chunk]:
         tokens = self.tokenizer(text)
         if not tokens:
@@ -58,10 +59,10 @@ class TextChunker:
                 break
             i += step
         return chunks
-
+ 
     def chunk_by_tokens(self, text: str) -> list[str]:
         return [c.text for c in self.chunk_by_tokens_with_meta(text)]
-
+ 
     def chunk_by_sentences_with_meta(
         self, text: str, max_tokens: int | None = None
     ) -> list[Chunk]:
@@ -69,19 +70,19 @@ class TextChunker:
         sentences = self.sentence_splitter(text)
         if not sentences:
             return []
-
+ 
         sent_tokens = [self.tokenizer(s) for s in sentences]
         chunks: list[Chunk] = []
         current_tokens: list[str] = []
         current_start_idx = 0
         total_word_index = 0
         chunk_index = 0
-
+ 
         for tokens in sent_tokens:
             sent_len = len(tokens)
             if not current_tokens:
                 current_start_idx = total_word_index
-
+ 
             if current_tokens and len(current_tokens) + sent_len > max_tokens:
                 chunk_text = " ".join(current_tokens)
                 chunks.append(
@@ -103,9 +104,9 @@ class TextChunker:
                 current_start_idx = total_word_index - overlap_count
             else:
                 current_tokens.extend(tokens)
-
+ 
             total_word_index += sent_len
-
+ 
         if current_tokens:
             chunk_text = " ".join(current_tokens)
             chunks.append(
@@ -116,9 +117,9 @@ class TextChunker:
                     index=chunk_index,
                 )
             )
-
+ 
         return chunks
-
+ 
     def chunk_by_sentences(
         self, text: str, max_tokens: int | None = None
     ) -> list[str]:
@@ -128,16 +129,18 @@ class TextChunker:
                 text, max_tokens=max_tokens
             )
         ]
-
-
+ 
+ 
 class PromptCorrector:
     def __init__(
-        self, tokens_per_chunk: int = 200, overlap: int = 50, **kwargs
+        self, tokens_per_chunk: int = 200, overlap: int = 50, **kwargs: Any
     ) -> None:
         self.chunker = TextChunker(
-            tokens_per_chunk=tokens_per_chunk, overlap=overlap, **kwargs
+            tokens_per_chunk=tokens_per_chunk,
+            overlap=overlap,
+            **kwargs
         )
-
+ 
     def correct(
         self,
         prompt: str,
@@ -153,7 +156,7 @@ class PromptCorrector:
         else:
             chunks = self.chunker.chunk_by_tokens(prompt)
         return "\n\n".join(chunks)
-
+ 
     def correct_with_meta(
         self,
         prompt: str,
@@ -167,8 +170,8 @@ class PromptCorrector:
                 prompt, max_tokens=max_tokens
             )
         return self.chunker.chunk_by_tokens_with_meta(prompt)
-
-
+ 
+ 
 def prompt_corrector(
     prompt: str,
     *,
@@ -179,8 +182,8 @@ def prompt_corrector(
 ) -> str:
     pc = PromptCorrector(tokens_per_chunk=tokens_per_chunk, overlap=overlap)
     return pc.correct(prompt, by_sentences=by_sentences, max_tokens=max_tokens)
-
-
+ 
+ 
 def correct_prompt(prompt: str) -> str:
     """
     Backwards-compatible wrapper expected by tests.

@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.auto_provider import AutoProvider
 from ai_cli.providers.registry import PROVIDER_MAP
