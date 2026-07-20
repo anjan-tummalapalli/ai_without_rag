@@ -64,17 +64,15 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
                     "cannot generate content."
                 )
 
-
+genai: Any
 try:
-    import google.generativeai as genai  # type: ignore  # Legacy SDK
-
+    import google.generativeai as genai
     _GENAI_LEGACY = True
-except Exception:
+except ImportError:
     try:
-        from google import genai  # New SDK
-
+        from google import genai
         _GENAI_LEGACY = False
-    except Exception:
+    except ImportError:
         genai = _GenaiShim()
         _GENAI_LEGACY = False
 
@@ -177,11 +175,16 @@ class GeminiProvider(AIProvider):
             )
 
         if _GENAI_LEGACY:
-            genai.configure(api_key=self.api_key)
-            self.client = genai.GenerativeModel(self.model)
+            legacy = cast(Any, genai)
+            legacy.configure(api_key=self.api_key)
+
+            self.client = legacy.GenerativeModel(
+                                    self.model or "gemini-1.5-flash"
+                                )
             self._use_new_api = False
         else:
-            self.client = genai.Client(api_key=self.api_key)
+            new_sdk = cast(Any, genai)
+            self.client = new_sdk.Client(api_key=self.api_key)
             self._use_new_api = True
 
         if chunk_size <= 0:
@@ -201,10 +204,12 @@ class GeminiProvider(AIProvider):
 
         try:
             if self._use_new_api:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                )
+                client = cast(Any, self.client)
+
+                response = client.models.generate_content(
+                                model=self.model,
+                                contents=prompt,
+                            )
             else:
                 response = self.client.generate_content(prompt)
 

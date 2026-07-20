@@ -103,10 +103,6 @@ no_implicit_optional = true
 warn_return_any = true
 warn_unused_ignores = true
 
-[[tool.mypy.overrides]]
-module = "tests.*"
-ignore_errors = true
-
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
