@@ -1,9 +1,8 @@
 import importlib
 from types import SimpleNamespace
 
-import pytest
-
 import ai_cli.telemetry.monitoring as monitoring
+import pytest
 
 MODULE_PATH = "ai_cli.telemetry.monitoring"
 

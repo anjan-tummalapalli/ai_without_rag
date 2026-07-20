@@ -1,5 +1,4 @@
 import pytest
-
 from ai_cli.utils import secrets
 from ai_cli.utils.secrets import chunk_text
 

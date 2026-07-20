@@ -243,7 +243,7 @@ class Tracer:
 
 class Metrics:
     """
-    Lightweight Prometheus metrics with RAG helpers. 
+    Lightweight Prometheus metrics with RAG helpers.
     No-op when disabled.
     """
 

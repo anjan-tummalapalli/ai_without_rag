@@ -56,9 +56,7 @@ class DeepSeekProvider(BaseProvider):
 
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
         if not OPENAI_AVAILABLE:
-            raise RuntimeError(
-                "The 'openai' package is not installed."
-            )
+            raise RuntimeError("The 'openai' package is not installed.")
 
         self.client: Any | None = None
 

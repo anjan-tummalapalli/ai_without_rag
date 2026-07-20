@@ -30,10 +30,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 class _GenaiShim:  # pylint: disable=too-few-public-methods
     """Shim that raises ProviderRequestError when no Google SDK is found."""
 
-    def configure(
-            self,
-            *_args: Any,
-            **_kwargs: Any) -> None:
+    def configure(self, *_args: Any, **_kwargs: Any) -> None:
         raise ProviderRequestError(
             "Google Generative AI SDK is not installed; "
             "install 'google-generativeai' or 'google-genai'."
@@ -93,10 +90,7 @@ class InMemoryVectorDB:
         - text: original chunk text (str)
     """
 
-    def __init__(
-            self,
-            api_key: str | None = None
-            ) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self._use_new_api = True
         self._items: list[dict[str, Any]] = []
@@ -259,10 +253,7 @@ class GeminiProvider(AIProvider):
                 break
         return chunks
 
-    def _create_embeddings(
-            self,
-            inputs: list[str]
-            ) -> list[list[float]]:
+    def _create_embeddings(self, inputs: list[str]) -> list[list[float]]:
         if not inputs:
             return []
 
@@ -431,11 +422,7 @@ class GeminiProvider(AIProvider):
 
         return self._send_impl(combined)
 
-    def send(
-            self,
-            prompt: str,
-            **kwargs: Any
-            ) -> str:
+    def send(self, prompt: str, **kwargs: Any) -> str:
         if getattr(self, "_mock", False):
             return "gemini response"
         return self._send_impl(prompt)

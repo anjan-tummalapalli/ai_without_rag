@@ -37,10 +37,7 @@ class OpenAIProvider(BaseProvider):
         api_key: str | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(
-            model=model,
-            api_key=api_key,
-            **kwargs)
+        super().__init__(model=model, api_key=api_key, **kwargs)
 
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model or self.DEFAULT_CHAT_MODEL
@@ -94,24 +91,18 @@ class OpenAIProvider(BaseProvider):
 
             choices = getattr(response, "choices", None)
             if not choices:
-                raise ProviderRequestError(
-                    "OpenAI returned no choices"
-                )
+                raise ProviderRequestError("OpenAI returned no choices")
 
             message = choices[0].message
             content = message.content
 
             if content is None:
-                raise ProviderRequestError(
-                    "OpenAI returned empty content"
-                )
+                raise ProviderRequestError("OpenAI returned empty content")
 
             return str(content).strip()
 
         except Exception as exc:
-            raise ProviderRequestError(
-                f"OpenAI request failed: {exc}"
-            ) from exc
+            raise ProviderRequestError(f"OpenAI request failed: {exc}") from exc
 
     def send(
         self,
