@@ -66,7 +66,7 @@ pytest = "^8.2.0"
 pytest-asyncio = "^0.23.7"
 pytest-cov = "^5.0.0"
 pytest-timeout = "^2.3.1"
-ruff = "^0.4.4"
+ruff = "^0.15.22"
 types-requests = "^2.32.0.20240523"
 pylint = "^4.0.6"
 bandit = "^1.9.4"
@@ -114,10 +114,10 @@ filterwarnings = [
     "ignore::DeprecationWarning",
 ]
 addopts = """
--v
---strict-markers
 --cov=src/ai_cli
+--cov-branch
 --cov-report=term-missing
+--cov-fail-under=95
 """
 markers = ["integration", "slow", "provider"]
 

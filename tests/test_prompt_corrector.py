@@ -1,4 +1,5 @@
 import pytest
+
 from ai_cli.core.prompt_corrector import correct_prompt
 
 

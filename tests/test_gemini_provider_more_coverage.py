@@ -1,4 +1,5 @@
 import pytest
+
 from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers.gemini_provider import GeminiProvider
 

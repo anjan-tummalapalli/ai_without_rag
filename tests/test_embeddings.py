@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from ai_cli.providers.openai_provider import OpenAIProvider
 
 

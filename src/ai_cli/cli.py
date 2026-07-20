@@ -13,6 +13,7 @@ from collections.abc import AsyncIterable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from ai_cli.core.api import ask
+from ai_cli.core.service import AIService
 from ai_cli.providers.bootstrap import init_providers
 
 if TYPE_CHECKING:
@@ -185,6 +186,10 @@ def _build_ask_kwargs(
     Uses inspect.signature so the CLI remains compatible with different
     ask() versions. Only keys accepted by ask() (or variable kwargs) are
     passed. None values are omitted.
+
+    .. deprecated::
+        Prefer constructing an :class:`AIService` via :func:`_make_service`.
+        This function is kept for backwards compatibility with existing tests.
     """
     provider = provider.strip() if provider and provider.strip() else "auto"
     prompt = prompt or ""
@@ -198,6 +203,10 @@ def _build_ask_kwargs(
     modules_list: list[str] | None = None
     if isinstance(modules, str) and modules.strip():
         modules_list = [m.strip() for m in modules.split(",") if m.strip()]
+    elif isinstance(modules, list):
+        modules_list = [
+            m.strip() for m in modules if isinstance(m, str) and m.strip()
+        ]
 
     candidate: dict[str, Any] = {
         "provider": provider,
@@ -323,6 +332,10 @@ def _invoke_with_retries(
     """
     Invoke ask() with exponential-backoff retries on transient errors.
     Handles sync and async responses transparently. Returns an exit code.
+
+    .. deprecated::
+        Prefer :class:`AIService` which encapsulates this logic.
+        This function is kept for backwards compatibility with existing tests.
     """
     if max_retries < 1:
         raise ValueError("max_retries must be at least 1")
@@ -360,6 +373,48 @@ def _invoke_with_retries(
 
     # Unreachable: loop always returns, but satisfies type checkers.
     return 1  # pragma: no cover
+
+
+def _make_service(
+    provider: str,
+    model: str | None,
+    timeout: int,
+    profile: str | None = None,
+    stream: bool = False,
+    modules: str | None = None,
+) -> AIService:
+    """Construct an ``AIService`` from CLI-style parameters."""
+    return AIService(
+        provider=provider,
+        model=model,
+        timeout=timeout,
+        profile=profile,
+        stream=stream,
+        modules=modules,
+    )
+
+
+def _call_service(svc: AIService, prompt: str) -> int:
+    """Call ``svc.ask()`` and print the result. Returns a CLI exit code."""
+    try:
+        reply = svc.ask(prompt)
+        print(reply)
+        return 0
+    except KeyboardInterrupt:
+        print("\n[Interrupted]", file=sys.stderr)
+        return 130
+    except TimeoutError as exc:
+        logger.error("Request timed out: %s", exc)
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 124
+    except (ConnectionError, OSError) as exc:
+        logger.error("Connection error: %s", exc)
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except (RuntimeError, TypeError, ValueError) as exc:
+        logger.exception("AI request failed: %s", exc)
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
 
 _HELP_TEXT = "\n".join(

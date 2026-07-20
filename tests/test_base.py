@@ -1,4 +1,5 @@
 import pytest
+
 from ai_cli.providers.base import (
     AIProvider,
     BaseProvider,
