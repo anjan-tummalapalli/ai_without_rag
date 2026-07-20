@@ -1,8 +1,6 @@
 import builtins
 from unittest.mock import MagicMock
 
-import pytest
-
 import ai_cli.cli as cli
 
 
