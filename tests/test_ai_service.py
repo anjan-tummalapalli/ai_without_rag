@@ -267,6 +267,7 @@ class TestCLIIntegration:
 
         assert code == 124
 
+
 def test_constructor_normalizes_values():
     svc = AIService(
         provider=" ",
@@ -280,31 +281,38 @@ def test_constructor_normalizes_values():
     assert svc.profile is None
     assert svc.modules == ["a", "b", "c"]
 
+
 async def agen():
     yield "A"
     yield "B"
+
 
 @pytest.mark.asyncio
 async def test_drain_async_generator():
     result = await AIService._drain_async(agen())
     assert result == "AB"
 
+
 async def coro():
     return "Hello"
+
 
 @pytest.mark.asyncio
 async def test_drain_async_coroutine():
     result = await AIService._drain_async(coro())
     assert result == "Hello"
 
+
 @pytest.mark.asyncio
 async def test_drain_async_iterable():
-    result = await AIService._drain_async(["A","B"])
+    result = await AIService._drain_async(["A", "B"])
     assert result == "AB"
+
 
 def test_drain_sync_list():
     out = AIService._drain_sync([1, 2, 3])
     assert out == "123"
+
 
 def test_stream_handles_async_generator_response(monkeypatch):
     svc = AIService()
@@ -314,6 +322,7 @@ def test_stream_handles_async_generator_response(monkeypatch):
         lambda _: agen(),
     )
     assert list(svc.ask_stream("x")) == ["AB"]
+
 
 def test_build_kwargs_signature_failure(monkeypatch) -> None:
     svc = AIService(provider="openai")

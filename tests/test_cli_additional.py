@@ -105,10 +105,12 @@ def test_run_interactive_bad_path(monkeypatch, capsys):
         def upsert_documents(self, *a, **k):
             pass
 
-    inputs = iter([
-        "/index file.txt",
-        "/exit",
-    ])
+    inputs = iter(
+        [
+            "/index file.txt",
+            "/exit",
+        ]
+    )
 
     monkeypatch.setattr(cli.os.path, "exists", lambda _: True)
     monkeypatch.setattr(cli, "_safe_resolve_path", lambda _: None)
@@ -132,10 +134,12 @@ def test_run_interactive_command_failure(monkeypatch, capsys):
         def retrieve_context(self, *a, **k):
             return ""
 
-    inputs = iter([
-        "hello",
-        "/exit",
-    ])
+    inputs = iter(
+        [
+            "hello",
+            "/exit",
+        ]
+    )
 
     monkeypatch.setattr(builtins, "input", lambda _: next(inputs))
     monkeypatch.setattr(cli, "_invoke_with_retries", lambda kwargs: 5)
