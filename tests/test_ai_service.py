@@ -5,16 +5,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pytest import MonkeyPatch as monkeypatch
 
 import ai_cli.core.service.ai_service as ai_service
 from ai_cli.core.service.ai_service import AIService
-
-monkeypatch.setattr(
-    ai_service.inspect,
-    "signature",
-    lambda *_: (_ for _ in ()).throw(ValueError()),
-)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -310,31 +303,29 @@ async def test_drain_async_iterable():
     assert result == "AB"
 
 def test_drain_sync_list():
-    out = AIService._drain_sync([1,2,3])
-    assert "[" in out
+    out = AIService._drain_sync([1, 2, 3])
+    assert out == "123"
 
-def test_stream_async(monkeypatch):
+def test_stream_handles_async_generator_response(monkeypatch):
     svc = AIService()
-
     monkeypatch.setattr(
         svc,
         "_call_with_retries",
         lambda _: agen(),
     )
+    assert list(svc.ask_stream("x")) == ["AB"]
 
-    assert list(svc.ask_stream("x")) == ["hello"]
-
-
-def test_build_kwargs_signature_failure(monkeypatch):
+def test_build_kwargs_signature_failure(monkeypatch) -> None:
     svc = AIService(provider="openai")
 
     monkeypatch.setattr(
         ai_service.inspect,
         "signature",
-        lambda *_: (_ for _ in ()).throw(ValueError()),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError()),
     )
 
     kwargs = svc._build_kwargs("hello")
 
     assert kwargs["provider"] == "openai"
     assert kwargs["prompt"] == "hello"
+    assert kwargs["timeout"] == 60
