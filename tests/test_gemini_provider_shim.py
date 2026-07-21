@@ -1,12 +1,11 @@
-import pytest
-
 from types import SimpleNamespace
 
+import pytest
+
+from ai_cli.core.exceptions import ProviderRequestError
 from ai_cli.providers import gemini_provider
-from ai_cli.core.exceptions import ProviderRequestError
-from ai_cli.providers.gemini_provider import _GenaiShim
-from ai_cli.core.exceptions import ProviderRequestError
-from ai_cli.providers.gemini_provider import GeminiProvider
+from ai_cli.providers.gemini_provider import GeminiProvider, _GenaiShim
+
 
 def test_shim_configure():
     shim = _GenaiShim()
