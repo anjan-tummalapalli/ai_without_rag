@@ -35,8 +35,8 @@ import inspect
 import json
 import logging
 import time
-from collections.abc import AsyncIterator, Iterator
-from typing import Any
+from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
+from typing import Any, TypeAlias
 
 from ai_cli.core.api import ask as _core_ask
 
@@ -46,7 +46,10 @@ logger = logging.getLogger("ai_cli.service")
 _MAX_BACKOFF_SECONDS: float = 30.0
 
 
-def _decode_chunk(chunk: Any) -> str:
+ProviderResult: TypeAlias = object
+
+
+def _decode_chunk(chunk: object) -> str:
     """Decode a streaming chunk to a UTF-8 string.
 
     Handles ``bytes``, ``str``, and arbitrary objects (JSON-serialised as a
@@ -119,7 +122,9 @@ class AIService:
         self.stream = stream
         self.modules: list[str] | None = None
         if isinstance(modules, str) and modules.strip():
-            self.modules = [m.strip() for m in modules.split(",") if m.strip()]
+            self.modules = [
+                m.strip() for m in modules.split(",") if m.strip()
+            ]
         self.max_retries = max_retries
         self.backoff = backoff
 
@@ -155,7 +160,8 @@ class AIService:
             return filtered
         except (TypeError, ValueError):
             logger.debug(
-                "Failed to inspect core ask() signature; sending best-effort args"
+                "Failed to inspect core ask() signature; "
+                "sending best-effort args"
             )
             base: dict[str, Any] = {
                 "provider": self.provider,
@@ -173,37 +179,35 @@ class AIService:
             return base
 
     @staticmethod
-    async def _drain_async(result: Any) -> str:
+    async def _drain_async(result: object) -> str:
         """Drain an awaitable / async-iterable result into a single string."""
         value = await result if inspect.isawaitable(result) else result
         parts: list[str] = []
-        if isinstance(value, AsyncIterator):
-            async for part in value:
-                parts.append(_decode_chunk(part))
-        elif hasattr(value, "__aiter__"):
+        if isinstance(value, AsyncIterable):
             async for part in value:
                 parts.append(_decode_chunk(part))
         elif hasattr(value, "__iter__") and not isinstance(
-            value, str | bytes | dict
+            value, (str, bytes, dict)
         ):
             for part in value:
                 parts.append(_decode_chunk(part))
         else:
             parts.append(_decode_chunk(value))
+
         return "".join(parts)
 
     @staticmethod
-    def _drain_sync(result: Any) -> str:
-        """Drain a synchronous (possibly iterable) result into a single string."""
+    def _drain_sync(result: object) -> str:
+        """Drain a synchronous (possibly iterable) result into a string."""
         if inspect.isawaitable(result) or hasattr(result, "__aiter__"):
             return asyncio.run(AIService._drain_async(result))
         parts: list[str] = []
-        if hasattr(result, "__iter__") and not isinstance(
-            result, str | bytes | dict
+        if isinstance(result, Iterable) and not isinstance(
+            result, (str, bytes, dict)
         ):
             for part in result:
                 parts.append(_decode_chunk(part))
-        elif isinstance(result, dict | list):
+        elif isinstance(result, dict):
             parts.append(
                 json.dumps(result, indent=2, ensure_ascii=False, default=str)
             )
@@ -211,7 +215,7 @@ class AIService:
             parts.append(_decode_chunk(result))
         return "".join(parts)
 
-    def _call_with_retries(self, prompt: str) -> Any:
+    def _call_with_retries(self, prompt: str) -> ProviderResult:
         """Call ``core.api.ask`` with exponential-backoff retries.
 
         Returns the raw result from ``ask()`` on success, or raises on
@@ -228,7 +232,7 @@ class AIService:
                     self.provider,
                 )
                 return _core_ask(**kwargs)
-            except (TimeoutError, ConnectionError, OSError) as exc:
+            except OSError as exc:
                 logger.warning(
                     "Transient error on attempt %d: %s", attempt, exc
                 )
@@ -344,7 +348,7 @@ class AIService:
 
         # Run the blocking provider call in a thread pool so we don't block the
         # event loop.
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         original_stream = self.stream
         self.stream = True
         try:
@@ -357,11 +361,11 @@ class AIService:
         if inspect.isawaitable(result):
             result = await result
 
-        if hasattr(result, "__aiter__"):
+        if isinstance(result, AsyncIterable):
             async for part in result:
                 yield _decode_chunk(part)
-        elif hasattr(result, "__iter__") and not isinstance(
-            result, str | bytes | dict
+        elif isinstance(result, Iterable) and not isinstance(
+            result, (str, bytes, dict)
         ):
             for part in result:
                 yield _decode_chunk(part)
