@@ -47,12 +47,12 @@ class DeepSeekProvider(BaseProvider):
     BASE_URL = "https://api.deepseek.com"
 
     def __init__(
-    self,
-    model: str | None = None,
-    api_key: str | None = None,
-    timeout: float | None = None,
-    **kwargs: Any,
-) -> None:
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+        timeout: float | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(
             model=model or self.DEFAULT_MODEL,
             api_key=api_key,
