@@ -47,16 +47,30 @@ class DeepSeekProvider(BaseProvider):
     BASE_URL = "https://api.deepseek.com"
 
     def __init__(
-        self,
-        api_key: str | None = None,
-    ) -> None:
-        super().__init__(model=self.DEFAULT_MODEL)
-        if api_key == "":
-            raise ValueError("DEEPSEEK_API_KEY not set")
+    self,
+    model: str | None = None,
+    api_key: str | None = None,
+    timeout: float | None = None,
+    **kwargs: Any,
+) -> None:
+        super().__init__(
+            model=model or self.DEFAULT_MODEL,
+            api_key=api_key,
+            timeout=timeout,
+            **kwargs,
+        )
+
+        self.model = model or os.getenv(
+            "DEEPSEEK_MODEL",
+            self.DEFAULT_MODEL,
+        )
 
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+
         if not OPENAI_AVAILABLE:
-            raise RuntimeError("The 'openai' package is not installed.")
+            raise RuntimeError(
+                "The 'openai' package is not installed."
+            )
 
         self.client: Any | None = None
 
