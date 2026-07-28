@@ -48,15 +48,10 @@ def test_create_embeddings_empty_response(monkeypatch):
         provider._create_embeddings(["hello"])
 
 
-
-
 class FakeModels:
     def embed_content(self, **kwargs):
-        return SimpleNamespace(
-            embeddings=[
-                SimpleNamespace(values=[1.0, 2.0])
-            ]
-        )
+        return SimpleNamespace(embeddings=[SimpleNamespace(values=[1.0, 2.0])])
+
 
 def test_embed_with_new_sdk_success():
     provider = GeminiProvider(api_key="test")
@@ -93,6 +88,7 @@ def test_embed_with_legacy_sdk(monkeypatch):
     )
 
     assert result == [[1.0, 2.0]]
+
 
 def test_create_embeddings_success(monkeypatch):
     provider = GeminiProvider(api_key="test")

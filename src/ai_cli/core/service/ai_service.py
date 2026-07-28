@@ -122,9 +122,7 @@ class AIService:
         self.stream = stream
         self.modules: list[str] | None = None
         if isinstance(modules, str) and modules.strip():
-            self.modules = [
-                m.strip() for m in modules.split(",") if m.strip()
-            ]
+            self.modules = [m.strip() for m in modules.split(",") if m.strip()]
         self.max_retries = max_retries
         self.backoff = backoff
 
