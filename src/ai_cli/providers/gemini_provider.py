@@ -67,17 +67,9 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
 
 genai: Any
 try:
-    import google.generativeai as genai
-
-    _GENAI_LEGACY = True
+    from google import genai
 except ImportError:
-    try:
-        from google import genai
-
-        _GENAI_LEGACY = False
-    except ImportError:
-        genai = _GenaiShim()
-        _GENAI_LEGACY = False
+    genai = _GenaiShim()
 
 
 class InMemoryVectorDB:
