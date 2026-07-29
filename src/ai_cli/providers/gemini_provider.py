@@ -66,10 +66,23 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
 
 
 genai: Any
+
 try:
+    # Preferred SDK (google-genai >= 1.x)
     from google import genai
+
+    _GENAI_LEGACY = False
+
 except ImportError:
-    genai = _GenaiShim()
+    try:
+        # Legacy SDK
+        import google.generativeai as genai
+
+        _GENAI_LEGACY = True
+
+    except ImportError:
+        genai = _GenaiShim()
+        _GENAI_LEGACY = False
 
 
 class InMemoryVectorDB:
@@ -147,6 +160,8 @@ class GeminiProvider(AIProvider):
     """AI provider for Google Gemini models with optional RAG support."""
 
     provider_name = "gemini"
+    DEFAULT_CHAT_MODEL = "gemini-3.6-flash"
+    DEFAULT_EMBEDDING_MODEL = "models/gemini-embedding-2"
 
     def __init__(
         self,
@@ -159,7 +174,7 @@ class GeminiProvider(AIProvider):
         **kwargs: Any,
     ) -> None:
         super().__init__(
-            model=model or "models/gemini-3.6-flash",
+            model=model or self.DEFAULT_CHAT_MODEL,
             api_key=api_key,
             **kwargs,
         )
@@ -179,7 +194,9 @@ class GeminiProvider(AIProvider):
             self._use_new_api = False
         else:
             new_sdk = cast(Any, genai)
-            self.client = new_sdk.Client(api_key=self.api_key)
+            self.client = new_sdk.Client(
+                api_key=self.api_key,
+            )
             self._use_new_api = True
 
         if chunk_size <= 0:
@@ -187,7 +204,9 @@ class GeminiProvider(AIProvider):
         if chunk_overlap < 0:
             raise ValueError("chunk_overlap must be non-negative")
 
-        self.embedding_model = embedding_model
+        self.embedding_model = (
+            embedding_model or self.DEFAULT_EMBEDDING_MODEL
+        )
         self.vector_db = vector_db_client or InMemoryVectorDB()
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -260,7 +279,7 @@ class GeminiProvider(AIProvider):
         if not inputs:
             return []
 
-        model = self.embedding_model or "models/text-embedding-004"
+        model = self.embedding_model or self.DEFAULT_EMBEDDING_MODEL
         payload = list(inputs)
 
         try:
@@ -280,23 +299,30 @@ class GeminiProvider(AIProvider):
         return vectors
 
     def _embed_with_new_sdk(
-        self, model: str, payload: list[str]
+        self,
+        model: str,
+        payload: list[str],
     ) -> list[list[float]]:
-        if not hasattr(self.client, "models") or not hasattr(
-            self.client.models, "embed_content"
+        """Create embeddings using the google-genai SDK."""
+        if (
+            not hasattr(self.client, "models")
+            or not hasattr(self.client.models, "embed_content")
         ):
             raise ProviderRequestError(
                 "Embedding API not available in google-genai SDK"
             )
-
-        result = self.client.models.embed_content(model=model, contents=payload)
-        embeddings = getattr(result, "embeddings", None)
-        if not embeddings:
-            raise ProviderRequestError("Embedding API returned no data")
-
         vectors: list[list[float]] = []
-        for item in embeddings:
-            values = getattr(item, "values", None)
+        for text in payload:
+            result = self.client.models.embed_content(
+                model=model,
+                contents=text,
+            )
+            embeddings = getattr(result, "embeddings", None)
+            if not embeddings:
+                raise ProviderRequestError(
+                    "Embedding API returned no data"
+                )
+            values = getattr(embeddings[0], "values", None)
             if values is None:
                 raise ProviderRequestError(
                     "Embedding item missing 'values' vector"

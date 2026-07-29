@@ -2,8 +2,6 @@ from typing import Any
 
 from ai_cli.providers.registry import build_provider, ensure_initialized
 
-DEFAULT_MODEL = "gpt-4o-mini"
-
 
 def ask(
     prompt: str,
@@ -25,7 +23,7 @@ def ask(
         if _provider is not None
         else build_provider(
             name=provider,
-            model=model or DEFAULT_MODEL,
+            model=model,
             **kwargs,
         )
     )
