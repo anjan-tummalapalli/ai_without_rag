@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+# pyrefly: ignore [missing-import]
 import pytest
 
 from ai_cli.core.exceptions import ProviderRequestError

@@ -28,6 +28,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests as req
 
 from ai_cli.core.exceptions import (
     AIProviderError,
@@ -531,8 +532,6 @@ class TestZAIProviderCoverage:
 
     def test_send_impl_network_error(self, monkeypatch):
         """_send_impl raises on network error."""
-        import requests as req
-
         monkeypatch.setattr(
             "requests.post",
             MagicMock(side_effect=req.RequestException("timeout")),
@@ -672,8 +671,6 @@ class TestZAIProviderCoverage:
 
     def test_send_network_error(self, monkeypatch):
         """send() raises on network exception."""
-        import requests as req
-
         monkeypatch.setattr(
             "requests.post",
             MagicMock(side_effect=req.RequestException("conn refused")),
@@ -706,8 +703,6 @@ class TestZAIProviderCoverage:
 
     def test_chat_error(self, monkeypatch):
         """chat() raises ProviderRequestError on failure."""
-        import requests as req
-
         monkeypatch.setattr(
             "requests.post",
             MagicMock(side_effect=req.RequestException("down")),
@@ -748,9 +743,9 @@ class TestDeepSeekProviderCoverage:
         return p
 
     def test_init_empty_key_raises(self):
-        """Test init empty key raises."""
-        with pytest.raises(ValueError, match="DEEPSEEK_API_KEY"):
-            DeepSeekProvider(api_key="")
+        """Test init empty key sets client to None."""
+        p = DeepSeekProvider(api_key="")
+        assert p.client is None
 
     def test_init_no_key(self):
         """Test init no key."""

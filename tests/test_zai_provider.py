@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 # Lightweight pytest fallback (keeps original behavior if pytest not present)
 try:
-    import pytest
+    import pytest  # pyrefly: ignore [missing-import]
 except Exception:
     import re
 

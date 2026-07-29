@@ -167,7 +167,7 @@ class GeminiProvider(AIProvider):
         **kwargs: Any,
     ) -> None:
         super().__init__(
-            model=model or "gemini-1.5-flash",
+            model=model or "models/gemini-3.6-flash",
             api_key=api_key,
             **kwargs,
         )
@@ -182,7 +182,7 @@ class GeminiProvider(AIProvider):
             legacy.configure(api_key=self.api_key)
 
             self.client = legacy.GenerativeModel(
-                self.model or "gemini-1.5-flash"
+                self.model or "gemini-3.6-flash"
             )
             self._use_new_api = False
         else:
@@ -207,9 +207,7 @@ class GeminiProvider(AIProvider):
 
         try:
             if self._use_new_api:
-                client = cast(Any, self.client)
-
-                response = client.models.generate_content(
+                response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
                 )
@@ -217,11 +215,16 @@ class GeminiProvider(AIProvider):
                 response = self.client.generate_content(prompt)
 
             if hasattr(response, "text") and response.text:
-                return cast(str, response.text)
+                return str(response.text)
 
-            return "gemini response"
-        except Exception:
-            return "gemini response"
+            raise ProviderRequestError(
+                "Gemini returned an empty response."
+            )
+
+        except Exception as exc:
+            raise ProviderRequestError(
+                f"Gemini request failed: {exc}"
+            ) from exc
 
     def health_check(self) -> bool:
         try:
