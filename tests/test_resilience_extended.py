@@ -240,6 +240,7 @@ def test_retry_engine_rejects_async():
         return "x"
 
     with pytest.raises(TypeError):
+        # pyrefly: ignore [unused-coroutine]
         engine.execute(async_fn)
 
 
@@ -277,6 +278,7 @@ def test_async_retry_decorator_rejects_sync():
     engine = AsyncRetryEngine()
     with pytest.raises(TypeError):
 
+        # pyrefly: ignore [bad-argument-type]
         @engine.decorator()
         def normal():
             return "x"
@@ -401,6 +403,7 @@ def test_retry_engine_rejects_coroutine():
     engine = RetryEngine()
 
     with pytest.raises(TypeError):
+        # pyrefly: ignore [unused-coroutine]
         engine.execute(fn)
 
 
@@ -443,6 +446,7 @@ async def test_async_retry_engine_decorator_all_attempts_fail():
         attempts["count"] += 1
         raise RuntimeError("failed")
 
+    # pyrefly: ignore [unexpected-keyword]
     with pytest.raises(RuntimeError, match="failed"):
         await always_fail()
 

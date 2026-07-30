@@ -170,6 +170,7 @@ def build_store_from_text(
     overlap: int = 50,
     dim: int = 64,
 ) -> VectorStore:
+    # pyrefly: ignore [unexpected-keyword]
     chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
     store = VectorStore(dim=dim)
     for i, c in enumerate(chunks):

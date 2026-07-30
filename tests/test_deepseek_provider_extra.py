@@ -52,6 +52,7 @@ class _UnauthorizedThenOkProvider:
 
 
 def test_send_skips_unauthorized_error_and_raises() -> None:
+    # pyrefly: ignore [unsupported-operation]
     PROVIDER_MAP["__auto_unauthorized__"] = _UnauthorizedThenOkProvider
     ap = AutoProvider(fallback_order=["__auto_unauthorized__"])
 
@@ -60,6 +61,7 @@ def test_send_skips_unauthorized_error_and_raises() -> None:
 
 
 def test_send_reports_provider_not_found() -> None:
+    # pyrefly: ignore [unsupported-operation]
     PROVIDER_MAP["__auto_present__"] = _FallbackOkProvider
     ap = AutoProvider(fallback_order=["__auto_present__"])
     ap.fallback_order = ["__auto_missing_now__", "__auto_present__"]

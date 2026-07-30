@@ -14,6 +14,7 @@ from ai_cli.providers.zAI_provider import ZAIProvider
 
 try:
     from ai_cli.providers.gemini_provider import (
+        # pyrefly: ignore [missing-module-attribute]
         GEMINI_IMPORT_ERROR,
         GeminiProvider,
     )
@@ -84,6 +85,7 @@ def test_gemini_provider(genai_mock, monkeypatch):
     _setup_genai_mock(genai_mock, text="gemini response")
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
 
+    # pyrefly: ignore [not-callable]
     p = GeminiProvider()
     assert p.send("hello") == "gemini response"
 

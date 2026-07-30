@@ -121,7 +121,7 @@ def test_run_interactive_bad_path(monkeypatch, capsys):
             "auto",
             None,
             30,
-            rag=DummyPipeline(),
+            rag=DummyPipeline(),  # pyrefly: ignore [bad-argument-type]
         )
         == 0
     )
@@ -149,7 +149,7 @@ def test_run_interactive_command_failure(monkeypatch, capsys):
             "auto",
             None,
             30,
-            rag=DummyPipeline(),
+            rag=DummyPipeline(),  # pyrefly: ignore [bad-argument-type]
         )
         == 0
     )

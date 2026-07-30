@@ -37,6 +37,7 @@ def test_gemini_import_available():
 )
 class TestGeminiCoverageBoost:
     def _provider(self):
+        # pyrefly: ignore [bad-argument-type, bad-specialization]
         p = GeminiProvider.__new__(GeminiProvider)
         p.model = "gemini"
         p.api_key = "test"
@@ -51,11 +52,13 @@ class TestGeminiCoverageBoost:
 
     def test_cosine_zero_norm(self):
         assert (
+            # pyrefly: ignore [missing-attribute]
             InMemoryVectorDB._cosine_similarity_with_norms([1], 0.0, [1], 1.0)
             == 0.0
         )
 
     def test_cosine_normal(self):
+        # pyrefly: ignore [missing-attribute]
         score = InMemoryVectorDB._cosine_similarity_with_norms(
             [1.0, 0.0],
             1.0,
@@ -65,11 +68,13 @@ class TestGeminiCoverageBoost:
         assert score == pytest.approx(1.0)
 
     def test_query_empty(self):
+        # pyrefly: ignore [bad-argument-type, bad-specialization]
         db = InMemoryVectorDB.__new__(InMemoryVectorDB)
         db._items = []
         assert db.query([1]) == []
 
     def test_query_all_results(self):
+        # pyrefly: ignore [bad-argument-type, bad-specialization]
         db = InMemoryVectorDB.__new__(InMemoryVectorDB)
         db._items = [
             {
@@ -84,6 +89,7 @@ class TestGeminiCoverageBoost:
         assert result[0]["id"] == "1"
 
     def test_query_heap_branch(self):
+        # pyrefly: ignore [bad-argument-type, bad-specialization]
         db = InMemoryVectorDB.__new__(InMemoryVectorDB)
         db._items = [
             {
@@ -148,6 +154,7 @@ class TestGeminiCoverageBoost:
         p = self._provider()
         p.chunk_text = MagicMock(return_value=[])
         p.index_document("doc", "text")
+        # pyrefly: ignore [missing-attribute]
         p.vector_db.upsert.assert_not_called()
 
     def test_index_document_count_mismatch(self):
@@ -202,6 +209,7 @@ class TestGeminiCoverageBoost:
 
     def test_send_with_rag_no_embedding_model(self):
         p = self._provider()
+        # pyrefly: ignore [bad-assignment]
         p.embedding_model = None
         with pytest.raises(ProviderRequestError):
             p.send_with_rag("hello")

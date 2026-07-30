@@ -692,6 +692,7 @@ def test_build_ask_kwargs_signature_failure(monkeypatch):
         model="m",
         profile="p",
         stream=True,
+        # pyrefly: ignore [bad-argument-type]
         modules=["x"],
     )
 
@@ -1001,7 +1002,7 @@ def test_run_interactive_help_exit(monkeypatch):
             provider="openai",
             model=None,
             timeout=1,
-            rag=Dummy(),
+            rag=Dummy(),  # pyrefly: ignore [bad-argument-type]
         )
         == 0
     )
@@ -1022,7 +1023,7 @@ def test_run_interactive_search(monkeypatch):
             provider="openai",
             model=None,
             timeout=1,
-            rag=Dummy(),
+            rag=Dummy(),  # pyrefly: ignore [bad-argument-type]
         )
         == 0
     )

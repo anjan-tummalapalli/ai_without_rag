@@ -187,6 +187,7 @@ class AIService:
         elif hasattr(value, "__iter__") and not isinstance(
             value, (str, bytes, dict)
         ):
+            # pyrefly: ignore [not-iterable]
             for part in value:
                 parts.append(_decode_chunk(part))
         else:
@@ -320,6 +321,7 @@ class AIService:
         if hasattr(result, "__iter__") and not isinstance(
             result, str | bytes | dict
         ):
+            # pyrefly: ignore [not-iterable]
             for part in result:
                 yield _decode_chunk(part)
         else:

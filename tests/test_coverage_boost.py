@@ -97,7 +97,9 @@ except ImportError:
         """Fallback for requests.post when requests isn't installed."""
         raise RequestException("requests is not installed")
  
+    # pyrefly: ignore [missing-attribute]
     req.RequestException = RequestException
+    # pyrefly: ignore [missing-attribute]
     req.post = _post
     sys.modules["requests"] = req
  

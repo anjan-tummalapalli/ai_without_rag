@@ -123,6 +123,7 @@ class TestGeminiProvider:
             mock_genai.configure = MagicMock()
             mock_genai.GenerativeModel.return_value = mock_model
             p = GeminiProvider(api_key="test", **kwargs)
+            # pyrefly: ignore [missing-attribute]
             p._mock_model = mock_model
         return p
 
@@ -226,6 +227,7 @@ class TestGeminiProvider:
 
     def test_send_with_rag_no_embedding_model_raises(self):
         p = self._make_provider()
+        # pyrefly: ignore [bad-assignment]
         p.embedding_model = None
         with pytest.raises(
             ProviderRequestError, match="Embedding model not configured"
@@ -332,6 +334,7 @@ class TestGeminiSendImpl:
             mock_genai.configure = MagicMock()
             mock_genai.GenerativeModel.return_value = mock_model
             p = GeminiProvider(api_key="real-key")
+            # pyrefly: ignore [missing-attribute]
             p._mock_model = mock_model
         return p
 

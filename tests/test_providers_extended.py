@@ -152,6 +152,7 @@ class TestRegistry:
 
     def test_register_and_retrieve_provider(self) -> None:
         """register_provider stores the class in PROVIDER_MAP."""
+        # pyrefly: ignore [bad-argument-type]
         register_provider("__test_dummy__", _DummyProvider)
         assert PROVIDER_MAP.get("__test_dummy__") is _DummyProvider
 
@@ -166,6 +167,7 @@ class TestRegistry:
 
     def test_register_chat_provider(self) -> None:
         """register_chat_provider populates CHAT_PROVIDERS and PROVIDER_MAP."""
+        # pyrefly: ignore [bad-argument-type]
         register_chat_provider("__test_chat__", _ChatDummyProvider)
         assert CHAT_PROVIDERS.get("__test_chat__") is _ChatDummyProvider
         assert PROVIDER_MAP.get("__test_chat__") is _ChatDummyProvider
@@ -266,6 +268,7 @@ class TestAutoProvider:
 
     def test_send_with_custom_fallback(self) -> None:
         """AutoProvider calls the registered provider class."""
+        # pyrefly: ignore [unsupported-operation]
         PROVIDER_MAP["__auto_test__"] = _OkSendProvider
         ap = AutoProvider(fallback_order=["__auto_test__"])
         result = ap.send("hello")
@@ -273,12 +276,14 @@ class TestAutoProvider:
 
     def test_ask_delegates_to_send(self) -> None:
         """ask() is an alias for send()."""
+        # pyrefly: ignore [unsupported-operation]
         PROVIDER_MAP["__auto_ask__"] = _FromSendProvider
         ap = AutoProvider(fallback_order=["__auto_ask__"])
         assert ap.ask("hi") == "from_send"
 
     def test_send_skips_missing_provider(self) -> None:
         """send() skips providers not present in PROVIDER_MAP."""
+        # pyrefly: ignore [unsupported-operation]
         PROVIDER_MAP["__auto_fallback__"] = _FallbackOkProvider
         ap = AutoProvider(
             fallback_order=["__not_registered_xyz__", "__auto_fallback__"]
@@ -288,6 +293,7 @@ class TestAutoProvider:
 
     def test_send_all_fail_raises(self) -> None:
         """send() raises ProviderRequestError when all fallbacks fail."""
+        # pyrefly: ignore [unsupported-operation]
         PROVIDER_MAP["__auto_fail__"] = _AlwaysFailProvider
         ap = AutoProvider(fallback_order=["__auto_fail__"])
         with pytest.raises(
@@ -302,6 +308,7 @@ class TestAutoProvider:
 
     def test_send_skips_unauthorized_error_and_raises(self) -> None:
         """send() records an 'unauthorized'-style failure as skipped."""
+        # pyrefly: ignore [unsupported-operation]
         PROVIDER_MAP["__auto_unauthorized__"] = _UnauthorizedThenOkProvider
         ap = AutoProvider(fallback_order=["__auto_unauthorized__"])
         with pytest.raises(
@@ -311,6 +318,7 @@ class TestAutoProvider:
 
     def test_send_reports_provider_not_found(self) -> None:
         """send() records a 'not found' error for a missing provider class."""
+        # pyrefly: ignore [unsupported-operation]
         PROVIDER_MAP["__auto_present__"] = _FallbackOkProvider
         ap = AutoProvider(fallback_order=["__auto_present__"])
         # Simulate the provider disappearing from the map between init and
