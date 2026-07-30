@@ -20,15 +20,86 @@ modules that aren't adequately exercised by the existing test suite.
 # Small dummy stub classes (used to test decorator registration) and one
 # large aggregating test class are both expected shapes for this kind of
 # coverage-focused test file.
+#
+# pylint: disable=too-many-lines
+# This is a single, deliberately comprehensive coverage-boost file
+# spanning several previously-undertested modules; splitting it purely
+# to dodge the line-count check would scatter closely related tests
+# across files for no readability benefit.
  
 from __future__ import annotations
  
 import json
 import os
+import sys
+import types
 from unittest.mock import MagicMock, patch
  
-import pytest
-import requests as req
+# Lightweight pytest fallback (keeps original behavior if pytest not
+# present), matching the pattern established in test_zai_provider.py.
+try:
+    import pytest  # pyrefly: ignore [missing-import]
+except ImportError:
+    import re
+ 
+    class _RaisesContext:
+        """Minimal stand-in for pytest.raises' context manager: fails the
+        test if the expected exception isn't raised, re-raises anything
+        of the wrong type, and optionally checks the message against a
+        regex, mirroring pytest's real `match=` behavior."""
+ 
+        def __init__(self, expected_exception, match=None):
+            """Store the expected exception type(s) and optional regex."""
+            self.expected_exception = expected_exception
+            self.match = match
+            self.exception = None
+ 
+        def __enter__(self):
+            """Return self so callers can inspect .exception afterward."""
+            return self
+ 
+        def __exit__(self, exc_type, exc, tb):
+            """Validate the raised exception's type and message."""
+            if exc_type is None:
+                raise AssertionError(
+                    f"{self.expected_exception} was not raised"
+                )
+            if not issubclass(exc_type, self.expected_exception):
+                return False
+            if self.match is not None and not re.search(self.match, str(exc)):
+                raise AssertionError(
+                    f"exception message {exc!r} does not match {self.match!r}"
+                )
+            self.exception = exc
+            return True
+ 
+    class _PyTestStub(types.ModuleType):
+        """Fallback module registered as `pytest` when the real package
+        isn't installed; only implements the `.raises()` this file uses."""
+ 
+        def raises(self, expected_exception, match=None):
+            """Return a _RaisesContext, mirroring pytest.raises()."""
+            return _RaisesContext(expected_exception, match=match)
+ 
+    pytest = _PyTestStub("pytest")
+    sys.modules["pytest"] = pytest
+ 
+# Minimal requests fallback so tests run even without requests installed.
+try:
+    import requests as req
+except ImportError:
+    req = types.ModuleType("requests")
+ 
+    class RequestException(Exception):
+        """Fallback stand-in for requests.RequestException."""
+ 
+    def _post(*args, **kwargs):
+        """Fallback for requests.post when requests isn't installed."""
+        raise RequestException("requests is not installed")
+ 
+    req.RequestException = RequestException
+    req.post = _post
+    sys.modules["requests"] = req
  
 from ai_cli.core.exceptions import (
     AIProviderError,

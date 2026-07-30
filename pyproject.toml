@@ -71,6 +71,7 @@ types-requests = "^2.32.0.20240523"
 pylint = "^4.0.6"
 bandit = "^1.9.4"
 pyflakes = "^3.4.0"
+pyrefly = "^1.1.1"
  
 [tool.poetry.extras]
 docs = ["mkdocs", "mkdocs-material", "mkdocstrings"]
@@ -126,6 +127,6 @@ source = ["src/ai_cli"]
 branch = true
  
 [tool.pyrefly]
-python-interpreter-path = ".venv/bin/python3.11"
+python-interpreter-path = "/Users/anjan/Library/Caches/pypoetry/virtualenvs/ai-cli-FEEqaryM-py3.11/bin/python3.11"
 search-path = ["src"]
 project-includes = ["src", "tests"]
