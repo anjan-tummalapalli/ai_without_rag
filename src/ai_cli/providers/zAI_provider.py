@@ -156,10 +156,8 @@ class ZAIProvider(AIProvider):
         # As a last resort, return the full JSON as string
         try:
             return json.dumps(data, ensure_ascii=False)
-        except Exception as exc:
-            raise ProviderRequestError(
-                "unable to coerce z.AI response to string"
-            ) from exc
+        except (TypeError, ValueError):
+            return str(data)
 
     def send(self, prompt: str, **kwargs: Any) -> str:
         if not self.api_key:

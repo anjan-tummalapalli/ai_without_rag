@@ -204,9 +204,7 @@ class GeminiProvider(AIProvider):
         if chunk_overlap < 0:
             raise ValueError("chunk_overlap must be non-negative")
 
-        self.embedding_model = (
-            embedding_model or self.DEFAULT_EMBEDDING_MODEL
-        )
+        self.embedding_model = embedding_model or self.DEFAULT_EMBEDDING_MODEL
         self.vector_db = vector_db_client or InMemoryVectorDB()
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -228,14 +226,10 @@ class GeminiProvider(AIProvider):
             if hasattr(response, "text") and response.text:
                 return str(response.text)
 
-            raise ProviderRequestError(
-                "Gemini returned an empty response."
-            )
+            raise ProviderRequestError("Gemini returned an empty response.")
 
         except Exception as exc:
-            raise ProviderRequestError(
-                f"Gemini request failed: {exc}"
-            ) from exc
+            raise ProviderRequestError(f"Gemini request failed: {exc}") from exc
 
     def health_check(self) -> bool:
         try:
@@ -304,9 +298,8 @@ class GeminiProvider(AIProvider):
         payload: list[str],
     ) -> list[list[float]]:
         """Create embeddings using the google-genai SDK."""
-        if (
-            not hasattr(self.client, "models")
-            or not hasattr(self.client.models, "embed_content")
+        if not hasattr(self.client, "models") or not hasattr(
+            self.client.models, "embed_content"
         ):
             raise ProviderRequestError(
                 "Embedding API not available in google-genai SDK"
@@ -319,9 +312,7 @@ class GeminiProvider(AIProvider):
             )
             embeddings = getattr(result, "embeddings", None)
             if not embeddings:
-                raise ProviderRequestError(
-                    "Embedding API returned no data"
-                )
+                raise ProviderRequestError("Embedding API returned no data")
             values = getattr(embeddings[0], "values", None)
             if values is None:
                 raise ProviderRequestError(

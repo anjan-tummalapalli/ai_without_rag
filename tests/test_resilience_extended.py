@@ -277,7 +277,6 @@ def test_async_retry_decorator_rejects_sync():
 
     engine = AsyncRetryEngine()
     with pytest.raises(TypeError):
-
         # pyrefly: ignore [bad-argument-type]
         @engine.decorator()
         def normal():

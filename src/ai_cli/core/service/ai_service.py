@@ -65,6 +65,10 @@ def _decode_chunk(chunk: object) -> str:
         return str(chunk)
 
 
+# Backward compatibility for older tests
+_chunk_to_text = _decode_chunk
+
+
 class AIService:
     """Provider-agnostic AI service shared by the CLI and GUI.
 
