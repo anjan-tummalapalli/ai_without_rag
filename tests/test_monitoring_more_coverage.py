@@ -82,3 +82,88 @@ def test_noop_metric():
     assert m.labels("a") is m
     assert m.inc() is None
     assert m.set() is None
+
+def test_find_existing_metric_without_prom_core(monkeypatch):
+    monkeypatch.setattr(monitoring, "prom_core", None)
+
+    assert monitoring._find_existing_metric("metric") is None
+
+
+def test_safe_counter_without_prometheus(monkeypatch):
+    monkeypatch.setattr(monitoring, "PromCounter", None)
+
+    metric = monitoring._safe_counter(
+        "counter",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+
+def test_safe_gauge_without_prometheus(monkeypatch):
+    monkeypatch.setattr(monitoring, "PromGauge", None)
+
+    metric = monitoring._safe_gauge(
+        "gauge",
+        "doc",
+        [],
+    )
+
+    assert isinstance(metric, monitoring._NoopMetric)
+
+
+def test_find_existing_metric_registry_none(monkeypatch):
+    class Core:
+        REGISTRY = None
+
+    monkeypatch.setattr(monitoring, "prom_core", Core)
+
+    assert monitoring._find_existing_metric("metric") is None
+
+
+def test_monitoring_logger_exception(monkeypatch):
+    def fake_server(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    messages = []
+
+    class FakeLogger:
+        def exception(self, msg, *args, **kwargs):
+            messages.append(msg)
+
+        def info(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(monitoring, "logger", FakeLogger())
+    monkeypatch.setattr(monitoring, "start_http_server", fake_server)
+
+    monitoring.Monitoring(port=9876)
+
+    assert messages == ["Failed to start monitoring server"]
+
+
+def test_noop_metric_all_methods():
+    metric = monitoring._NoopMetric()
+
+    assert metric.labels("a", "b") is metric
+    assert metric.labels() is metric
+    assert metric.inc() is None
+    assert metric.inc(5) is None
+    assert metric.set() is None
+    assert metric.set(10) is None
+
+
+def test_find_existing_metric_no_names(monkeypatch):
+    class Collector:
+        pass
+
+    class Registry:
+        collectors = [Collector()]
+
+    class Core:
+        REGISTRY = Registry()
+
+    monkeypatch.setattr(monitoring, "prom_core", Core)
+
+    assert monitoring._find_existing_metric("metric") is None

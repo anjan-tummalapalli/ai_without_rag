@@ -230,3 +230,20 @@ def test_send_with_rag_without_context(monkeypatch):
     )
 
     assert p.send_with_rag("hello") == "hello"
+
+def test_health_check_without_client():
+    p = provider()
+    p.client = None
+    assert p.health_check() is False
+
+
+def test_chunk_text_single_chunk():
+    p = provider()
+
+    chunks = p.chunk_text(
+        "hello",
+        chunk_size=100,
+        overlap=0,
+    )
+
+    assert chunks == ["hello"]

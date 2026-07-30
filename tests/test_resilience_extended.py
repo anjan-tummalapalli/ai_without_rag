@@ -457,3 +457,13 @@ def test_execute_with_fallback_returns_none_without_fallback():
         raise RuntimeError("boom")
 
     assert execute_with_fallback(primary) is None
+
+def test_execute_with_fallback_without_fallback():
+    assert execute_with_fallback(
+        lambda: (_ for _ in ()).throw(RuntimeError())
+    ) is None
+
+
+def test_cache_delete_missing():
+    cache = Cache()
+    cache.delete("missing")

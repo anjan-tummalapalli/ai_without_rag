@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 from ai_cli.providers.deepseek_provider import DeepSeekProvider
+from ai_cli.core.exceptions import ProviderRequestError
 
 
 def test_deepseek_health_check_false_without_key():
@@ -103,3 +104,21 @@ def test_deepseek_chat_falls_back_to_choice_text():
     provider.client = fake_client
 
     assert provider.chat("hello") == "chat-text-fallback"
+
+
+def test_deepseek_send_client_exception():
+    provider = DeepSeekProvider(api_key="x")
+
+    class Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    raise RuntimeError("boom")
+
+    provider.client = Client()
+
+    try:
+        provider.send("hello")
+    except (RuntimeError, ProviderRequestError):
+        pass
