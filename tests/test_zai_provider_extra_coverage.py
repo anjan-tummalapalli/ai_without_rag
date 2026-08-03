@@ -2,8 +2,8 @@ import pytest
 import requests
 
 from ai_cli.core.exceptions import ProviderRequestError
-from ai_cli.providers.zAI_provider import ZAIProvider
 from ai_cli.providers.contracts import ChatProvider
+from ai_cli.providers.zAI_provider import ZAIProvider
 
 
 class DummyResponse:
