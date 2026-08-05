@@ -83,6 +83,7 @@ def test_noop_metric():
     assert m.inc() is None
     assert m.set() is None
 
+
 def test_find_existing_metric_without_prom_core(monkeypatch):
     monkeypatch.setattr(monitoring, "prom_core", None)
 

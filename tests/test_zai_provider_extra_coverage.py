@@ -136,6 +136,7 @@ def test_is_ready_false(monkeypatch):
 
     assert ZAIProvider().is_ready() is False
 
+
 def test_send_impl_empty_response(monkeypatch):
     provider = ZAIProvider()
     provider.api_key = "key"
@@ -155,6 +156,7 @@ def test_send_impl_empty_response(monkeypatch):
 
     with pytest.raises(ProviderRequestError, match="empty response"):
         provider._send_impl("hello")
+
 
 def test_send_impl_choices_without_message(monkeypatch):
     monkeypatch.setenv("ZAI_API_KEY", "abc")
@@ -178,6 +180,7 @@ def test_send_impl_choices_without_message(monkeypatch):
 
     assert provider._send_impl("hello") == '{"choices": [{"foo": "bar"}]}'
 
+
 def test_send_impl_choices_not_dict(monkeypatch):
     monkeypatch.setenv("ZAI_API_KEY", "abc")
 
@@ -197,6 +200,7 @@ def test_send_impl_choices_not_dict(monkeypatch):
     provider = ZAIProvider()
 
     assert provider._send_impl("hello") == '{"choices": ["plain string"]}'
+
 
 def test_send_impl_json_dump_failure(monkeypatch):
     monkeypatch.setenv("ZAI_API_KEY", "abc")
@@ -225,6 +229,7 @@ def test_send_impl_json_dump_failure(monkeypatch):
 
     assert "BadObject" in result
 
+
 def test_send_impl_output_key(monkeypatch):
     monkeypatch.setenv("ZAI_API_KEY", "abc")
 
@@ -239,6 +244,7 @@ def test_send_impl_output_key(monkeypatch):
     provider = ZAIProvider()
 
     assert provider._send_impl("hi") == "hello"
+
 
 def test_send_impl_result_key(monkeypatch):
     provider = ZAIProvider()
@@ -258,6 +264,7 @@ def test_send_impl_result_key(monkeypatch):
 
     assert provider._send_impl("hi") == "success"
 
+
 def test_send_impl_non_json_text_response(monkeypatch):
     monkeypatch.setenv("ZAI_API_KEY", "abc")
 
@@ -275,6 +282,7 @@ def test_send_impl_non_json_text_response(monkeypatch):
     provider = ZAIProvider()
 
     assert provider._send_impl("hello") == "plain text response"
+
 
 def test_send_impl_empty_text(monkeypatch):
     monkeypatch.setenv("ZAI_API_KEY", "abc")
@@ -297,6 +305,7 @@ def test_send_impl_empty_text(monkeypatch):
         match="empty response",
     ):
         provider._send_impl("hello")
+
 
 def test_send_impl_choice_text(monkeypatch):
     monkeypatch.setenv("ZAI_API_KEY", "abc")
@@ -322,6 +331,7 @@ def test_send_impl_choice_text(monkeypatch):
 
     assert provider._send_impl("hello") == "answer"
 
+
 def test_send_impl_json_dump(monkeypatch):
     monkeypatch.setenv("ZAI_API_KEY", "abc")
 
@@ -340,12 +350,14 @@ def test_send_impl_json_dump(monkeypatch):
 
     assert provider._send_impl("hello") == '{"foo": ["bar"]}'
 
+
 def test_chat_provider_methods():
     class Dummy(ChatProvider):
         def ask(self, prompt, **kwargs):
             return prompt
 
     assert Dummy().ask("hi") == "hi"
+
 
 def test_send_impl_choices_message_without_content(monkeypatch):
     provider = ZAIProvider()
@@ -355,13 +367,7 @@ def test_send_impl_choices_message_without_content(monkeypatch):
         status_code = 200
 
         def json(self):
-            return {
-                "choices": [
-                    {
-                        "message": {}
-                    }
-                ]
-            }
+            return {"choices": [{"message": {}}]}
 
     monkeypatch.setattr(
         requests,
