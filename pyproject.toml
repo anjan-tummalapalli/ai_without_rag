@@ -38,7 +38,7 @@ packages = [{ include = "ai_cli", from = "src" }]
 [tool.poetry.dependencies]
 python = "^3.10"
 cohere = "^7.0.5"
-google-genai = "^2.10.0"
+google-genai = "^2.16.0"
 openai = "^2.44.0"
 requests = "^2.34.0"
 prometheus-client = "^0.25.0"
@@ -93,17 +93,6 @@ lint.ignore = ["E501"]
 [tool.ruff.format]
 quote-style = "double"
  
-[tool.mypy]
-python_version = "3.10"
-files = ["src", "tests"]
-strict = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-check_untyped_defs = true
-no_implicit_optional = true
-warn_return_any = true
-warn_unused_ignores = true
- 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
@@ -130,3 +119,22 @@ branch = true
 python-interpreter-path = "/Users/anjan/Library/Caches/pypoetry/virtualenvs/ai-cli-FEEqaryM-py3.11/bin/python3.11"
 search-path = ["src"]
 project-includes = ["src", "tests"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src", "tests"]
+strict = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "google",
+    "google.*",
+]
+follow_imports = "skip"
+ignore_missing_imports = true

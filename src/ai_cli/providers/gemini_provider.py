@@ -65,24 +65,32 @@ class _GenaiShim:  # pylint: disable=too-few-public-methods
                 )
 
 
-genai: Any
+# Google SDK import compatibility
+#
+# Prefer the new `google-genai` SDK, but fall back to the legacy
+# `google-generativeai` package if necessary.
 
 try:
-    # Preferred SDK (google-genai >= 1.x)
-    from google import genai
-
-    _GENAI_LEGACY = False
-
+    from google import genai as google_genai
 except ImportError:
-    try:
-        # Legacy SDK
-        import google.generativeai as genai
+    google_genai = None
 
-        _GENAI_LEGACY = True
+try:
+    import google.generativeai as legacy_genai
+except ImportError:
+    legacy_genai = None
 
-    except ImportError:
-        genai = _GenaiShim()
-        _GENAI_LEGACY = False
+
+_GENAI_LEGACY = False
+genai: Any
+
+if google_genai is not None:
+    genai = google_genai
+elif legacy_genai is not None:
+    genai = legacy_genai
+    _GENAI_LEGACY = True
+else:
+    genai = _GenaiShim()
 
 
 class InMemoryVectorDB:
