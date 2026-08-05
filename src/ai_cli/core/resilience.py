@@ -150,12 +150,12 @@ class RetryEngine:
         max_attempts: int = 3,
         retries: int | None = None,
         base_delay: float = 0,
-        retry_on: Callable[[Exception], bool]
-        | tuple[type[Exception], ...]
-        | None = None,
-        retry_filter: Callable[[Exception], bool]
-        | tuple[type[Exception], ...]
-        | None = None,
+        retry_on: (
+            Callable[[Exception], bool] | tuple[type[Exception], ...] | None
+        ) = None,
+        retry_filter: (
+            Callable[[Exception], bool] | tuple[type[Exception], ...] | None
+        ) = None,
         **kwargs: Any,
     ) -> None:
         self.max_attempts = retries or max_attempts

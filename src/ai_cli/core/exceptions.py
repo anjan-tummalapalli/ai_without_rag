@@ -53,9 +53,11 @@ class AIProviderError(Exception):
             "code": self.code,
             "retryable": self.retryable,
             "details": self.details,
-            "cause": repr(self.__cause__)
-            if getattr(self, "__cause__", None)
-            else None,
+            "cause": (
+                repr(self.__cause__)
+                if getattr(self, "__cause__", None)
+                else None
+            ),
         }
 
     def to_json(self) -> str:
