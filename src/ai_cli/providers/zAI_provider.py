@@ -156,13 +156,20 @@ class ZAIProvider(AIProvider):
                     if isinstance(content, str):
                         return content
 
-        # As a last resort, return the full JSON as string
+        # As a last resort, return the full JSON as string. If the
+        # payload contains something json.dumps can't serialize (e.g. an
+        # unexpected object type), fall back to str() rather than
+        # failing the whole request over an unusual-but-non-empty
+        # response body.
         try:
             return json.dumps(data, ensure_ascii=False)
-        except Exception as exc:
-            raise ProviderRequestError(
-                "unable to coerce z.AI response to string"
-            ) from exc
+        except (TypeError, ValueError):
+            try:
+                return str(data)
+            except Exception as exc:
+                raise ProviderRequestError(
+                    "unable to coerce z.AI response to string"
+                ) from exc
 
     def send(self, prompt: str, **kwargs: Any) -> str:
         if not self.api_key:
