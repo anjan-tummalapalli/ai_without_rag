@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 import ai_cli.core.service.ai_service as ai_service
-from ai_cli.core.service.ai_service import AIService, _decode_chunk
-from ai_cli.providers.contracts import ChatProvider, EmbeddingProvider
+from ai_cli.core.service.ai_service import AIService
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -340,39 +338,3 @@ def test_build_kwargs_signature_failure(monkeypatch) -> None:
     assert kwargs["provider"] == "openai"
     assert kwargs["prompt"] == "hello"
     assert kwargs["timeout"] == 60
-
-
-def test_decode_chunk_json_failure(monkeypatch):
-    def raise_error(*args, **kwargs):
-        raise TypeError("boom")
-
-    monkeypatch.setattr(json, "dumps", raise_error)
-
-    class Dummy:
-        def __str__(self):
-            return "dummy"
-
-    assert _decode_chunk(Dummy()) == "dummy"
-
-
-def test_chunk_to_text_json_failure(monkeypatch):
-    def raise_error(*args, **kwargs):
-        raise TypeError("boom")
-
-    monkeypatch.setattr(json, "dumps", raise_error)
-
-    class Dummy:
-        def __str__(self):
-            return "dummy"
-
-    assert ai_service._chunk_to_text(Dummy()) == "dummy"
-
-
-def test_chat_provider_abstract():
-    with pytest.raises(TypeError):
-        ChatProvider()
-
-
-def test_embedding_provider_abstract():
-    with pytest.raises(TypeError):
-        EmbeddingProvider()

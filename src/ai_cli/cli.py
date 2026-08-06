@@ -55,11 +55,11 @@ def _safe_resolve_path(raw: str | None) -> str | None:
     looks like a path-traversal attempt (e.g. contains ``..`` components or
     null bytes).  Callers must treat a ``None`` return as an error.
 
-    Note: this does **not** restrict reads to a specific directory — the CLI is
-    a developer tool and intentionally allows arbitrary file paths.  The check
-    exists solely to surface accidental or malicious traversal sequences so
-    they can be rejected early with a clear error message rather than silently
-    opening an unexpected file.
+    Note: this does **not** restrict reads to a specific directory — the
+    CLI is a developer tool and intentionally allows arbitrary file paths.
+    The check exists solely to surface accidental or malicious traversal
+    sequences so they can be rejected early with a clear error message
+    rather than silently opening an unexpected file.
     """
     if raw is None:
         return None
@@ -80,7 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser."""
     parser = argparse.ArgumentParser(
         prog="ai-cli",
-        description="Enterprise AI CLI Gateway for multi-provider AI interactions.",
+        description=(
+            "Enterprise AI CLI Gateway for multi-provider AI interactions."
+        ),
     )
     parser.add_argument(
         "-p",
@@ -468,7 +470,8 @@ def run_interactive(
     current_model = model
     current_profile = profile
     current_stream = stream
-    # Allow interactive RAG commands (/index, /search) even without --rag at startup.
+    # Allow interactive RAG commands (/index, /search) even without
+    # --rag at startup.
     pipeline: RAGPipeline = (
         rag if rag is not None else _RAGPipeline(embed_dim=128)
     )
@@ -582,10 +585,12 @@ def run_interactive(
             if context
             else user_input
         )
-        # Fix 5 (prompt size): cap after RAG expansion to prevent oversized payloads
+        # Fix 5 (prompt size): cap after RAG expansion to prevent
+        # oversized payloads
         if len(used_prompt) > 100_000:
             print(
-                "Warning: prompt is very large after RAG expansion; truncating to 100k characters.",
+                "Warning: prompt is very large after RAG expansion; "
+                "truncating to 100k characters.",
                 file=sys.stderr,
             )
             used_prompt = used_prompt[:100_000]
@@ -636,7 +641,7 @@ def _load_rag_docs(
     rag_chunk_size: int,
     rag_chunk_overlap: int,
 ) -> RAGPipeline:
-    """Instantiate a RAGPipeline and index the provided file paths / raw texts."""
+    """Instantiate a RAGPipeline and index the file paths / raw texts."""
     from ai_cli.rag.pipeline import RAGPipeline as _RAGPipeline
 
     pipeline = _RAGPipeline(embed_dim=128)

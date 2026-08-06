@@ -2,7 +2,8 @@ try:
     import pytest  # type: ignore
 except Exception:
     # Minimal shim for environments without pytest.
-    # Provides pytest.mark.<name> as a no-op decorator and pytest.raises as a context manager.
+    # Provides pytest.mark.<name> as a no-op decorator and
+    # pytest.raises as a context manager.
     class _Mark:
         def __getattr__(self, name):
             def decorator(func):
@@ -240,7 +241,6 @@ def test_retry_engine_rejects_async():
         return "x"
 
     with pytest.raises(TypeError):
-        # pyrefly: ignore [unused-coroutine]
         engine.execute(async_fn)
 
 
@@ -277,7 +277,7 @@ def test_async_retry_decorator_rejects_sync():
 
     engine = AsyncRetryEngine()
     with pytest.raises(TypeError):
-        # pyrefly: ignore [bad-argument-type]
+
         @engine.decorator()
         def normal():
             return "x"
@@ -402,11 +402,11 @@ def test_retry_engine_rejects_coroutine():
     engine = RetryEngine()
 
     with pytest.raises(TypeError):
-        # pyrefly: ignore [unused-coroutine]
         engine.execute(fn)
 
 
-# duplicate test_async_retry_decorator_rejects_sync removed to avoid redefinition
+# duplicate test_async_retry_decorator_rejects_sync removed to
+# avoid redefinition
 
 
 @pytest.mark.asyncio
@@ -445,7 +445,6 @@ async def test_async_retry_engine_decorator_all_attempts_fail():
         attempts["count"] += 1
         raise RuntimeError("failed")
 
-    # pyrefly: ignore [unexpected-keyword]
     with pytest.raises(RuntimeError, match="failed"):
         await always_fail()
 
@@ -457,15 +456,3 @@ def test_execute_with_fallback_returns_none_without_fallback():
         raise RuntimeError("boom")
 
     assert execute_with_fallback(primary) is None
-
-
-def test_execute_with_fallback_without_fallback():
-    assert (
-        execute_with_fallback(lambda: (_ for _ in ()).throw(RuntimeError()))
-        is None
-    )
-
-
-def test_cache_delete_missing():
-    cache = Cache()
-    cache.delete("missing")

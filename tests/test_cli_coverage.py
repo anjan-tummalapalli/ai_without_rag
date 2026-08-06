@@ -624,7 +624,9 @@ def test_load_rag_docs_missing_file():
     from ai_cli.cli import _load_rag_docs
 
     pipeline = _load_rag_docs(
-        ["/tmp/does_not_exist_file.txt"],
+        # nosec B108: intentionally nonexistent path — this test asserts
+        # the missing-file error path, no file is ever created here.
+        ["/tmp/does_not_exist_file.txt"],  # nosec B108
         rag_chunk_size=100,
         rag_chunk_overlap=10,
     )
@@ -692,7 +694,6 @@ def test_build_ask_kwargs_signature_failure(monkeypatch):
         model="m",
         profile="p",
         stream=True,
-        # pyrefly: ignore [bad-argument-type]
         modules=["x"],
     )
 
@@ -1002,7 +1003,7 @@ def test_run_interactive_help_exit(monkeypatch):
             provider="openai",
             model=None,
             timeout=1,
-            rag=Dummy(),  # pyrefly: ignore [bad-argument-type]
+            rag=Dummy(),
         )
         == 0
     )
@@ -1023,7 +1024,7 @@ def test_run_interactive_search(monkeypatch):
             provider="openai",
             model=None,
             timeout=1,
-            rag=Dummy(),  # pyrefly: ignore [bad-argument-type]
+            rag=Dummy(),
         )
         == 0
     )

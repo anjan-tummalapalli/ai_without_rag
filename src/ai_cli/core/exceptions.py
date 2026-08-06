@@ -1,4 +1,3 @@
-# /Users/anjan/Documents/New project/ai_chat/ai_cli/src/ai_cli/core/exceptions.py
 from __future__ import annotations
 
 import json
@@ -7,13 +6,16 @@ from typing import Any
 
 
 class AIProviderError(Exception):
-    """Base exception for AI provider errors with optional structured metadata.
+    """Base exception for AI provider errors with optional structured
+    metadata.
 
     Args:
         message: Human readable message.
         code: Optional machine-readable error code.
-        retryable: Whether the operation that caused this error can be retried.
-        details: Arbitrary extra data useful for debugging (e.g., request_id, provider).
+        retryable: Whether the operation that caused this error can be
+            retried.
+        details: Arbitrary extra data useful for debugging (e.g.,
+            request_id, provider).
         cause: Optional original exception to chain.
     """
 
@@ -47,7 +49,8 @@ class AIProviderError(Exception):
         return " ".join(parts)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the exception (useful for logging or returning structured errors)."""
+        """Serialize the exception (useful for logging or returning
+        structured errors)."""
         return {
             "message": self.message,
             "code": self.code,
@@ -68,7 +71,8 @@ class AIProviderError(Exception):
     def from_exception(
         cls, exc: BaseException, *, message: str | None = None, **kwargs: Any
     ) -> AIProviderError:
-        """Wrap an existing exception into an AIProviderError while preserving context."""
+        """Wrap an existing exception into an AIProviderError while
+        preserving context."""
         msg = message or str(exc) or exc.__class__.__name__
         return cls(msg, cause=exc, **kwargs)
 
@@ -124,7 +128,8 @@ class ResponseValidationError(AIProviderError):
 class ChunkingError(AIProviderError):
     """Raised when text chunking fails.
 
-    details example: {"text_length": 12345, "chunk_size": 1024, "chunk_index": 5}
+    details example: {"text_length": 12345, "chunk_size": 1024,
+    "chunk_index": 5}
     """
 
     def __init__(
@@ -154,7 +159,8 @@ class EmbeddingError(AIProviderError):
 class VectorDBError(AIProviderError):
     """Raised for vector DB/storage related errors.
 
-    details example: {"operation": "upsert", "db": "faiss", "index_name": "docs_v1"}
+    details example: {"operation": "upsert", "db": "faiss",
+    "index_name": "docs_v1"}
     """
 
     def __init__(
@@ -188,7 +194,8 @@ class RetrievalError(AIProviderError):
         super().__init__(message, details=details, **kwargs)
 
 
-# Small utility for capturing stack traces for debugging/logging without raising.
+# Small utility for capturing stack traces for debugging/logging
+# without raising.
 def capture_exception_info(exc: BaseException) -> dict[str, Any]:
     return {
         "type": exc.__class__.__name__,

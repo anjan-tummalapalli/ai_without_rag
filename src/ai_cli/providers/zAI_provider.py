@@ -19,7 +19,9 @@ from ai_cli.providers.base import AIProvider, ProviderMetadata
 ZAI_DEFAULT_BASE = "https://api.z.ai/v1/generate"
 
 try:
-    import requests  # local import so static analyzers don't require the package at module import time
+    # local import so static analyzers don't require the package at
+    # module import time
+    import requests
 except Exception as exc:
     raise ProviderRequestError(
         "missing 'requests' library; install with `pip install requests`"
@@ -32,7 +34,8 @@ class ZAIProvider(AIProvider):
 
     - Uses ZAI_API_KEY and optionally ZAI_API_BASE env vars.
     - Posts JSON payload { "model": <model>, "prompt": <prompt> }.
-    - Attempts to extract textual response from common keys in the returned JSON.
+    - Attempts to extract textual response from common keys in the
+      returned JSON.
     """
 
     DEFAULT_META = ProviderMetadata(name="z.ai")
@@ -156,8 +159,10 @@ class ZAIProvider(AIProvider):
         # As a last resort, return the full JSON as string
         try:
             return json.dumps(data, ensure_ascii=False)
-        except (TypeError, ValueError):
-            return str(data)
+        except Exception as exc:
+            raise ProviderRequestError(
+                "unable to coerce z.AI response to string"
+            ) from exc
 
     def send(self, prompt: str, **kwargs: Any) -> str:
         if not self.api_key:

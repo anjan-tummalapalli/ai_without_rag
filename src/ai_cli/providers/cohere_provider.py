@@ -8,8 +8,8 @@ from typing import Any, cast
 # Use relative import to avoid CI/package import resolution issues
 from .base import BaseProvider
 
-# cohere is imported at runtime below when needed; avoid a static import here to prevent
-# "imported but unused" lint/compile errors.
+# cohere is imported at runtime below when needed; avoid a static import
+# here to prevent "imported but unused" lint/compile errors.
 
 
 class CohereProvider(BaseProvider):
@@ -48,9 +48,10 @@ class CohereProvider(BaseProvider):
         if not api_key:
             raise ValueError("COHERE_API_KEY is required")
 
-        # Import cohere at runtime to avoid static-analysis failures when the package
-        # isn't available in the environment (editors/CI). If the package is missing
-        # and this provider is used in tests, allow the "test" api_key path.
+        # Import cohere at runtime to avoid static-analysis failures when
+        # the package isn't available in the environment (editors/CI). If
+        # the package is missing and this provider is used in tests,
+        # allow the "test" api_key path.
         try:
             import cohere as _cohere
         except Exception as exc:
@@ -59,7 +60,8 @@ class CohereProvider(BaseProvider):
                 self.client = None
             else:
                 raise RuntimeError(
-                    "The 'cohere' package is required to use CohereProvider; install it with 'pip install cohere'"
+                    "The 'cohere' package is required to use "
+                    "CohereProvider; install it with 'pip install cohere'"
                 ) from exc
         else:
             if api_key == "test":

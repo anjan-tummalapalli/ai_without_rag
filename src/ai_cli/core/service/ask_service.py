@@ -8,9 +8,8 @@ retry, decoding, and provider-selection logic is kept in one place.
 from __future__ import annotations
 
 import os
-from typing import Any
 
-from ai_cli.core.service.ai_service import AIService
+from ai_cli.core.service.ai_service import AIService, AskKwargs
 
 
 def ask(
@@ -64,7 +63,7 @@ class _AskServiceAdapter(AIService):
         super().__init__(**kwargs)  # type: ignore[arg-type]
         self._api_key = api_key
 
-    def _build_kwargs(self, prompt: str) -> dict[str, Any]:
+    def _build_kwargs(self, prompt: str) -> AskKwargs:
         kwargs = super()._build_kwargs(prompt)
         if self._api_key is not None:
             kwargs["api_key"] = self._api_key

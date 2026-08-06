@@ -56,7 +56,11 @@ def test_load_rag_docs_bad_path(monkeypatch):
 
 def test_load_rag_docs_open_failure(monkeypatch):
     monkeypatch.setattr(cli.os.path, "exists", lambda _: True)
-    monkeypatch.setattr(cli, "_safe_resolve_path", lambda _: "/tmp/x")
+    # nosec B108: mocked return value only, never used to touch the
+    # filesystem — the point of this test is that open() raises.
+    monkeypatch.setattr(
+        cli, "_safe_resolve_path", lambda _: "/tmp/x"
+    )  # nosec B108
 
     def bad_open(*args, **kwargs):
         raise OSError("cannot open")
@@ -121,7 +125,7 @@ def test_run_interactive_bad_path(monkeypatch, capsys):
             "auto",
             None,
             30,
-            rag=DummyPipeline(),  # pyrefly: ignore [bad-argument-type]
+            rag=DummyPipeline(),
         )
         == 0
     )
@@ -149,7 +153,7 @@ def test_run_interactive_command_failure(monkeypatch, capsys):
             "auto",
             None,
             30,
-            rag=DummyPipeline(),  # pyrefly: ignore [bad-argument-type]
+            rag=DummyPipeline(),
         )
         == 0
     )

@@ -120,7 +120,6 @@ class TestMetricsNoOp:
         m = self._make_noop_metrics()
         m.record_latency("openai", 1.5)
         m.record_latency(None, 0.1)
-        # pyrefly: ignore [bad-argument-type]
         m.record_latency("openai", None)
 
     def test_record_chunks_noop(self):
@@ -410,7 +409,6 @@ class _FallbackOkProvider:
 
 def test_send_skips_unauthorized_error_and_raises() -> None:
     """send() records an 'unauthorized'-style failure as skipped."""
-    # pyrefly: ignore [unsupported-operation]
     PROVIDER_MAP["__auto_unauthorized__"] = _UnauthorizedThenOkProvider
     ap = AutoProvider(fallback_order=["__auto_unauthorized__"])
     with pytest.raises(ProviderRequestError, match="Auto fallback exhausted"):
@@ -419,7 +417,6 @@ def test_send_skips_unauthorized_error_and_raises() -> None:
 
 def test_send_reports_provider_not_found() -> None:
     """send() records a 'not found' error for a missing provider class."""
-    # pyrefly: ignore [unsupported-operation]
     PROVIDER_MAP["__auto_present__"] = _FallbackOkProvider
     ap = AutoProvider(fallback_order=["__auto_present__"])
     ap.fallback_order = ["__auto_missing_now__", "__auto_present__"]

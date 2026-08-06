@@ -5,10 +5,7 @@ OpenAI ChatGPT provider implementation for ai_cli.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any, cast
-
-if TYPE_CHECKING:
-    from openai import OpenAI
+from typing import Any, cast
 
 try:
     from openai import OpenAI

@@ -60,7 +60,6 @@ def setup_function():
 
 
 def test_register_provider_direct_registration():
-    # pyrefly: ignore [bad-argument-type]
     register_provider("dummy", DummyProvider)
 
     assert PROVIDER_MAP["dummy"] is DummyProvider
@@ -75,7 +74,6 @@ def test_register_provider_decorator_registration():
 
 
 def test_register_chat_provider_registers_both_maps():
-    # pyrefly: ignore [bad-argument-type]
     register_chat_provider("chat", DummyProvider)
 
     assert CHAT_PROVIDERS["chat"] is DummyProvider
@@ -84,7 +82,6 @@ def test_register_chat_provider_registers_both_maps():
 
 @patch("ai_cli.providers.registry.ensure_initialized")
 def test_get_chat_provider_success(mock_init):
-    # pyrefly: ignore [bad-argument-type]
     register_chat_provider("chat", DummyProvider)
 
     obj = get_chat_provider("chat", foo="bar")
@@ -102,9 +99,7 @@ def test_get_chat_provider_unknown(mock_init):
 
 @patch("ai_cli.providers.registry.ensure_initialized")
 def test_list_providers_sorted(mock_init):
-    # pyrefly: ignore [bad-argument-type]
     register_provider("z", DummyProvider)
-    # pyrefly: ignore [bad-argument-type]
     register_provider("a", DummyProvider)
 
     assert list_providers() == ["a", "z"]
@@ -112,7 +107,6 @@ def test_list_providers_sorted(mock_init):
 
 @patch("ai_cli.providers.registry.ensure_initialized")
 def test_build_provider_success(mock_init):
-    # pyrefly: ignore [bad-argument-type]
     register_provider("dummy", DummyProvider)
 
     obj = build_provider("dummy", answer=42)
@@ -128,7 +122,6 @@ def test_build_provider_unknown(mock_init):
 
 
 def test_provider_registry_getitem_returns_registered_class():
-    # pyrefly: ignore [bad-argument-type]
     register_provider("dummy", DummyProvider)
 
     assert PROVIDERS["dummy"] is DummyProvider

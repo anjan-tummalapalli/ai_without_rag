@@ -126,7 +126,6 @@ def test_large_prompt(monkeypatch):
             stream=False,
             timeout=30,
             modules=None,
-            # pyrefly: ignore [bad-argument-type]
             rag=FakePipeline(),
             rag_chunk_size=100,
             rag_chunk_overlap=10,
@@ -141,7 +140,6 @@ class BadMetric:
 
 def test_record_request_exception():
     m = Monitoring()
-    # pyrefly: ignore [bad-assignment]
     m.requests = BadMetric()
 
     m.record_request("openai")
@@ -149,7 +147,6 @@ def test_record_request_exception():
 
 def test_record_failure_exception():
     m = Monitoring()
-    # pyrefly: ignore [bad-assignment]
     m.failures = BadMetric()
 
     m.record_failure("openai")
@@ -157,7 +154,6 @@ def test_record_failure_exception():
 
 def test_record_latency_exception():
     m = Monitoring()
-    # pyrefly: ignore [bad-assignment]
     m.latency = BadMetric()
 
     m.record_latency("openai", 2.5)
@@ -165,7 +161,6 @@ def test_record_latency_exception():
 
 def test_record_chunks_exception():
     m = Monitoring()
-    # pyrefly: ignore [bad-assignment]
     m.chunks = BadMetric()
 
     m.record_chunks("openai", "model", 5)
@@ -173,7 +168,6 @@ def test_record_chunks_exception():
 
 def test_record_embedding_exception():
     m = Monitoring()
-    # pyrefly: ignore [bad-assignment]
     m.embedding_requests = BadMetric()
 
     m.record_embedding("openai", "model", 1.2)
@@ -181,7 +175,6 @@ def test_record_embedding_exception():
 
 def test_record_vector_query_exception():
     m = Monitoring()
-    # pyrefly: ignore [bad-assignment]
     m.vector_queries = BadMetric()
 
     m.record_vector_query("openai", "model")

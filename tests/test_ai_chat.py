@@ -149,7 +149,8 @@ class VectorStore:
             if len(heap) < top_k:
                 heapq.heappush(heap, (score, doc_id, self._docs[doc_id]))
             else:
-                # heap[0] is smallest score in heap, replace if current score is higher
+                # heap[0] is smallest score in heap, replace if current
+                # score is higher
                 if score > heap[0][0]:
                     heapq.heapreplace(heap, (score, doc_id, self._docs[doc_id]))
 
@@ -170,8 +171,7 @@ def build_store_from_text(
     overlap: int = 50,
     dim: int = 64,
 ) -> VectorStore:
-    # pyrefly: ignore [unexpected-keyword]
-    chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+    chunks = chunk_text(text, chunk_size=chunk_size, chunk_overlap=overlap)
     store = VectorStore(dim=dim)
     for i, c in enumerate(chunks):
         store.add(f"{doc_id_prefix}-{i}", c)

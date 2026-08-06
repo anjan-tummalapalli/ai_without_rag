@@ -36,7 +36,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, TypedDict, cast
 
 from ai_cli.core.api import ask as _core_ask
 
@@ -47,6 +47,17 @@ _MAX_BACKOFF_SECONDS: float = 30.0
 
 
 ProviderResult: TypeAlias = object
+
+
+class AskKwargs(TypedDict, total=False):
+    provider: str
+    prompt: str
+    model: str | None
+    timeout: int
+    profile: str | None
+    stream: bool
+    modules: list[str] | None
+    api_key: str
 
 
 def _decode_chunk(chunk: object) -> str:
@@ -63,10 +74,6 @@ def _decode_chunk(chunk: object) -> str:
         return json.dumps(chunk, default=str, ensure_ascii=False)
     except (TypeError, ValueError):
         return str(chunk)
-
-
-# Backward compatibility for older tests
-_chunk_to_text = _decode_chunk
 
 
 class AIService:
@@ -134,7 +141,7 @@ class AIService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _build_kwargs(self, prompt: str) -> dict[str, Any]:
+    def _build_kwargs(self, prompt: str) -> AskKwargs:
         """Build kwargs for ``core.api.ask``, filtering to accepted params."""
         candidate: dict[str, Any] = {
             "provider": self.provider,
@@ -159,7 +166,7 @@ class AIService:
             }
             filtered.setdefault("prompt", prompt)
             filtered.setdefault("provider", self.provider)
-            return filtered
+            return cast(AskKwargs, filtered)
         except (TypeError, ValueError):
             logger.debug(
                 "Failed to inspect core ask() signature; "
@@ -178,7 +185,7 @@ class AIService:
                 base["stream"] = self.stream
             if self.modules is not None:
                 base["modules"] = self.modules
-            return base
+            return cast(AskKwargs, base)
 
     @staticmethod
     async def _drain_async(result: object) -> str:
@@ -191,7 +198,6 @@ class AIService:
         elif hasattr(value, "__iter__") and not isinstance(
             value, (str, bytes, dict)
         ):
-            # pyrefly: ignore [not-iterable]
             for part in value:
                 parts.append(_decode_chunk(part))
         else:
@@ -201,7 +207,7 @@ class AIService:
 
     @staticmethod
     def _drain_sync(result: object) -> str:
-        """Drain a synchronous (possibly iterable) result into a string."""
+        """Drain a sync (possibly iterable) result into a single string."""
         if inspect.isawaitable(result) or hasattr(result, "__aiter__"):
             return asyncio.run(AIService._drain_async(result))
         parts: list[str] = []
@@ -210,7 +216,7 @@ class AIService:
         ):
             for part in result:
                 parts.append(_decode_chunk(part))
-        elif isinstance(result, dict):
+        elif isinstance(result, (dict, list)):
             parts.append(
                 json.dumps(result, indent=2, ensure_ascii=False, default=str)
             )
@@ -235,7 +241,7 @@ class AIService:
                     self.provider,
                 )
                 return _core_ask(**kwargs)
-            except OSError as exc:
+            except (TimeoutError, ConnectionError, OSError) as exc:
                 logger.warning(
                     "Transient error on attempt %d: %s", attempt, exc
                 )
@@ -325,7 +331,6 @@ class AIService:
         if hasattr(result, "__iter__") and not isinstance(
             result, str | bytes | dict
         ):
-            # pyrefly: ignore [not-iterable]
             for part in result:
                 yield _decode_chunk(part)
         else:

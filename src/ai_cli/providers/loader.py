@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ai_cli.providers.base import BaseProvider
+
+logger = logging.getLogger("ai_cli.providers.loader")
 
 
 def load_all_providers() -> dict[str, type[BaseProvider]]:
@@ -29,8 +32,8 @@ def load_all_providers() -> dict[str, type[BaseProvider]]:
 
     try:
         from ai_cli.providers.gemini_provider import GeminiProvider
-    except Exception:
-        pass
+    except ImportError:
+        logger.debug("Gemini provider unavailable (google-genai not installed)")
     else:
         providers["gemini"] = GeminiProvider
 

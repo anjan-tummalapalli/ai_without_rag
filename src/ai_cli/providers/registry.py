@@ -16,7 +16,9 @@ DEFAULT_PROVIDER = "openai"
 class ProviderRegistry(dict[str, type[BaseProvider]]):
     """Dict-like view onto ``PROVIDER_MAP`` that always reflects live state."""
 
-    def __getitem__(self, key: str) -> type[BaseProvider] | None:  # type: ignore[override]
+    def __getitem__(  # type: ignore[override]
+        self, key: str
+    ) -> type[BaseProvider] | None:
         return PROVIDER_MAP.get(key)
 
 

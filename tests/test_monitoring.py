@@ -198,7 +198,6 @@ def test_record_embedding_without_latency() -> None:
     metrics.record_embedding(
         "provider",
         "model",
-        # pyrefly: ignore [bad-argument-type]
         None,
     )
 
@@ -210,7 +209,6 @@ def test_record_request_metric_failure() -> None:
         def labels(self, **kwargs):
             raise RuntimeError()
 
-    # pyrefly: ignore [bad-assignment]
     metrics.requests = Broken()
 
     metrics.record_request("openai")

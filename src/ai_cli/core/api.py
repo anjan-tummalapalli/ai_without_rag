@@ -1,13 +1,18 @@
+"""Public, synchronous entry point for issuing a single AI request."""
+
 from typing import Any
 
+from ai_cli.providers.base import BaseProvider
 from ai_cli.providers.registry import build_provider, ensure_initialized
+
+DEFAULT_MODEL = "gpt-4o-mini"
 
 
 def ask(
     prompt: str,
     provider: str,
     model: str | None = None,
-    _provider: Any = None,
+    _provider: BaseProvider | None = None,
     **kwargs: Any,
 ) -> str:
     """Send `prompt` to `provider` (optionally overriding `model`) and
@@ -23,10 +28,9 @@ def ask(
         if _provider is not None
         else build_provider(
             name=provider,
-            model=model,
+            model=model or DEFAULT_MODEL,
             **kwargs,
         )
     )
 
-    result = ai_provider.send(prompt)
-    return result
+    return ai_provider.send(prompt)
